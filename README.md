@@ -32,9 +32,10 @@ organized, see [`CLAUDE.md`](CLAUDE.md).
 11. [Writing to more than one sink](#writing-to-more-than-one-sink)
 12. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
 13. [Parameterized segments](#parameterized-segments)
-14. [Quick reference](#quick-reference)
-15. [Project layout](#project-layout)
-16. [Status](#status)
+14. [A complete ETL, with error routing](#a-complete-etl-with-error-routing)
+15. [Quick reference](#quick-reference)
+16. [Project layout](#project-layout)
+17. [Status](#status)
 
 ## Building the CLI
 
@@ -587,6 +588,98 @@ arguments — and a segment never takes another segment as a parameter
 (that would pull toward a functional core, deliberately out of scope; see
 `design/segments.md` §8). `examples/segments.sift` demonstrates the same
 reuse.
+
+## A complete ETL, with error routing
+
+Put together, that's a realistic pipeline: a reusable segment for shared
+validation, a plain stage and a parameterized scalar segment for
+filtering, `map` to normalize and derive a field, `drop`/`rename` to
+reshape, `hash` and a parameterized column segment to declassify two
+different `@pii` columns, `select` to fix the final shape, `offset`/`limit`
+to slice, and a two-sink broadcast at the end:
+
+```sift
+source in = csv("etl.csv", schema: {
+  id: int,
+  full_name: string,
+  email: string @pii,
+  phone: string @pii,
+  ssn: string @pii,
+  age: int,
+  amount: double,
+  plan: string,
+  signup_date: string,
+  internal_notes: string
+})
+sink out   = jsonl("etl_out.jsonl")
+sink audit = jsonl("etl_audit.jsonl")
+
+pipeline validate =
+     check(.email != "", "missing email")
+  |> check(.amount > 0.0, "non-positive amount")
+
+pipeline eligible(min: double) = filter(.amount >= min)
+pipeline scrub(col)            = mask(col)
+
+pipeline main {
+  in
+    |> validate
+    |> filter(.age >= 18)
+    |> eligible(100.0)
+    |> map({ ...row, plan: upper(.plan), high_value: .amount >= 500.0 })
+    |> drop(ssn, internal_notes)
+    |> rename(full_name: name, signup_date: joined_at)
+    |> hash(email)
+    |> scrub(phone)
+    |> select(id, name, email, phone, age, amount, plan, high_value, joined_at)
+    |> offset(1)
+    |> limit(2)
+    |> out, audit
+}
+```
+
+```console
+$ ./sift run etl.sift
+$ cat etl_out.jsonl
+{"id":4,"name":"Liam Wu","email":"d9c57089f04f2b2e9cd8abcc2e1088afc708fcf60b842d42ab3dc3d3c153e13e","phone":"********","age":25,"amount":500,"plan":"FREE","high_value":true,"joined_at":"2024-04-10"}
+{"id":5,"name":"Nina Simone","email":"cec43edb6a1681336ab87fa21ea576e83450826e3cc05f2ca73128e7fd69745f","phone":"********","age":29,"amount":120,"plan":"PRO","high_value":false,"joined_at":"2024-05-12"}
+```
+
+Of six source rows, `filter(.age >= 18)` removes Tom (15) and
+`eligible(100.0)` removes Grace ($50 < the $100 minimum) — genuine drops,
+not failures. `offset(1)` then discards Ada positionally, and `limit(2)`
+takes exactly Liam and Nina, stopping before Owen is ever read — the same
+`offset`/`limit` mechanics from
+[Slicing rows](#slicing-rows-limit-and-offset), now composing with
+everything else. `examples/etl.sift` is the full, runnable version.
+
+### With errors
+
+Swap in `on error |> errors` and a couple of bad rows — one with a blank
+email (fails `validate`'s `check`), one with an `amount` cell that won't
+even parse as a `double` (fails at the source, before `validate` runs at
+all) — and both divert to the error sink as a fixed envelope, while every
+healthy row still flows through the exact same pipeline to `out` and
+`audit`:
+
+```console
+$ ./sift run etl-errors.sift
+$ cat etl-errors_out.jsonl
+{"id":1,"name":"Ada Lovelace","email":"b5fc85e55755f9e0d030a10ab4429b6b2944855f9a0d60077fe832becbc41d72","phone":"********","age":42,"amount":250.5,"plan":"PRO","high_value":false,"joined_at":"2024-01-15"}
+{"id":6,"name":"Liam Wu","email":"d9c57089f04f2b2e9cd8abcc2e1088afc708fcf60b842d42ab3dc3d3c153e13e","phone":"********","age":25,"amount":500,"plan":"FREE","high_value":true,"joined_at":"2024-04-10"}
+{"id":7,"name":"Nina Simone","email":"cec43edb6a1681336ab87fa21ea576e83450826e3cc05f2ca73128e7fd69745f","phone":"********","age":29,"amount":120,"plan":"PRO","high_value":false,"joined_at":"2024-05-12"}
+{"id":8,"name":"Owen King","email":"b82aec285b6e6a36fd26fc7404b07b48af53f7b931a492c4b177d58351adba1f","phone":"********","age":31,"amount":999.99,"plan":"ENTERPRISE","high_value":true,"joined_at":"2024-06-18"}
+$ cat etl-errors_errors.jsonl
+{"source":"in","ordinal":1,"offset":3,"reason":"missing email","stage":"check"}
+{"source":"in","ordinal":4,"offset":6,"reason":"cannot parse \"N/A\" as double","stage":"csv:amount"}
+```
+
+This variant drops `offset`/`limit`: since they [count every row
+positionally, healthy or failed](#slicing-rows-limit-and-offset), the two
+diverted rows would otherwise occupy `limit`'s quota ahead of the healthy
+rows behind them in the file, leaving `out`/`audit` empty — a real
+interaction worth knowing about, not a bug. `examples/etl-errors.sift` is
+the full, runnable version.
 
 ## Quick reference
 
