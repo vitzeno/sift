@@ -32,6 +32,7 @@ var BuiltinStageNames = map[string]bool{
 	"check":  true,
 	"select": true,
 	"drop":   true,
+	"rename": true,
 }
 
 // ColumnRef is a bare column-name reference — the argument form
@@ -66,6 +67,26 @@ type Drop struct {
 }
 
 func (*Drop) stageNode() {}
+
+// RenamePair is one `old: new` pair in a rename stage's argument list —
+// old must be a column already in the input schema, new is the column's
+// replacement name.
+type RenamePair struct {
+	Old string
+	New string
+	Pos lexer.Pos
+}
+
+// Rename renames each pair's Old column to New in place: same position,
+// same exact type — including the @pii tag (design-improvements.md §2).
+// Preserving the tag is load-bearing: renaming a PII column must not be
+// a way to launder it.
+type Rename struct {
+	Pairs []RenamePair
+	Pos   lexer.Pos
+}
+
+func (*Rename) stageNode() {}
 
 // NameRef refers to a declared source, sink, or named pipeline segment
 // by name — the "in" and "out" in `in |> filter(...) |> out`, or a named

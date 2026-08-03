@@ -19,6 +19,7 @@ func (p *Parser) parseStageChain() []ast.Stage {
 //
 //	| "check" "(" Expr "," STRING ")"
 //	| "select" "(" ColumnRefList ")" | "drop" "(" ColumnRefList ")"
+//	| "rename" "(" RenamePair ("," RenamePair)* ")"
 //
 // decision: built-in stage names are recognized by their literal text
 // here in the parser, not as lexer keywords (module 3's decision).
@@ -48,8 +49,10 @@ func (p *Parser) parseStageElem() ast.Stage {
 		return p.parseSelect(pos)
 	case "drop":
 		return p.parseDrop(pos)
+	case "rename":
+		return p.parseRename(pos)
 	default:
-		p.fail(pos, "unknown stage %q (built-in stages are filter, map, check, select, drop)", name)
+		p.fail(pos, "unknown stage %q (built-in stages are filter, map, check, select, drop, rename)", name)
 		return nil
 	}
 }
@@ -89,6 +92,26 @@ func (p *Parser) parseDrop(pos lexer.Pos) *ast.Drop {
 	cols := p.parseColumnRefList()
 	p.expect(lexer.RPAREN)
 	return &ast.Drop{Columns: cols, Pos: pos}
+}
+
+func (p *Parser) parseRename(pos lexer.Pos) *ast.Rename {
+	p.expect(lexer.LPAREN)
+	pairs := []ast.RenamePair{p.parseRenamePair()}
+	for p.cur.Kind == lexer.COMMA {
+		p.next()
+		pairs = append(pairs, p.parseRenamePair())
+	}
+	p.expect(lexer.RPAREN)
+	return &ast.Rename{Pairs: pairs, Pos: pos}
+}
+
+// parseRenamePair := ColumnRef ":" ColumnRef  (old ":" new)
+func (p *Parser) parseRenamePair() ast.RenamePair {
+	pos := p.cur.Pos
+	old := p.parseColumnRef()
+	p.expect(lexer.COLON)
+	new := p.parseColumnRef()
+	return ast.RenamePair{Old: old.Name, New: new.Name, Pos: pos}
 }
 
 // parseColumnRefList := ColumnRef ("," ColumnRef)*

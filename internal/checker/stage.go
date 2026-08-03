@@ -70,6 +70,14 @@ func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting
 			out = append(out, st)
 			schema = newSchema
 
+		case *ast.Rename:
+			newSchema, err := c.checkRename(st, schema)
+			if err != nil {
+				return nil, value.Schema{}, err
+			}
+			out = append(out, st)
+			schema = newSchema
+
 		case *ast.NameRef:
 			expanded, newSchema, err := c.expandNameRef(st, schema, visiting)
 			if err != nil {

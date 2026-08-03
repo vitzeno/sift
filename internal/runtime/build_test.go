@@ -95,6 +95,26 @@ pipeline main {
 	}
 }
 
+// TestBuildFullPipelineRenamePreservesPII is S2's own demo
+// (design-improvements.md §8): renaming a @pii column and writing it
+// unmasked is still rejected — proof the tag survived the rename,
+// through the real parser and checker rather than a hand-built AST.
+func TestBuildFullPipelineRenamePreservesPII(t *testing.T) {
+	src := `source in = csv("../../testdata/people.csv", schema: { name: string, age: int, email: string @pii })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> rename(email: email_addr) |> out
+}`
+	prog, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if _, err := checker.Check(prog); err == nil {
+		t.Fatal("Check succeeded, want it to reject the renamed field, still @pii and unmasked")
+	}
+}
+
 // TestBuildFullPipelineMapFilterCheck exercises all three v0 stages
 // together through the full pipeline, including a named segment
 // (design.md §2) inlined by the checker before Build ever sees it. It

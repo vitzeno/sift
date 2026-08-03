@@ -65,6 +65,8 @@ func Build(in BuildInput) (top Stream, src Source, sink Sink, err error) {
 			top = NewSelect(top, columnNames(st.Columns))
 		case *ast.Drop:
 			top = NewDrop(top, columnNames(st.Columns))
+		case *ast.Rename:
+			top = NewRename(top, renamePairs(st.Pairs))
 		default:
 			// The checker only ever emits ast.BuiltinStageNames kinds into
 			// CheckedProgram.Stages (internal/checker/stage.go's
@@ -86,4 +88,15 @@ func columnNames(cols []ast.ColumnRef) []string {
 		names[i] = c.Name
 	}
 	return names
+}
+
+// renamePairs flattens a rename stage's pair list into the old->new map
+// NewRename needs — the checker has already ruled out any duplicate or
+// colliding Old/New, so a plain map loses no information here.
+func renamePairs(pairs []ast.RenamePair) map[string]string {
+	m := make(map[string]string, len(pairs))
+	for _, p := range pairs {
+		m[p.Old] = p.New
+	}
+	return m
 }
