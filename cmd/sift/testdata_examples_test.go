@@ -101,6 +101,16 @@ func TestExampleDrop(t *testing.T) {
 	}
 }
 
+func TestExampleRename(t *testing.T) {
+	got := runExample(t, "rename")
+	want := `{"name":"Ada","birth_date":"1990-01-01","email":"***************"}
+{"name":"Tom","birth_date":"2001-05-12","email":"***************"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestExampleNamedSegment(t *testing.T) {
 	got := runExample(t, "named-segment")
 	want := `{"name":"Ada","email":"ada@example.com"}
