@@ -1,0 +1,70 @@
+package runtime
+
+import (
+	"fmt"
+
+	"github.com/vitzeno/sift/internal/value"
+)
+
+// SourceOptions and SinkOptions are the construction-time parameters a
+// format needs. This is deliberately a plain struct rather than
+// map[string]any: v0 has exactly two formats and both need a path plus a
+// declared schema, so a typed struct is simpler and catches typos at
+// compile time.
+//
+// decision: once the parser/checker exist (modules 5-6), a source/sink
+// declaration's keyword args (`csv("people.csv", schema: {...})`) will be
+// translated into one of these structs. The struct may grow fields for
+// format-specific options (e.g. a CSV delimiter) — it will not need a
+// different shape, since the registry itself never special-cases a format.
+type SourceOptions struct {
+	// Name is the source's declared name (e.g. "in"), recorded in each
+	// row's Provenance.Source.
+	Name   string
+	Path   string
+	Schema value.Schema
+}
+
+type SinkOptions struct {
+	Path   string
+	Schema value.Schema
+}
+
+// SourceCtor and SinkCtor are what a format registers under its name
+// (design.md §4). Adding a format never touches the lexer, parser,
+// checker, or executor — only a registry entry.
+type SourceCtor func(SourceOptions) (Source, error)
+type SinkCtor func(SinkOptions) (Sink, error)
+
+var (
+	sourceRegistry = map[string]SourceCtor{}
+	sinkRegistry   = map[string]SinkCtor{}
+)
+
+// RegisterSource makes a format available under name. Formats call this
+// from an init() in internal/format; the registry itself has no built-in
+// knowledge of "csv" or "jsonl".
+func RegisterSource(name string, ctor SourceCtor) {
+	sourceRegistry[name] = ctor
+}
+
+func RegisterSink(name string, ctor SinkCtor) {
+	sinkRegistry[name] = ctor
+}
+
+// NewSource looks up name and constructs a Source from opts.
+func NewSource(name string, opts SourceOptions) (Source, error) {
+	ctor, ok := sourceRegistry[name]
+	if !ok {
+		return nil, fmt.Errorf("no source format registered under %q", name)
+	}
+	return ctor(opts)
+}
+
+func NewSink(name string, opts SinkOptions) (Sink, error) {
+	ctor, ok := sinkRegistry[name]
+	if !ok {
+		return nil, fmt.Errorf("no sink format registered under %q", name)
+	}
+	return ctor(opts)
+}

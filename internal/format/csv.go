@@ -1,0 +1,129 @@
+// Package format holds concrete Source/Sink implementations and registers
+// them with the runtime registry. Per design.md §4, this is the *only*
+// place that knows the string "csv" or "jsonl" — the registry itself, and
+// everything above it, is format-agnostic.
+package format
+
+import (
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+
+	"github.com/vitzeno/sift/internal/runtime"
+	"github.com/vitzeno/sift/internal/value"
+)
+
+func init() {
+	runtime.RegisterSource("csv", NewCSVSource)
+}
+
+// csvSource reads rows against a declared schema (design.md §3: CSV has no
+// inherent types, so the schema must be given up front). Column order in
+// the file need not match the schema's declared order — csvSource matches
+// columns by header name.
+type csvSource struct {
+	f    *os.File
+	r    *csv.Reader
+	name string
+	// col maps a schema field name to its column index in the CSV file.
+	col     map[string]int
+	schema  value.Schema
+	ordinal int
+}
+
+// NewCSVSource is the SourceCtor registered under "csv". It opens the file,
+// reads the header row, and checks every schema field has a matching
+// column — a missing column is a construction-time error, not a panic,
+// since it's a real misconfiguration a caller can hit legitimately (a
+// typo'd schema, a header-less export, etc).
+func NewCSVSource(opts runtime.SourceOptions) (runtime.Source, error) {
+	f, err := os.Open(opts.Path)
+	if err != nil {
+		return nil, fmt.Errorf("csv source %q: %w", opts.Name, err)
+	}
+
+	r := csv.NewReader(f)
+	header, err := r.Read()
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("csv source %q: reading header: %w", opts.Name, err)
+	}
+
+	col := make(map[string]int, len(header))
+	for i, h := range header {
+		col[h] = i
+	}
+	for _, field := range opts.Schema.Fields {
+		if _, ok := col[field.Name]; !ok {
+			f.Close()
+			return nil, fmt.Errorf("csv source %q: schema field %q not in header %v", opts.Name, field.Name, header)
+		}
+	}
+
+	return &csvSource{
+		f:      f,
+		r:      r,
+		name:   opts.Name,
+		col:    col,
+		schema: opts.Schema,
+	}, nil
+}
+
+func (s *csvSource) Schema() value.Schema {
+	return s.schema
+}
+
+func (s *csvSource) Next() (value.Row, bool) {
+	record, err := s.r.Read()
+	if err == io.EOF {
+		return value.Row{}, false
+	}
+	if err != nil {
+		// decision: Next() has no error return (design.md §4's Stream
+		// interface is fixed), and v0 has no error-policy machinery yet
+		// (that's a checker/executor concern, modules 6-7). A malformed
+		// data row is out of v0's acceptance scope, so this is treated
+		// as an internal invariant violation rather than a user-facing
+		// diagnostic. Revisit once `on error` routing exists.
+		panic(fmt.Sprintf("csv source %q: %v", s.name, err))
+	}
+
+	fields := make(map[string]any, len(s.schema.Fields))
+	for _, field := range s.schema.Fields {
+		raw := record[s.col[field.Name]]
+		v, err := parseScalar(raw, field.Type.Kind)
+		if err != nil {
+			panic(fmt.Sprintf("csv source %q: field %q: %v", s.name, field.Name, err))
+		}
+		fields[field.Name] = v
+	}
+
+	line, _ := s.r.FieldPos(0)
+	row := value.Row{
+		Fields: fields,
+		Prov: value.Provenance{
+			Source:  s.name,
+			Ordinal: s.ordinal,
+			Offset:  line,
+		},
+	}
+	s.ordinal++
+	return row, true
+}
+
+func parseScalar(raw string, kind value.Kind) (any, error) {
+	switch kind {
+	case value.String:
+		return raw, nil
+	case value.Int:
+		return strconv.Atoi(raw)
+	case value.Double:
+		return strconv.ParseFloat(raw, 64)
+	case value.Bool:
+		return strconv.ParseBool(raw)
+	default:
+		return nil, fmt.Errorf("unsupported scalar kind %v", kind)
+	}
+}
