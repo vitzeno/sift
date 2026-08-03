@@ -81,6 +81,35 @@ a `string @pii` back into a plain `string`. Every other function or
 operator that touches a `@pii` value propagates the tag — transforming
 PII never launders it.
 
+## More stages: select, drop, rename, limit/offset, declassifiers
+
+Beyond `filter`/`map`/`check`, five more built-ins round out v0's stage
+set. `select`/`drop` project columns — and dropping a `@pii` column is a
+legitimate way to satisfy the sink rule, with no `mask` call at all.
+`rename` remaps a column name while preserving its exact type,
+**including a `@pii` tag** — a renamed PII column is still rejected
+unmasked. `limit`/`offset` slice rows positionally, counting a failed
+row the same as a healthy one. And `mask`/`hash`/`redact` exist as
+stages as well as functions: `|> hash(email)` declassifies the whole
+column in one step, where `map({ ...row, email: hash(.email) })` is one
+missing `...row` away from silently dropping every other column.
+
+```sift
+in
+  |> drop(ssn, internal_notes)
+  |> rename(full_name: name, signup_date: joined_at)
+  |> hash(email)
+  |> mask(phone)
+  |> select(id, name, email, phone, plan, joined_at)
+  |> limit(3)
+  |> out
+```
+
+See `testdata/select.sift`, `drop.sift`, `rename.sift`,
+`limit-offset.sift`, and `declassify.sift` for one runnable example per
+stage, and `testdata/customer-export.sift` for the composite pipeline
+above in full — a CRM dump turned into a GDPR-safe analytics extract.
+
 ## Error policies
 
 A row can fail — a `check` condition is false, or a source cell won't
@@ -164,7 +193,11 @@ $ ./sift --emit-schema testdata/adults.sift
   another pipeline by name.
 - **Stages** (v0's complete set): `filter(<bool>)` keeps matching rows;
   `map({ ...row, field: expr })` rebuilds each row; `check(<bool>, "reason")`
-  fails a row when the condition is false.
+  fails a row when the condition is false; `select(col, ...)`/`drop(col, ...)`
+  project columns; `rename(old: new, ...)` remaps a column name, preserving
+  type and any `@pii` tag; `limit(n)`/`offset(n)` slice rows positionally;
+  `mask(col, ...)`/`hash(col, ...)`/`redact(col, ...)` declassify a `@pii`
+  column in place.
 - **Expressions**: field access (`.age`), int/double/string/bool
   literals, `+ - * /`, comparisons, `&& ||`, function calls, and record
   literals with spread (`{ ...row, ... }`).
@@ -206,6 +239,12 @@ rather than panicking), `on error abort/skip/route` is a real language
 feature, and a source cell that won't coerce to its declared type fails
 the same way a `check` does — governed by the same policy, with its own
 acceptance tests (`design-errors.md` §7, ERR-A through ERR-E).
+
+`design-improvements.md`'s built-in stages batch is also complete:
+`select`/`drop`, `rename`, `limit`/`offset`, and `mask`/`hash`/`redact`
+as first-class stages, each with its own acceptance tests
+(`design-improvements.md` §9, S1-A through S4-B) and a runnable
+`testdata/` example.
 
 `design-xlsx.md` and `design-parquet.md` document two more connector
 phases — neither is built yet; xlsx depends on this phase's
