@@ -331,3 +331,17 @@ func TestExampleETLErrors(t *testing.T) {
 		t.Error("errsink must never carry a failed row's raw fields, only its envelope")
 	}
 }
+
+// TestExampleXLSX exercises xlsx.sift: an xlsx source reading a real
+// worksheet (people.xlsx, sheet "People", a title row above the header
+// so header_row: 2 is load-bearing) through the same filter/jsonl-sink
+// shape as adults.sift's csv version (design/xlsx.md's headline claim
+// is exactly this — no frontend change to read a different format).
+func TestExampleXLSX(t *testing.T) {
+	got := runExample(t, "xlsx")
+	want := `{"name":"Ada","age":42}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
