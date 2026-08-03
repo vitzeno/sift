@@ -13,6 +13,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vitzeno/sift/internal/runtime"
@@ -261,5 +262,72 @@ func TestExampleBadCell(t *testing.T) {
 `
 	if string(got) != want {
 		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestExampleETL exercises etl.sift end to end: a reusable parameterless
+// segment (validate), a plain filter, a parameterized scalar segment
+// (eligible), map, drop, rename, hash, a parameterized column segment
+// (scrub), select, offset/limit, and a terminal broadcast to two sinks —
+// nearly every language feature composed into one pipeline.
+func TestExampleETL(t *testing.T) {
+	got := runExample(t, "etl", "etl_audit.jsonl")
+	want := `{"id":4,"name":"Liam Wu","email":"d9c57089f04f2b2e9cd8abcc2e1088afc708fcf60b842d42ab3dc3d3c153e13e","phone":"********","age":25,"amount":500,"plan":"FREE","high_value":true,"joined_at":"2024-04-10"}
+{"id":5,"name":"Nina Simone","email":"cec43edb6a1681336ab87fa21ea576e83450826e3cc05f2ca73128e7fd69745f","phone":"********","age":29,"amount":120,"plan":"PRO","high_value":false,"joined_at":"2024-05-12"}
+`
+	if string(got) != want {
+		t.Errorf("out output =\n%s\nwant\n%s", got, want)
+	}
+
+	auditPath := filepath.Join("..", "..", "examples", "etl_audit.jsonl")
+	gotAudit, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatalf("reading audit sink: %v", err)
+	}
+	if string(gotAudit) != string(got) {
+		t.Errorf("audit output =\n%s\nwant byte-identical to out output\n%s", gotAudit, got)
+	}
+}
+
+// TestExampleETLErrors is etl-errors.sift: the same pipeline as etl.sift,
+// under `on error |> errors`. Zoe's blank email fails validate's check;
+// Max's amount cell won't coerce to double at all and fails at the
+// source, before validate even runs. Both are diverted to the errors
+// sink as a fixed envelope — never their raw fields — while every other
+// row still flows through the full pipeline (segments, declassifiers,
+// projection) and reaches both out and audit.
+func TestExampleETLErrors(t *testing.T) {
+	got := runExample(t, "etl-errors", "etl-errors_audit.jsonl", "etl-errors_errors.jsonl")
+	want := `{"id":1,"name":"Ada Lovelace","email":"b5fc85e55755f9e0d030a10ab4429b6b2944855f9a0d60077fe832becbc41d72","phone":"********","age":42,"amount":250.5,"plan":"PRO","high_value":false,"joined_at":"2024-01-15"}
+{"id":6,"name":"Liam Wu","email":"d9c57089f04f2b2e9cd8abcc2e1088afc708fcf60b842d42ab3dc3d3c153e13e","phone":"********","age":25,"amount":500,"plan":"FREE","high_value":true,"joined_at":"2024-04-10"}
+{"id":7,"name":"Nina Simone","email":"cec43edb6a1681336ab87fa21ea576e83450826e3cc05f2ca73128e7fd69745f","phone":"********","age":29,"amount":120,"plan":"PRO","high_value":false,"joined_at":"2024-05-12"}
+{"id":8,"name":"Owen King","email":"b82aec285b6e6a36fd26fc7404b07b48af53f7b931a492c4b177d58351adba1f","phone":"********","age":31,"amount":999.99,"plan":"ENTERPRISE","high_value":true,"joined_at":"2024-06-18"}
+`
+	if string(got) != want {
+		t.Errorf("out output =\n%s\nwant\n%s", got, want)
+	}
+
+	auditPath := filepath.Join("..", "..", "examples", "etl-errors_audit.jsonl")
+	gotAudit, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatalf("reading audit sink: %v", err)
+	}
+	if string(gotAudit) != string(got) {
+		t.Errorf("audit output =\n%s\nwant byte-identical to out output\n%s", gotAudit, got)
+	}
+
+	errPath := filepath.Join("..", "..", "examples", "etl-errors_errors.jsonl")
+	gotErr, err := os.ReadFile(errPath)
+	if err != nil {
+		t.Fatalf("reading error sink: %v", err)
+	}
+	wantErr := `{"source":"in","ordinal":1,"offset":3,"reason":"missing email","stage":"check"}
+{"source":"in","ordinal":4,"offset":6,"reason":"cannot parse \"N/A\" as double","stage":"csv:amount"}
+`
+	if string(gotErr) != wantErr {
+		t.Errorf("error sink =\n%s\nwant\n%s", gotErr, wantErr)
+	}
+	if strings.Contains(string(gotErr), "Zoe") || strings.Contains(string(gotErr), "Max") {
+		t.Error("errsink must never carry a failed row's raw fields, only its envelope")
 	}
 }

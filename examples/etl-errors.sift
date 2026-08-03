@@ -1,0 +1,48 @@
+// Same shape as etl.sift, but with `on error |> errors` (design-errors.md
+// §5): two rows in this ingest are bad — Zoe's email is blank (fails
+// `validate`'s check) and Max's amount cell won't coerce to double at
+// all (fails at the source, design-errors.md §2.3 phase E3, before
+// `validate` even runs). Both are diverted to the `errors` sink as a
+// fixed envelope, never their raw fields; every other row still flows
+// through the full pipeline — segments, declassifiers, projection — and
+// reaches both `out` and `audit`, exactly as in etl.sift. No offset/limit
+// here: the point is error routing composing with the rest of the
+// pipeline, not row-slicing on top of it.
+on error |> errors
+
+source in = csv("etl-errors.csv", schema: {
+  id: int,
+  full_name: string,
+  email: string @pii,
+  phone: string @pii,
+  ssn: string @pii,
+  age: int,
+  amount: double,
+  plan: string,
+  signup_date: string,
+  internal_notes: string
+})
+sink out    = jsonl("etl-errors_out.jsonl")
+sink audit  = jsonl("etl-errors_audit.jsonl")
+sink errors = jsonl("etl-errors_errors.jsonl")
+
+pipeline validate =
+     check(.email != "", "missing email")
+  |> check(.amount > 0.0, "non-positive amount")
+
+pipeline eligible(min: double) = filter(.amount >= min)
+pipeline scrub(col)            = mask(col)
+
+pipeline main {
+  in
+    |> validate
+    |> filter(.age >= 18)
+    |> eligible(100.0)
+    |> map({ ...row, plan: upper(.plan), high_value: .amount >= 500.0 })
+    |> drop(ssn, internal_notes)
+    |> rename(full_name: name, signup_date: joined_at)
+    |> hash(email)
+    |> scrub(phone)
+    |> select(id, name, email, phone, age, amount, plan, high_value, joined_at)
+    |> out, audit
+}
