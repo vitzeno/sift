@@ -1,0 +1,38 @@
+// A composite, real-world use of every stage design-improvements.md
+// added: turning a full CRM dump into a GDPR-safe analytics extract.
+// Order matters here and shows how the stages compose:
+//   1. drop(ssn, internal_notes)     — two columns analytics must never
+//      see at all, not even masked.
+//   2. rename(full_name: name, signup_date: joined_at) — onto the
+//      analytics warehouse's canonical column names.
+//   3. hash(email)  — a stable, one-way join key in place of the
+//      address itself.
+//   4. mask(phone)  — kept for shape/support tooling, not the value.
+//   5. select(...)  — the exact output column set, in the warehouse's
+//      expected order.
+//   6. limit(3)     — this run is a schema-preview export, capped to
+//      three rows; Liam is never reached.
+// Every @pii column is gone or declassified by the time select runs, so
+// the sink accepts the row with no further masking needed.
+source in  = csv("customer-export.csv", schema: {
+  id: int,
+  full_name: string,
+  email: string @pii,
+  phone: string @pii,
+  ssn: string @pii,
+  signup_date: string,
+  plan: string,
+  internal_notes: string
+})
+sink   out = jsonl("customer-export_out.jsonl")
+
+pipeline main {
+  in
+    |> drop(ssn, internal_notes)
+    |> rename(full_name: name, signup_date: joined_at)
+    |> hash(email)
+    |> mask(phone)
+    |> select(id, name, email, phone, plan, joined_at)
+    |> limit(3)
+    |> out
+}

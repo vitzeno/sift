@@ -131,6 +131,21 @@ func TestExampleDeclassify(t *testing.T) {
 	}
 }
 
+// TestExampleCustomerExport runs the composite real-world pipeline that
+// chains every stage design-improvements.md added — drop, rename, hash,
+// mask, select, and limit — in the order a GDPR-safe analytics extract
+// would actually use them.
+func TestExampleCustomerExport(t *testing.T) {
+	got := runExample(t, "customer-export")
+	want := `{"id":1,"name":"Ada Lovelace","email":"b5fc85e55755f9e0d030a10ab4429b6b2944855f9a0d60077fe832becbc41d72","phone":"********","plan":"pro","joined_at":"2024-01-15"}
+{"id":2,"name":"Tom Reed","email":"72bb75a959e1785b79ffe7230eaeec25880707a91b4a4f98330fc1510bd40e03","phone":"********","plan":"free","joined_at":"2024-02-20"}
+{"id":3,"name":"Grace Hopper","email":"b533d4547eaa5a0fa955965a1ca393ccd2ea013032a105726f232eb41bddc4fa","phone":"********","plan":"pro","joined_at":"2024-03-05"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestExampleNamedSegment(t *testing.T) {
 	got := runExample(t, "named-segment")
 	want := `{"name":"Ada","email":"ada@example.com"}

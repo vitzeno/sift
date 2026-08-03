@@ -1,0 +1,5 @@
+id,full_name,email,phone,ssn,signup_date,plan,internal_notes
+1,Ada Lovelace,ada@example.com,555-0100,111-11-1111,2024-01-15,pro,VIP handled by Sam
+2,Tom Reed,tom@example.com,555-0101,222-22-2222,2024-02-20,free,Flagged for churn risk
+3,Grace Hopper,grace@example.com,555-0102,333-33-3333,2024-03-05,pro,None
+4,Liam Wu,liam@example.com,555-0103,444-44-4444,2024-04-10,free,Requested refund
