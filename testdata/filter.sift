@@ -1,0 +1,9 @@
+// Demonstrates filter with a compound condition: && combining a numeric
+// comparison with a bare bool field. Tom fails on age, Grace fails on
+// active; only Ada and Liam satisfy both.
+source in  = csv("filter.csv", schema: { name: string, age: int, active: bool })
+sink   out = jsonl("filter_out.jsonl")
+
+pipeline main {
+  in |> filter(.age >= 18 && .active) |> out
+}
