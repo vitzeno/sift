@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 
 	"github.com/vitzeno/sift/internal/runtime"
 	"github.com/vitzeno/sift/internal/value"
@@ -99,45 +98,27 @@ func (s *csvSource) Next() (value.Row, bool) {
 		return value.Row{}, false
 	}
 
+	line, _ := s.r.FieldPos(0)
+	prov := value.Provenance{
+		Source:  s.name,
+		Ordinal: s.ordinal,
+		Offset:  line,
+	}
+	s.ordinal++
+
 	fields := make(map[string]any, len(s.schema.Fields))
 	for _, field := range s.schema.Fields {
 		raw := record[s.col[field.Name]]
-		v, err := parseScalar(raw, field.Type.Kind)
-		if err != nil {
-			// decision: still a panic, not a row Failure. This is
-			// exactly the "cell coercion" case design-errors.md assigns
-			// to phase E3 (value.Coerce, a shared helper the xlsx/
-			// parquet connectors also use) — not yet built. Revisit
-			// here when E3 lands.
-			panic(fmt.Sprintf("csv source %q: field %q: %v", s.name, field.Name, err))
+		v, fail := value.Coerce(field.Type, raw)
+		if fail != nil {
+			// One failure per row (design-errors.md §9): the first bad
+			// cell marks the row and short-circuits — the rest of the
+			// record is never coerced.
+			fail.Stage = fmt.Sprintf("csv:%s", field.Name)
+			return value.Row{Fail: fail, Prov: prov}, true
 		}
 		fields[field.Name] = v
 	}
 
-	line, _ := s.r.FieldPos(0)
-	row := value.Row{
-		Fields: fields,
-		Prov: value.Provenance{
-			Source:  s.name,
-			Ordinal: s.ordinal,
-			Offset:  line,
-		},
-	}
-	s.ordinal++
-	return row, true
-}
-
-func parseScalar(raw string, kind value.Kind) (any, error) {
-	switch kind {
-	case value.String:
-		return raw, nil
-	case value.Int:
-		return strconv.Atoi(raw)
-	case value.Double:
-		return strconv.ParseFloat(raw, 64)
-	case value.Bool:
-		return strconv.ParseBool(raw)
-	default:
-		return nil, fmt.Errorf("unsupported scalar kind %v", kind)
-	}
+	return value.Row{Fields: fields, Prov: prov}, true
 }

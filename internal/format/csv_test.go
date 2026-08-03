@@ -98,6 +98,60 @@ func TestCSVSourceMalformedRecordIsInfraFatal(t *testing.T) {
 	}
 }
 
+// TestCSVSourceBadCellIsRowFailure is ERR-D (design-errors.md §7): a
+// non-numeric "age" cell must become a row Failure — not a panic — and
+// the source must keep working normally afterward: the next row still
+// reads, and Ordinal/Offset keep advancing as though nothing went wrong,
+// since only that one row is marked, never the stream itself.
+func TestCSVSourceBadCellIsRowFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "badcell.csv")
+	writeFile(t, path, "name,age\nAda,not-a-number\nTom,15\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name:   "in",
+		Path:   path,
+		Schema: peopleSchema(),
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok {
+		t.Fatal("Next() returned ok=false, want the failed row returned normally")
+	}
+	if row.Fail == nil {
+		t.Fatal("Fail is nil, want it set for a cell that doesn't parse as int")
+	}
+	if row.Fail.Reason != `cannot parse "not-a-number" as int` {
+		t.Errorf("Fail.Reason = %q, want %q", row.Fail.Reason, `cannot parse "not-a-number" as int`)
+	}
+	if row.Fail.Stage != "csv:age" {
+		t.Errorf("Fail.Stage = %q, want %q", row.Fail.Stage, "csv:age")
+	}
+	if row.Prov.Ordinal != 0 || row.Prov.Offset != 2 {
+		t.Errorf("Prov = %+v, want Ordinal=0 Offset=2 (still attached, even though the row failed)", row.Prov)
+	}
+	if err := src.Err(); err != nil {
+		t.Errorf("Err() = %v, want nil — a bad cell is a row failure, not infra-fatal", err)
+	}
+
+	row2, ok := src.Next()
+	if !ok {
+		t.Fatal("Next() returned ok=false on the second, healthy row")
+	}
+	if row2.Fail != nil {
+		t.Errorf("Fail = %+v, want nil for Tom's healthy row", row2.Fail)
+	}
+	if row2.Fields["name"] != "Tom" || row2.Fields["age"] != 15 {
+		t.Errorf("Fields = %#v, want name=Tom age=15", row2.Fields)
+	}
+	if row2.Prov.Ordinal != 1 || row2.Prov.Offset != 3 {
+		t.Errorf("second row Prov = %+v, want Ordinal=1 Offset=3", row2.Prov)
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
