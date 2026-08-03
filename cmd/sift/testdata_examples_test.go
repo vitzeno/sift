@@ -121,6 +121,16 @@ func TestExampleLimitOffset(t *testing.T) {
 	}
 }
 
+func TestExampleDeclassify(t *testing.T) {
+	got := runExample(t, "declassify")
+	want := `{"ticket_id":1,"email":"b5fc85e55755f9e0d030a10ab4429b6b2944855f9a0d60077fe832becbc41d72","phone":"[REDACTED]","subject":"Billing question"}
+{"ticket_id":2,"email":"72bb75a959e1785b79ffe7230eaeec25880707a91b4a4f98330fc1510bd40e03","phone":"[REDACTED]","subject":"Login issue"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestExampleNamedSegment(t *testing.T) {
 	got := runExample(t, "named-segment")
 	want := `{"name":"Ada","email":"ada@example.com"}
