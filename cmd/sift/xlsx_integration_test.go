@@ -1,6 +1,6 @@
 // This file maps to design/xlsx.md §5's acceptance list (XLSX-A through
 // XLSX-G), driving the xlsx source through the real CLI entry point
-// (runFile) the same way every other phase's acceptance tests do.
+// (runFile) the same way every other phase's integration tests do.
 // Fixture workbooks are generated with excelize at test time rather
 // than checked in as binaries, matching internal/format/xlsx_test.go's
 // convention — every fixture's shape is readable as the Go code that
