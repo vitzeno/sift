@@ -31,6 +31,11 @@ type csvSource struct {
 	col     map[string]int
 	schema  value.Schema
 	ordinal int
+	// err holds an infra-fatal error from the underlying reader (a
+	// malformed record it couldn't tokenize at all, an I/O error mid-
+	// read). It's infra-fatal, not a per-row Failure, because there's no
+	// well-formed row to attach one to — see design-errors.md §2.4.
+	err error
 }
 
 // NewCSVSource is the SourceCtor registered under "csv". It opens the file,
@@ -75,19 +80,23 @@ func (s *csvSource) Schema() value.Schema {
 	return s.schema
 }
 
+func (s *csvSource) Err() error {
+	return s.err
+}
+
 func (s *csvSource) Next() (value.Row, bool) {
 	record, err := s.r.Read()
 	if err == io.EOF {
 		return value.Row{}, false
 	}
 	if err != nil {
-		// decision: Next() has no error return (design.md §4's Stream
-		// interface is fixed), and v0 has no error-policy machinery yet
-		// (that's a checker/executor concern, modules 6-7). A malformed
-		// data row is out of v0's acceptance scope, so this is treated
-		// as an internal invariant violation rather than a user-facing
-		// diagnostic. Revisit once `on error` routing exists.
-		panic(fmt.Sprintf("csv source %q: %v", s.name, err))
+		// The reader couldn't tokenize this record at all (a bad quote,
+		// a field-count mismatch) — there's no well-formed row to carry
+		// a per-row Failure, so this is infra-fatal (design-errors.md
+		// §2.4): stop the stream and let the driver read it back via
+		// Err() after Next returns ok == false.
+		s.err = fmt.Errorf("csv source %q: %w", s.name, err)
+		return value.Row{}, false
 	}
 
 	fields := make(map[string]any, len(s.schema.Fields))
@@ -95,6 +104,11 @@ func (s *csvSource) Next() (value.Row, bool) {
 		raw := record[s.col[field.Name]]
 		v, err := parseScalar(raw, field.Type.Kind)
 		if err != nil {
+			// decision: still a panic, not a row Failure. This is
+			// exactly the "cell coercion" case design-errors.md assigns
+			// to phase E3 (value.Coerce, a shared helper the xlsx/
+			// parquet connectors also use) — not yet built. Revisit
+			// here when E3 lands.
 			panic(fmt.Sprintf("csv source %q: field %q: %v", s.name, field.Name, err))
 		}
 		fields[field.Name] = v

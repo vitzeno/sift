@@ -109,10 +109,27 @@ type Provenance struct {
 	Offset  int
 }
 
+// Failure marks a Row that failed somewhere in the pipeline — a check
+// condition that was false, or (from design-errors.md's phase E3) a
+// source cell that wouldn't coerce to its declared type. It never
+// duplicates Provenance: the Row it rides on already carries source,
+// ordinal, and offset (design-errors.md §2.1).
+type Failure struct {
+	Reason string // human-facing, e.g. "missing email"
+	Stage  string // originating stage, e.g. "check", "csv:age"
+}
+
 // Row is one record flowing through the pipeline: named field values plus
 // provenance. Fields is a map (not an ordered struct) because a stage like
 // map can add or drop columns freely — schema order lives on Schema, not Row.
+//
+// Fail is nil for a healthy row. Once set, every stage downstream must
+// treat the row as opaque and pass it through untouched — Fields may be
+// incomplete or suspect, so no stage may evaluate an expression against
+// it (design-errors.md §2.2). Only the driver, at the end of the chain,
+// disposes of a failed row per the program's error policy.
 type Row struct {
 	Fields map[string]any
 	Prov   Provenance
+	Fail   *Failure
 }

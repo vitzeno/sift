@@ -75,3 +75,33 @@ func TestSchemaFirstPII(t *testing.T) {
 		t.Errorf("FirstPII() = %+v, %v; want the first PII field, \"email\"", f, ok)
 	}
 }
+
+// TestRowFailNilByDefault confirms a healthy Row's zero value carries no
+// Failure — design-errors.md §2.1 designates nil as "healthy" and every
+// existing Row literal in the codebase (predating this field) must keep
+// meaning exactly that.
+func TestRowFailNilByDefault(t *testing.T) {
+	row := Row{Fields: map[string]any{"name": "Ada"}}
+	if row.Fail != nil {
+		t.Errorf("Fail = %+v, want nil on a Row literal that never set it", row.Fail)
+	}
+}
+
+func TestRowFailCarriesReasonAndStage(t *testing.T) {
+	row := Row{
+		Fields: map[string]any{"email": ""},
+		Prov:   Provenance{Source: "in", Ordinal: 3},
+		Fail:   &Failure{Reason: "missing email", Stage: "check"},
+	}
+	if row.Fail.Reason != "missing email" {
+		t.Errorf("Fail.Reason = %q, want %q", row.Fail.Reason, "missing email")
+	}
+	if row.Fail.Stage != "check" {
+		t.Errorf("Fail.Stage = %q, want %q", row.Fail.Stage, "check")
+	}
+	// A Failure never duplicates provenance — it rides on the Row that
+	// already carries it (design-errors.md §2.1).
+	if row.Prov.Ordinal != 3 {
+		t.Errorf("Prov.Ordinal = %d, want 3", row.Prov.Ordinal)
+	}
+}

@@ -58,11 +58,11 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	top, sink, err := runtime.Build(toBuildInput(cp))
+	top, runSrc, sink, err := runtime.Build(toBuildInput(cp))
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if err := runtime.Run(top, sink); err != nil {
+	if err := runtime.Run(top, runSrc, sink, runtime.PolicyAbort); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 
@@ -127,11 +127,11 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	top, sink, err := runtime.Build(toBuildInput(cp))
+	top, runSrc, sink, err := runtime.Build(toBuildInput(cp))
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if err := runtime.Run(top, sink); err != nil {
+	if err := runtime.Run(top, runSrc, sink, runtime.PolicyAbort); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 

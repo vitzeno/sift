@@ -37,6 +37,13 @@ func (f *Filter) Next() (value.Row, bool) {
 		if !ok {
 			return value.Row{}, false
 		}
+		// A failed row is opaque: it flows straight through, never
+		// tested against pred (design-errors.md §2.2). Its Fields may
+		// be incomplete or suspect, and it's the driver's job — not
+		// Filter's — to decide what happens to it.
+		if row.Fail != nil {
+			return row, true
+		}
 		if f.pred(row) {
 			return row, true
 		}

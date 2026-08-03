@@ -1,6 +1,8 @@
 package format
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/vitzeno/sift/internal/runtime"
@@ -63,5 +65,42 @@ func TestCSVSourceMissingSchemaField(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected an error for a schema field not present in the CSV header")
+	}
+}
+
+// TestCSVSourceMalformedRecordIsInfraFatal is ERR-E's source-level half
+// (design-errors.md §2.4): a record the reader can't even tokenize into
+// the right number of fields leaves no well-formed row to attach a
+// per-row Failure to, so Next reports a clean-looking ok=false and the
+// real problem surfaces through Err() — never a panic.
+func TestCSVSourceMalformedRecordIsInfraFatal(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "malformed.csv")
+	// The second row has only one field where the header declares two;
+	// encoding/csv's Reader rejects this as a field-count mismatch
+	// rather than returning a (short) record.
+	writeFile(t, path, "name,age\nOnlyOneField\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name:   "in",
+		Path:   path,
+		Schema: peopleSchema(),
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	if _, ok := src.Next(); ok {
+		t.Fatal("Next() returned ok=true, want false on a malformed record")
+	}
+	if err := src.Err(); err == nil {
+		t.Fatal("Err() returned nil, want the underlying reader error")
+	}
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
 	}
 }

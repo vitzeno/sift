@@ -42,7 +42,7 @@ func runFile(path string) error {
 	sink := *cp.Sink
 	sink.Path = resolvePath(base, sink.Path)
 
-	top, runSink, err := runtime.Build(runtime.BuildInput{
+	top, runSrc, runSink, err := runtime.Build(runtime.BuildInput{
 		Source:       &source,
 		SourceSchema: cp.SourceSchema,
 		Sink:         &sink,
@@ -53,7 +53,12 @@ func runFile(path string) error {
 		return err
 	}
 
-	return runtime.Run(top, runSink)
+	// decision: hardcoded to PolicyAbort — design-errors.md's phase E1
+	// ("failure mechanism, runtime only"). There's no frontend yet for a
+	// program to declare `on error skip`/`|> errors`; that's phase E2.
+	// Abort is v0's only behavior and design.md §2's default, so this
+	// keeps every existing .sift program's behavior unchanged.
+	return runtime.Run(top, runSrc, runSink, runtime.PolicyAbort)
 }
 
 // resolvePath joins path onto base unless path is already absolute, in

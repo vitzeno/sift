@@ -23,6 +23,12 @@ func (m *Map) Next() (value.Row, bool) {
 	if !ok {
 		return value.Row{}, false
 	}
+	// A failed row is opaque: map must not evaluate its record literal
+	// against fields that are, by definition, suspect
+	// (design-errors.md §2.2). Pass it through unchanged.
+	if row.Fail != nil {
+		return row, true
+	}
 	return value.Row{
 		Fields: eval.EvalRecord(m.rec, row),
 		Prov:   row.Prov,

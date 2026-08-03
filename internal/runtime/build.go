@@ -29,33 +29,38 @@ type BuildInput struct {
 // a Sink also from the registry. This is design.md §4's "build" step —
 // buildPipeline — the only place a *ast.Filter/*ast.Map/*ast.Check turns
 // into the matching runtime.Filter/Map/Check.
-func Build(in BuildInput) (Stream, Sink, error) {
-	src, err := NewSource(in.Source.Format, SourceOptions{
+//
+// Build returns the original Source alongside the wrapped chain: Run
+// needs both — top to pull rows, src to check Err() after top reports
+// EOF (design-errors.md §2.4) — since a Filter/Map/Check wrapping src
+// no longer looks like src to the type system.
+func Build(in BuildInput) (top Stream, src Source, sink Sink, err error) {
+	src, err = NewSource(in.Source.Format, SourceOptions{
 		Name:   in.Source.Name,
 		Path:   in.Source.Path,
 		Schema: in.SourceSchema,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	sink, err := NewSink(in.Sink.Format, SinkOptions{
+	sink, err = NewSink(in.Sink.Format, SinkOptions{
 		Path:   in.Sink.Path,
 		Schema: in.SinkSchema,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	var stream Stream = src
+	top = src
 	for _, stage := range in.Stages {
 		switch st := stage.(type) {
 		case *ast.Filter:
-			stream = NewFilterExpr(stream, st.Pred)
+			top = NewFilterExpr(top, st.Pred)
 		case *ast.Map:
-			stream = NewMap(stream, st.Record)
+			top = NewMap(top, st.Record)
 		case *ast.Check:
-			stream = NewCheck(stream, st.Cond, st.Reason)
+			top = NewCheck(top, st.Cond, st.Reason)
 		default:
 			// The checker only ever emits these three stage kinds into
 			// CheckedProgram.Stages (internal/checker/stage.go's
@@ -65,5 +70,5 @@ func Build(in BuildInput) (Stream, Sink, error) {
 		}
 	}
 
-	return stream, sink, nil
+	return top, src, sink, nil
 }

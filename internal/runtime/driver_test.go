@@ -1,16 +1,21 @@
 package runtime
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/vitzeno/sift/internal/value"
 )
 
 // fakeStream replays a fixed slice of rows and counts how many times
-// Next was called, so tests can assert on pull counts directly.
+// Next was called, so tests can assert on pull counts directly. It also
+// satisfies Source (Schema/Err), so it can stand in as Run's src
+// parameter directly whenever a test has no stages wrapping it, or
+// simulate an infra-fatal failure via err.
 type fakeStream struct {
 	rows  []value.Row
 	calls int
+	err   error
 }
 
 func (f *fakeStream) Next() (value.Row, bool) {
@@ -21,6 +26,14 @@ func (f *fakeStream) Next() (value.Row, bool) {
 	row := f.rows[0]
 	f.rows = f.rows[1:]
 	return row, true
+}
+
+func (f *fakeStream) Schema() value.Schema {
+	return value.Schema{}
+}
+
+func (f *fakeStream) Err() error {
+	return f.err
 }
 
 // fakeSink records every Write and whether Close was called.
@@ -54,7 +67,7 @@ func TestDriverFilterAndEOF(t *testing.T) {
 	})
 	sink := &fakeSink{}
 
-	if err := Run(filtered, sink); err != nil {
+	if err := Run(filtered, src, sink, PolicyAbort); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 
@@ -80,7 +93,7 @@ func TestDriverEmptyStream(t *testing.T) {
 	src := &fakeStream{}
 	sink := &fakeSink{}
 
-	if err := Run(src, sink); err != nil {
+	if err := Run(src, src, sink, PolicyAbort); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink.written) != 0 {
@@ -88,5 +101,85 @@ func TestDriverEmptyStream(t *testing.T) {
 	}
 	if !sink.closed {
 		t.Error("sink.Close was not called")
+	}
+}
+
+// TestDriverAbortOnFailedRow is ERR-A from design-errors.md §7 at the
+// runtime layer: a failed row under PolicyAbort stops the run with a
+// *FailureError carrying the row's reason and provenance, and closes
+// the sink even though the run didn't finish. Healthy rows before the
+// failure still reach the sink.
+func TestDriverAbortOnFailedRow(t *testing.T) {
+	src := &fakeStream{rows: []value.Row{
+		{Fields: map[string]any{"name": "Ada"}, Prov: value.Provenance{Source: "in", Ordinal: 0}},
+		{Fail: &value.Failure{Reason: "missing email", Stage: "check"}, Prov: value.Provenance{Source: "in", Ordinal: 1}},
+		{Fields: map[string]any{"name": "Tom"}, Prov: value.Provenance{Source: "in", Ordinal: 2}},
+	}}
+	sink := &fakeSink{}
+
+	err := Run(src, src, sink, PolicyAbort)
+	if err == nil {
+		t.Fatal("Run succeeded, want a FailureError")
+	}
+	fe, ok := err.(*FailureError)
+	if !ok {
+		t.Fatalf("error type = %T, want *FailureError", err)
+	}
+	if fe.Fail.Reason != "missing email" {
+		t.Errorf("Reason = %q, want %q", fe.Fail.Reason, "missing email")
+	}
+	if fe.Prov.Ordinal != 1 {
+		t.Errorf("Prov.Ordinal = %d, want 1 (the failing row)", fe.Prov.Ordinal)
+	}
+	if len(sink.written) != 1 {
+		t.Errorf("sink received %d rows, want 1 (only Ada, before the failure)", len(sink.written))
+	}
+	if !sink.closed {
+		t.Error("sink.Close was not called after the abort")
+	}
+}
+
+// TestDriverSkipOnFailedRow is ERR-B: the same failed row under
+// PolicySkip is silently dropped, the run completes with no error, and
+// every healthy row still reaches the sink.
+func TestDriverSkipOnFailedRow(t *testing.T) {
+	src := &fakeStream{rows: []value.Row{
+		{Fields: map[string]any{"name": "Ada"}},
+		{Fail: &value.Failure{Reason: "missing email", Stage: "check"}},
+		{Fields: map[string]any{"name": "Tom"}},
+	}}
+	sink := &fakeSink{}
+
+	if err := Run(src, src, sink, PolicySkip); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if len(sink.written) != 2 {
+		t.Fatalf("sink received %d rows, want 2 (Ada and Tom, failure dropped)", len(sink.written))
+	}
+	if sink.written[0].Fields["name"] != "Ada" || sink.written[1].Fields["name"] != "Tom" {
+		t.Errorf("sink.written = %+v, want Ada then Tom", sink.written)
+	}
+	if !sink.closed {
+		t.Error("sink.Close was not called")
+	}
+}
+
+// TestDriverInfraFatalAbortsRegardlessOfPolicy is ERR-E: a source-level
+// Err() aborts the run even under PolicySkip — infra-fatal is not
+// governed by the error policy at all (design-errors.md §2.4).
+func TestDriverInfraFatalAbortsRegardlessOfPolicy(t *testing.T) {
+	infraErr := fmt.Errorf("disk read error")
+	src := &fakeStream{err: infraErr}
+	sink := &fakeSink{}
+
+	err := Run(src, src, sink, PolicySkip)
+	if err == nil {
+		t.Fatal("Run succeeded, want the infra-fatal error")
+	}
+	if err != infraErr {
+		t.Errorf("error = %v, want the exact infra-fatal error from Err()", err)
+	}
+	if !sink.closed {
+		t.Error("sink.Close was not called after the infra-fatal abort")
 	}
 }
