@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/vitzeno/sift/internal/value"
@@ -181,6 +182,59 @@ func TestDriverInfraFatalAbortsRegardlessOfPolicy(t *testing.T) {
 	}
 	if !sink.closed {
 		t.Error("sink.Close was not called after the infra-fatal abort")
+	}
+}
+
+// TestDriverBroadcastsToEveryMainSink is design-multisink.md's terminal
+// broadcast at the runtime layer: every healthy row reaches every sink,
+// in declared order, and Close is called on all of them.
+func TestDriverBroadcastsToEveryMainSink(t *testing.T) {
+	src := &fakeStream{rows: []value.Row{
+		{Fields: map[string]any{"name": "Ada", "age": 42}},
+	}}
+	sink1 := &fakeSink{}
+	sink2 := &fakeSink{}
+
+	if err := Run(src, src, []Sink{sink1, sink2}, PolicyAbort, nil); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if len(sink1.written) != 1 || len(sink2.written) != 1 {
+		t.Fatalf("sink1/sink2 received %d/%d rows, want 1/1", len(sink1.written), len(sink2.written))
+	}
+	if !sink1.closed || !sink2.closed {
+		t.Error("every sink must be closed, even when there's more than one")
+	}
+}
+
+// failingCloseSink always errors on Close, so tests can force the
+// close-all path to hit more than one failure.
+type failingCloseSink struct {
+	fakeSink
+	closeErr error
+}
+
+func (s *failingCloseSink) Close() error {
+	s.fakeSink.Close()
+	return s.closeErr
+}
+
+// TestDriverCloseAllAggregatesErrors is design-multisink.md §6's
+// "close-all" rule: every sink is closed even if an earlier one errors,
+// and the failures are aggregated rather than the first one winning.
+func TestDriverCloseAllAggregatesErrors(t *testing.T) {
+	src := &fakeStream{}
+	sink1 := &failingCloseSink{closeErr: fmt.Errorf("disk full")}
+	sink2 := &failingCloseSink{closeErr: fmt.Errorf("permission denied")}
+
+	err := Run(src, src, []Sink{sink1, sink2}, PolicyAbort, nil)
+	if err == nil {
+		t.Fatal("Run succeeded, want the aggregated close errors")
+	}
+	if !sink1.closed || !sink2.closed {
+		t.Error("both sinks must be closed even though both error")
+	}
+	if !strings.Contains(err.Error(), "disk full") || !strings.Contains(err.Error(), "permission denied") {
+		t.Errorf("error = %q, want it to contain both close errors", err.Error())
 	}
 }
 

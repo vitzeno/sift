@@ -67,6 +67,77 @@ pipeline main {
 	}
 }
 
+// TestCheckMultiSinkBroadcast is design-multisink.md MS-A/§5: a terminal
+// list resolves to every named sink, in declared order, all sharing the
+// one computed schema.
+func TestCheckMultiSinkBroadcast(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, age: int })
+sink out = jsonl("out.jsonl")
+sink out2 = jsonl("out2.jsonl")
+
+pipeline main {
+  in |> filter(.age >= 18) |> out, out2
+}`
+	cp := mustCheck(t, src)
+	if len(cp.Sinks) != 2 || cp.Sinks[0].Name != "out" || cp.Sinks[1].Name != "out2" {
+		t.Fatalf("Sinks = %v, want [out, out2] in declared order", cp.Sinks)
+	}
+	wantSchema := "{ name: string, age: int }"
+	if got := cp.SinkSchema.String(); got != wantSchema {
+		t.Errorf("SinkSchema = %s, want %s (both sinks share it)", got, wantSchema)
+	}
+}
+
+// TestCheckDuplicateSinkInBroadcastList is design-multisink.md MS-C: the
+// same sink listed twice is a compile error, since it's always a literal
+// double-write of the same row.
+func TestCheckDuplicateSinkInBroadcastList(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out, out
+}`
+	err := checkErr(t, src)
+	if !strings.Contains(err.Error(), `sink "out" listed twice`) {
+		t.Errorf("error = %v, want a duplicate-sink error", err)
+	}
+}
+
+// TestCheckPIIRejectsUnmaskedMultiSink is design-multisink.md MS-D: an
+// unmasked @pii field reaching a broadcast list is a single compile
+// error naming every sink it applies to, not one error per sink.
+func TestCheckPIIRejectsUnmaskedMultiSink(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, email: string @pii })
+sink out = jsonl("out.jsonl")
+sink out2 = jsonl("out2.jsonl")
+
+pipeline main {
+  in |> out, out2
+}`
+	err := checkErr(t, src)
+	want := `field "email" is @pii and reaches sink "out", "out2" unmasked; declassify with mask/hash/redact`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
+// TestCheckPIIAllowsMaskedMultiSink is MS-D's success mode: masking once
+// before the broadcast clears the tag for every listed sink.
+func TestCheckPIIAllowsMaskedMultiSink(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, email: string @pii })
+sink out = jsonl("out.jsonl")
+sink out2 = jsonl("out2.jsonl")
+
+pipeline main {
+  in |> map({ ...row, email: mask(.email) }) |> out, out2
+}`
+	cp := mustCheck(t, src)
+	if len(cp.Sinks) != 2 {
+		t.Fatalf("Sinks = %d, want 2", len(cp.Sinks))
+	}
+}
+
 // TestCheckPIIRejectsUnmaskedSink is design.md §7 Case B's failure mode:
 // an unmasked @pii field reaching the sink must fail to compile with the
 // message design.md §3 spells out almost verbatim.
