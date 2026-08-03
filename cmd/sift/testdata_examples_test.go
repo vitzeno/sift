@@ -111,6 +111,16 @@ func TestExampleRename(t *testing.T) {
 	}
 }
 
+func TestExampleLimitOffset(t *testing.T) {
+	got := runExample(t, "limit-offset")
+	want := `{"name":"Grace","event":"purchase"}
+{"name":"Liam","event":"logout"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestExampleNamedSegment(t *testing.T) {
 	got := runExample(t, "named-segment")
 	want := `{"name":"Ada","email":"ada@example.com"}
