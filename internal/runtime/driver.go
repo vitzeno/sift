@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/vitzeno/sift/internal/value"
@@ -36,9 +37,16 @@ func (e *FailureError) Error() string {
 }
 
 // Run is the driver loop (design.md §4, design-errors.md §3.2): pull one
-// row from top, and either write a healthy row to sink or dispose of a
-// failed one per policy, until top is exhausted. Exactly one row is in
-// flight at a time — nothing here buffers the stream.
+// row from top, and either broadcast a healthy row to every sink
+// (design-multisink.md §3) or dispose of a failed one per policy, until
+// top is exhausted. Exactly one row is in flight at a time — nothing
+// here buffers the stream.
+//
+// sinks are written in declared order (design-multisink.md §6); a write
+// error is infra-fatal, matching the single-sink behavior this
+// generalizes. A partial multi-file write on that path is inherent to
+// writing N files with no cross-file transaction — declared order at
+// least keeps the partial state deterministic.
 //
 // errSink is only used, and only need be non-nil, under PolicyRoute; it
 // is nil for every program that doesn't declare `on error |> <name>`
@@ -50,15 +58,31 @@ func (e *FailureError) Error() string {
 // to the general Stream interface. Only Source gained Err()
 // (design-errors.md §2.4) — Filter/Map/Check didn't need a matching
 // method just to forward it, and top's static type stays plain Stream.
-func Run(top Stream, src Source, sink Sink, policy Policy, errSink Sink) error {
+func Run(top Stream, src Source, sinks []Sink, policy Policy, errSink Sink) error {
+	// closeAll closes every sink (and errSink, if present) even if an
+	// earlier Close errors, aggregating rather than bailing on the first
+	// (design-multisink.md §6's "close-all" rule) — a later sink's file
+	// handle deserves to be released regardless of an earlier one's fate.
+	closeAll := func() error {
+		var errs []error
+		for _, s := range sinks {
+			if err := s.Close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if errSink != nil {
+			if err := errSink.Close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return errors.Join(errs...)
+	}
+
 	for {
 		row, ok := top.Next()
 		if !ok {
 			if srcErr := src.Err(); srcErr != nil {
-				sink.Close()
-				if errSink != nil {
-					errSink.Close()
-				}
+				closeAll()
 				return srcErr
 			}
 			break
@@ -66,16 +90,13 @@ func Run(top Stream, src Source, sink Sink, policy Policy, errSink Sink) error {
 		if row.Fail != nil {
 			switch policy {
 			case PolicyAbort:
-				sink.Close()
-				if errSink != nil {
-					errSink.Close()
-				}
+				closeAll()
 				return &FailureError{Fail: row.Fail, Prov: row.Prov}
 			case PolicySkip:
 				continue
 			case PolicyRoute:
 				if err := errSink.Write(envelopeRow(row.Prov, row.Fail)); err != nil {
-					sink.Close()
+					closeAll()
 					return err
 				}
 				continue
@@ -83,15 +104,12 @@ func Run(top Stream, src Source, sink Sink, policy Policy, errSink Sink) error {
 				panic(fmt.Sprintf("runtime: unknown policy %v", policy))
 			}
 		}
-		if err := sink.Write(row); err != nil {
-			return err
+		for _, s := range sinks {
+			if err := s.Write(row); err != nil {
+				closeAll()
+				return err
+			}
 		}
 	}
-	if err := sink.Close(); err != nil {
-		return err
-	}
-	if errSink != nil {
-		return errSink.Close()
-	}
-	return nil
+	return closeAll()
 }

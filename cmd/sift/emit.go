@@ -58,7 +58,9 @@ func emitSchema(path string) error {
 	}
 
 	fmt.Printf("source %s: %s\n", cp.Source.Name, cp.SourceSchema)
-	fmt.Printf("sink %s: %s\n", cp.Sink.Name, cp.SinkSchema)
+	for _, s := range cp.Sinks {
+		fmt.Printf("sink %s: %s\n", s.Name, cp.SinkSchema)
+	}
 	return nil
 }
 

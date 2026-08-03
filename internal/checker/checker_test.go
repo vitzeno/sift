@@ -49,8 +49,8 @@ pipeline main {
 }`
 	cp := mustCheck(t, src)
 
-	if cp.Source.Name != "in" || cp.Sink.Name != "out" {
-		t.Errorf("Source/Sink = %q/%q, want in/out", cp.Source.Name, cp.Sink.Name)
+	if cp.Source.Name != "in" || len(cp.Sinks) != 1 || cp.Sinks[0].Name != "out" {
+		t.Errorf("Source/Sinks = %q/%v, want in/[out]", cp.Source.Name, cp.Sinks)
 	}
 	wantSchema := "{ name: string, age: int }"
 	if got := cp.SourceSchema.String(); got != wantSchema {

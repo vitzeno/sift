@@ -41,13 +41,17 @@ func runFile(path string) error {
 	base := filepath.Dir(path)
 	source := *cp.Source
 	source.Path = resolvePath(base, source.Path)
-	sink := *cp.Sink
-	sink.Path = resolvePath(base, sink.Path)
+	sinks := make([]*ast.SinkDecl, len(cp.Sinks))
+	for i, s := range cp.Sinks {
+		sink := *s
+		sink.Path = resolvePath(base, sink.Path)
+		sinks[i] = &sink
+	}
 
-	top, runSrc, runSink, err := runtime.Build(runtime.BuildInput{
+	top, runSrc, runSinks, err := runtime.Build(runtime.BuildInput{
 		Source:       &source,
 		SourceSchema: cp.SourceSchema,
-		Sink:         &sink,
+		Sinks:        sinks,
 		SinkSchema:   cp.SinkSchema,
 		Stages:       cp.Stages,
 	})
@@ -65,7 +69,7 @@ func runFile(path string) error {
 		}
 	}
 
-	return runtime.Run(top, runSrc, runSink, toRuntimePolicy(cp.ErrorPolicy), errSink)
+	return runtime.Run(top, runSrc, runSinks, toRuntimePolicy(cp.ErrorPolicy), errSink)
 }
 
 // toRuntimePolicy translates the checker's frontend-facing

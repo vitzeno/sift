@@ -16,25 +16,29 @@ import (
 // business depending on it. The five-field duplication is the price of
 // keeping that dependency arrow pointing one way; the caller (module 8's
 // CLI) is what bridges the two.
+//
+// Sinks is a list, not a single decl — design-multisink.md's terminal
+// broadcast: every sink receives the identical SinkSchema, since
+// broadcast happens after the last stage and performs no transform.
 type BuildInput struct {
 	Source       *ast.SourceDecl
 	SourceSchema value.Schema
-	Sink         *ast.SinkDecl
+	Sinks        []*ast.SinkDecl
 	SinkSchema   value.Schema
 	Stages       []ast.Stage
 }
 
 // Build turns a checked program into a runnable chain: a Source from the
 // registry, wrapped by one runtime stage per checked ast.Stage, feeding
-// a Sink also from the registry. This is design.md §4's "build" step —
-// buildPipeline — the only place a *ast.Filter/*ast.Map/*ast.Check turns
-// into the matching runtime.Filter/Map/Check.
+// every Sink also from the registry. This is design.md §4's "build"
+// step — buildPipeline — the only place a *ast.Filter/*ast.Map/*ast.Check
+// turns into the matching runtime.Filter/Map/Check.
 //
 // Build returns the original Source alongside the wrapped chain: Run
 // needs both — top to pull rows, src to check Err() after top reports
 // EOF (design-errors.md §2.4) — since a Filter/Map/Check wrapping src
 // no longer looks like src to the type system.
-func Build(in BuildInput) (top Stream, src Source, sink Sink, err error) {
+func Build(in BuildInput) (top Stream, src Source, sinks []Sink, err error) {
 	src, err = NewSource(in.Source.Format, SourceOptions{
 		Name:   in.Source.Name,
 		Path:   in.Source.Path,
@@ -44,12 +48,15 @@ func Build(in BuildInput) (top Stream, src Source, sink Sink, err error) {
 		return nil, nil, nil, err
 	}
 
-	sink, err = NewSink(in.Sink.Format, SinkOptions{
-		Path:   in.Sink.Path,
-		Schema: in.SinkSchema,
-	})
-	if err != nil {
-		return nil, nil, nil, err
+	sinks = make([]Sink, len(in.Sinks))
+	for i, sinkDecl := range in.Sinks {
+		sinks[i], err = NewSink(sinkDecl.Format, SinkOptions{
+			Path:   sinkDecl.Path,
+			Schema: in.SinkSchema,
+		})
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	top = src
@@ -82,7 +89,7 @@ func Build(in BuildInput) (top Stream, src Source, sink Sink, err error) {
 		}
 	}
 
-	return top, src, sink, nil
+	return top, src, sinks, nil
 }
 
 // columnNames extracts the bare names from a column-ref list — Build

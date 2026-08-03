@@ -67,7 +67,7 @@ func TestDriverFilterAndEOF(t *testing.T) {
 	})
 	sink := &fakeSink{}
 
-	if err := Run(filtered, src, sink, PolicyAbort, nil); err != nil {
+	if err := Run(filtered, src, []Sink{sink}, PolicyAbort, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestDriverEmptyStream(t *testing.T) {
 	src := &fakeStream{}
 	sink := &fakeSink{}
 
-	if err := Run(src, src, sink, PolicyAbort, nil); err != nil {
+	if err := Run(src, src, []Sink{sink}, PolicyAbort, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink.written) != 0 {
@@ -117,7 +117,7 @@ func TestDriverAbortOnFailedRow(t *testing.T) {
 	}}
 	sink := &fakeSink{}
 
-	err := Run(src, src, sink, PolicyAbort, nil)
+	err := Run(src, src, []Sink{sink}, PolicyAbort, nil)
 	if err == nil {
 		t.Fatal("Run succeeded, want a FailureError")
 	}
@@ -150,7 +150,7 @@ func TestDriverSkipOnFailedRow(t *testing.T) {
 	}}
 	sink := &fakeSink{}
 
-	if err := Run(src, src, sink, PolicySkip, nil); err != nil {
+	if err := Run(src, src, []Sink{sink}, PolicySkip, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink.written) != 2 {
@@ -172,7 +172,7 @@ func TestDriverInfraFatalAbortsRegardlessOfPolicy(t *testing.T) {
 	src := &fakeStream{err: infraErr}
 	sink := &fakeSink{}
 
-	err := Run(src, src, sink, PolicySkip, nil)
+	err := Run(src, src, []Sink{sink}, PolicySkip, nil)
 	if err == nil {
 		t.Fatal("Run succeeded, want the infra-fatal error")
 	}
@@ -200,7 +200,7 @@ func TestDriverRouteWritesEnvelopeToErrSink(t *testing.T) {
 	sink := &fakeSink{}
 	errSink := &fakeSink{}
 
-	if err := Run(src, src, sink, PolicyRoute, errSink); err != nil {
+	if err := Run(src, src, []Sink{sink}, PolicyRoute, errSink); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 

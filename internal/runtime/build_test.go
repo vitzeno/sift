@@ -26,7 +26,7 @@ func toBuildInput(cp *checker.CheckedProgram) runtime.BuildInput {
 	return runtime.BuildInput{
 		Source:       cp.Source,
 		SourceSchema: cp.SourceSchema,
-		Sink:         cp.Sink,
+		Sinks:        cp.Sinks,
 		SinkSchema:   cp.SinkSchema,
 		Stages:       cp.Stages,
 	}
@@ -60,15 +60,15 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	top, runSrc, sink, err := runtime.Build(toBuildInput(cp))
+	top, runSrc, sinks, err := runtime.Build(toBuildInput(cp))
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if err := runtime.Run(top, runSrc, sink, runtime.PolicyAbort, nil); err != nil {
+	if err := runtime.Run(top, runSrc, sinks, runtime.PolicyAbort, nil); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 
-	got, err := os.ReadFile(cp.Sink.Path)
+	got, err := os.ReadFile(cp.Sinks[0].Path)
 	if err != nil {
 		t.Fatalf("reading output: %v", err)
 	}
@@ -144,11 +144,11 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	top, runSrc, sink, err := runtime.Build(toBuildInput(cp))
+	top, runSrc, sinks, err := runtime.Build(toBuildInput(cp))
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if err := runtime.Run(top, runSrc, sink, runtime.PolicyAbort, nil); err != nil {
+	if err := runtime.Run(top, runSrc, sinks, runtime.PolicyAbort, nil); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 
@@ -197,11 +197,11 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	top, runSrc, sink, err := runtime.Build(toBuildInput(cp))
+	top, runSrc, sinks, err := runtime.Build(toBuildInput(cp))
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if err := runtime.Run(top, runSrc, sink, runtime.PolicyAbort, nil); err != nil {
+	if err := runtime.Run(top, runSrc, sinks, runtime.PolicyAbort, nil); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 
@@ -242,11 +242,11 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	top, runSrc, sink, err := runtime.Build(toBuildInput(cp))
+	top, runSrc, sinks, err := runtime.Build(toBuildInput(cp))
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if err := runtime.Run(top, runSrc, sink, runtime.PolicyAbort, nil); err != nil {
+	if err := runtime.Run(top, runSrc, sinks, runtime.PolicyAbort, nil); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 

@@ -8,6 +8,7 @@ package checker
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vitzeno/sift/internal/ast"
 	"github.com/vitzeno/sift/internal/lexer"
@@ -31,12 +32,17 @@ func errorf(pos lexer.Pos, format string, args ...any) *CheckError {
 }
 
 // CheckedProgram is what module 7 builds and runs: the resolved source
-// and sink with their schemas, and the flat chain of stages between
+// and sink(s) with their schemas, and the flat chain of stages between
 // them. Stages contains only *ast.Filter/*ast.Map/*ast.Check — every
 // *ast.NameRef to a named pipeline segment has already been inlined
 // (stage.go's expandStages), and the source/sink boundary NameRefs are
-// represented by the Source/Sink fields instead of appearing in the
+// represented by the Source/Sinks fields instead of appearing in the
 // list.
+//
+// Sinks holds one or more sinks in declared order (design-multisink.md's
+// terminal broadcast: `|> out, out_2`). They all share the one
+// SinkSchema below — broadcast performs no transform, so there's nothing
+// to compute per sink.
 //
 // ErrorPolicy defaults to ast.ErrorAbort when the program declares none
 // (design-errors.md §5). ErrorSink is non-nil only when ErrorPolicy is
@@ -45,7 +51,7 @@ func errorf(pos lexer.Pos, format string, args ...any) *CheckError {
 type CheckedProgram struct {
 	Source       *ast.SourceDecl
 	SourceSchema value.Schema
-	Sink         *ast.SinkDecl
+	Sinks        []*ast.SinkDecl
 	SinkSchema   value.Schema
 	Stages       []ast.Stage
 	ErrorPolicy  ast.ErrorPolicyKind
@@ -109,9 +115,12 @@ func Check(prog *ast.Program) (*CheckedProgram, error) {
 	}
 
 	srcName := runnable.Body[0].(*ast.NameRef).Name
-	sinkRef := runnable.Body[len(runnable.Body)-1].(*ast.NameRef)
+	sinkRefs := c.trailingSinkRefs(runnable)
+	if err := c.checkNoDuplicateSink(sinkRefs); err != nil {
+		return nil, err
+	}
 
-	middle := runnable.Body[1 : len(runnable.Body)-1]
+	middle := runnable.Body[1 : len(runnable.Body)-len(sinkRefs)]
 	stages, schema, err := c.expandStages(middle, c.sourceSchemas[srcName], map[string]bool{})
 	if err != nil {
 		return nil, err
@@ -119,19 +128,78 @@ func Check(prog *ast.Program) (*CheckedProgram, error) {
 
 	if f, ok := schema.FirstPII(); ok {
 		return nil, errorf(runnable.Pos,
-			"field %q is @pii and reaches sink %q unmasked; declassify with mask/hash/redact",
-			f.Name, sinkRef.Name)
+			"field %q is @pii and reaches sink %s unmasked; declassify with mask/hash/redact",
+			f.Name, sinkNameList(sinkRefs))
+	}
+
+	sinks := make([]*ast.SinkDecl, len(sinkRefs))
+	for i, ref := range sinkRefs {
+		sinks[i] = c.sinksByName[ref.Name]
 	}
 
 	return &CheckedProgram{
 		Source:       c.sourcesByName[srcName],
 		SourceSchema: c.sourceSchemas[srcName],
-		Sink:         c.sinksByName[sinkRef.Name],
+		Sinks:        sinks,
 		SinkSchema:   schema,
 		Stages:       stages,
 		ErrorPolicy:  errPolicy,
 		ErrorSink:    errSink,
 	}, nil
+}
+
+// trailingSinkRefs collects the terminal broadcast list
+// (design-multisink.md §2) off the end of runnable's body: the run of
+// consecutive *ast.NameRef elements, from the last backward, that each
+// resolve to a declared sink. It never looks at index 0 (always the
+// source ref) — findRunnablePipeline already guarantees the final
+// element is a sink NameRef, so this always returns at least one.
+func (c *checker) trailingSinkRefs(runnable *ast.PipelineDecl) []*ast.NameRef {
+	body := runnable.Body
+	sinkRefs := []*ast.NameRef{body[len(body)-1].(*ast.NameRef)}
+	for i := len(body) - 2; i > 0; i-- {
+		ref, ok := body[i].(*ast.NameRef)
+		if !ok || c.namespace[ref.Name] != declSink {
+			break
+		}
+		sinkRefs = append(sinkRefs, ref)
+	}
+	for l, r := 0, len(sinkRefs)-1; l < r; l, r = l+1, r-1 {
+		sinkRefs[l], sinkRefs[r] = sinkRefs[r], sinkRefs[l]
+	}
+	return sinkRefs
+}
+
+// checkNoDuplicateSink rejects the same sink appearing twice in a
+// broadcast list (design-multisink.md §5): every listed sink receives
+// every row, so a repeat is a literal double-write, always a mistake.
+// Contrast design-routing.md, where the same sink across branches is
+// fine — that's per-row selection, not broadcast.
+func (c *checker) checkNoDuplicateSink(sinkRefs []*ast.NameRef) error {
+	seen := map[string]bool{}
+	for _, ref := range sinkRefs {
+		if seen[ref.Name] {
+			return errorf(ref.Pos, "sink %q listed twice", ref.Name)
+		}
+		seen[ref.Name] = true
+	}
+	return nil
+}
+
+// sinkNameList formats a broadcast list for a diagnostic: a single sink
+// unquoted-joined the way the pre-multisink message already did, or a
+// comma-separated quoted list when there's more than one — the PII check
+// runs once against the shared terminal schema (design-multisink.md §4),
+// so one error must name every sink it covers.
+func sinkNameList(sinkRefs []*ast.NameRef) string {
+	if len(sinkRefs) == 1 {
+		return fmt.Sprintf("%q", sinkRefs[0].Name)
+	}
+	names := make([]string, len(sinkRefs))
+	for i, ref := range sinkRefs {
+		names[i] = fmt.Sprintf("%q", ref.Name)
+	}
+	return strings.Join(names, ", ")
 }
 
 // buildNamespace resolves every source/sink/pipeline name into one map,
