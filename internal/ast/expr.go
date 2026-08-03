@@ -21,6 +21,22 @@ type FieldAccess struct {
 
 func (*FieldAccess) exprNode() {}
 
+// ParamRef is a bare identifier in expression position with no call
+// parens following it -- a reference to an enclosing parameterized
+// segment's scalar parameter (design/segments.md §2.2), e.g. "min" in
+// `filter(.age >= min)`. The parser can't tell a genuine parameter
+// reference from a typo -- that needs the enclosing segment's parameter
+// list, which is checker business -- so it always produces this node;
+// the checker's monomorphization pass either substitutes it with the
+// call site's literal argument or, if it doesn't resolve to a declared
+// scalar parameter in scope, rejects it as an undefined name.
+type ParamRef struct {
+	Name string
+	Pos  lexer.Pos
+}
+
+func (*ParamRef) exprNode() {}
+
 type IntLit struct {
 	Value int64
 	Pos   lexer.Pos

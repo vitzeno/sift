@@ -176,3 +176,43 @@ type Check struct {
 }
 
 func (*Check) stageNode() {}
+
+// CallArgKind distinguishes a parameterized segment call's two argument
+// forms (design/segments.md §2), matching Param's two kinds one for one.
+type CallArgKind int
+
+const (
+	// ArgColumn is a bare column-name argument, bound to a ParamColumn
+	// parameter.
+	ArgColumn CallArgKind = iota
+	// ArgScalar is a literal argument, bound to a ParamScalar parameter.
+	// Literal is always one of IntLit/DoubleLit/StringLit/BoolLit -- a
+	// call argument is a compile-time constant, never an expression over
+	// row data (design/segments.md §6's scope fence).
+	ArgScalar
+)
+
+// CallArg is one argument at a parameterized segment call site --
+// `scrub(email)`'s "email", `adults(18)`'s "18".
+type CallArg struct {
+	Kind    CallArgKind
+	Column  string // set when Kind == ArgColumn
+	Literal Expr   // set when Kind == ArgScalar
+	Pos     lexer.Pos
+}
+
+// SegmentCall is a call to a parameterized named segment --
+// `scrub(email)`, `adults(18)`, `gate(score, 50)`. It reads identically
+// to a built-in stage at the call site (design/segments.md's stated
+// point of the feature): the parser produces one for any identifier not
+// in BuiltinStageNames that's followed by "(" -- whether Name actually
+// names a declared, parameterized pipeline segment is the checker's job
+// (buildNamespace + expandSegmentCall), same as a bare NameRef's
+// resolution.
+type SegmentCall struct {
+	Name string
+	Args []CallArg
+	Pos  lexer.Pos
+}
+
+func (*SegmentCall) stageNode() {}

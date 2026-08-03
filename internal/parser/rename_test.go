@@ -44,13 +44,3 @@ func TestParseRenameRejectsFieldAccess(t *testing.T) {
 		t.Errorf("error = %v, want the column-vs-field-access diagnostic", err)
 	}
 }
-
-func TestParseUnknownStageMessageListsRename(t *testing.T) {
-	_, err := Parse(`pipeline main { in |> bogus(x) |> out }`)
-	if err == nil {
-		t.Fatal("Parse succeeded, want an unknown-stage error")
-	}
-	if !strings.Contains(err.Error(), "rename") {
-		t.Errorf("error = %v, want it to list rename among the built-ins", err)
-	}
-}

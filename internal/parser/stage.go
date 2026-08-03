@@ -47,6 +47,7 @@ func (p *Parser) parseStageChain() []ast.Stage {
 //	| "rename" "(" RenamePair ("," RenamePair)* ")"
 //	| "limit" "(" INT ")" | "offset" "(" INT ")"
 //	| ("mask" | "hash" | "redact") "(" ColumnRefList ")"
+//	| IDENT "(" CallArgList ")"
 //
 // decision: built-in stage names are recognized by their literal text
 // here in the parser, not as lexer keywords (module 3's decision).
@@ -54,8 +55,9 @@ func (p *Parser) parseStageChain() []ast.Stage {
 // closed to a fixed list (ast.BuiltinStageNames), each with its own
 // argument shape, so the parser has to know their names to know how to
 // parse what follows the '('. A bare identifier with no following '(' is
-// a NameRef to a declared source, sink, or named pipeline segment;
-// resolving which is the checker's job.
+// a NameRef to a declared source, sink, or named pipeline segment; one
+// followed by '(' but not in the closed list is a parameterized segment
+// call (design-segments.md §2) -- resolving either is the checker's job.
 func (p *Parser) parseStageElem() ast.Stage {
 	pos := p.cur.Pos
 	if p.cur.Kind == lexer.ILLEGAL {
@@ -96,14 +98,60 @@ func (p *Parser) parseStageElem() ast.Stage {
 		return p.parseDeclassifyStage(name, pos)
 	case "take":
 		// decision: a specific, helpful rejection rather than falling
-		// through to the generic "unknown stage" message
-		// (design-improvements.md §3 locks the name as "limit", not
-		// "take" — a likely guess from other languages/tools).
+		// through to parsing it as a segment call (design-improvements.md
+		// §3 locks the name as "limit", not "take" — a likely guess from
+		// other languages/tools).
 		p.fail(pos, "unknown stage %q (did you mean %q?)", "take", "limit")
 		return nil
 	default:
-		p.fail(pos, "unknown stage %q (built-in stages are filter, map, check, select, drop, rename, limit, offset, mask, hash, redact)", name)
-		return nil
+		return p.parseSegmentCall(name, pos)
+	}
+}
+
+// parseSegmentCall := IDENT "(" (CallArg ("," CallArg)*)? ")"
+//
+// Any identifier not in ast.BuiltinStageNames, followed by "(", parses as
+// a call to a parameterized named segment (design-segments.md §2) --
+// `scrub(email)`, `adults(18)`. Whether name actually names a declared
+// pipeline segment, and whether its parameter count and kinds match, is
+// the checker's job (expandSegmentCall) -- the parser only knows the call
+// shape, the same division of labor as a bare NameRef.
+func (p *Parser) parseSegmentCall(name string, pos lexer.Pos) *ast.SegmentCall {
+	p.expect(lexer.LPAREN)
+	var args []ast.CallArg
+	if p.cur.Kind != lexer.RPAREN {
+		args = append(args, p.parseCallArg())
+		for p.cur.Kind == lexer.COMMA {
+			p.next()
+			args = append(args, p.parseCallArg())
+		}
+	}
+	p.expect(lexer.RPAREN)
+	return &ast.SegmentCall{Name: name, Args: args, Pos: pos}
+}
+
+// parseCallArg := IDENT | INT | DOUBLE | STRING | "true" | "false"
+//
+// A segment call argument is a bare column name or a scalar literal --
+// design-segments.md §2's two forms -- never a general expression: a
+// call argument is never stream-dependent (§6's scope fence). A bare
+// identifier is always taken as a column-name argument; v0 has no syntax
+// for forwarding a scalar parameter by name at a call site.
+func (p *Parser) parseCallArg() ast.CallArg {
+	pos := p.cur.Pos
+	switch p.cur.Kind {
+	case lexer.IDENT:
+		return ast.CallArg{Kind: ast.ArgColumn, Column: p.next().Lit, Pos: pos}
+	case lexer.INT, lexer.DOUBLE, lexer.STRING, lexer.TRUE, lexer.FALSE:
+		return ast.CallArg{Kind: ast.ArgScalar, Literal: p.parsePrimary(), Pos: pos}
+	case lexer.DOT:
+		p.next()
+		field := p.expectIdent()
+		p.fail(pos, "segment call arguments are a column name or literal, not a field access (%s)", "."+field)
+		return ast.CallArg{}
+	default:
+		p.fail(pos, "expected a column name or literal argument, got %s", p.cur)
+		return ast.CallArg{}
 	}
 }
 

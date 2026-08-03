@@ -53,15 +53,3 @@ func TestParseDeclassifyRejectsFieldAccess(t *testing.T) {
 		t.Errorf("error = %v, want the column-vs-field-access diagnostic", err)
 	}
 }
-
-func TestParseUnknownStageMessageListsDeclassifiers(t *testing.T) {
-	_, err := Parse(`pipeline main { in |> bogus(x) |> out }`)
-	if err == nil {
-		t.Fatal("Parse succeeded, want an unknown-stage error")
-	}
-	for _, name := range []string{"mask", "hash", "redact"} {
-		if !strings.Contains(err.Error(), name) {
-			t.Errorf("error = %v, want it to list %q among the built-ins", err, name)
-		}
-	}
-}

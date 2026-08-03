@@ -74,13 +74,3 @@ func TestParseSelectRequiresAtLeastOneColumn(t *testing.T) {
 		t.Fatal("Parse succeeded, want an error for select() with no columns")
 	}
 }
-
-func TestParseUnknownStageMessageListsSelectAndDrop(t *testing.T) {
-	_, err := Parse(`pipeline main { in |> bogus(x) |> out }`)
-	if err == nil {
-		t.Fatal("Parse succeeded, want an unknown-stage error")
-	}
-	if !strings.Contains(err.Error(), "select") || !strings.Contains(err.Error(), "drop") {
-		t.Errorf("error = %v, want it to list select and drop among the built-ins", err)
-	}
-}

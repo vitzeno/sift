@@ -141,11 +141,20 @@ func (p *Parser) parseSchemaField() ast.SchemaField {
 	return ast.SchemaField{Name: name, TypeName: typeName, PII: pii, Pos: pos}
 }
 
-// parsePipelineDecl := "pipeline" IDENT ( "{" StageChain "}" | "=" StageChain )
+// parsePipelineDecl := "pipeline" IDENT ( "(" ParamList ")" )?
+//
+//	( "{" StageChain "}" | "=" StageChain )
 func (p *Parser) parsePipelineDecl() *ast.PipelineDecl {
 	pos := p.cur.Pos
 	p.expect(lexer.PIPELINE)
 	name := p.expectIdent()
+
+	var params []ast.Param
+	if p.cur.Kind == lexer.LPAREN {
+		p.next()
+		params = p.parseParamList()
+		p.expect(lexer.RPAREN)
+	}
 
 	var body []ast.Stage
 	switch p.cur.Kind {
@@ -159,7 +168,37 @@ func (p *Parser) parsePipelineDecl() *ast.PipelineDecl {
 	case lexer.ILLEGAL:
 		p.fail(p.cur.Pos, "%s", p.cur.Lit)
 	default:
-		p.fail(p.cur.Pos, "expected '{' or '=' after pipeline name, got %s", p.cur)
+		p.fail(p.cur.Pos, "expected '(', '{', or '=' after pipeline name, got %s", p.cur)
 	}
-	return &ast.PipelineDecl{Name: name, Body: body, Pos: pos}
+	return &ast.PipelineDecl{Name: name, Params: params, Body: body, Pos: pos}
+}
+
+// parseParamList := Param ("," Param)*
+func (p *Parser) parseParamList() []ast.Param {
+	params := []ast.Param{p.parseParam()}
+	for p.cur.Kind == lexer.COMMA {
+		p.next()
+		params = append(params, p.parseParam())
+	}
+	return params
+}
+
+// parseParam := IDENT (":" IDENT)?
+//
+// No colon: a column parameter (design-segments.md §2.1) -- referenced
+// `.name` inside the body, bound to a bare column name at the call site.
+// With a colon: a scalar parameter (§2.2) of the named type -- referenced
+// as a bare value inside the body, bound to a literal at the call site.
+// Like SchemaField.TypeName, the type name is left as raw identifier
+// text; resolving it against int/double/string/bool is the checker's
+// job, not the parser's.
+func (p *Parser) parseParam() ast.Param {
+	pos := p.cur.Pos
+	name := p.expectIdent()
+	if p.cur.Kind != lexer.COLON {
+		return ast.Param{Name: name, Kind: ast.ParamColumn, Pos: pos}
+	}
+	p.next()
+	typeName := p.expectIdent()
+	return ast.Param{Name: name, Kind: ast.ParamScalar, TypeName: typeName, Pos: pos}
 }

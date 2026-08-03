@@ -123,7 +123,7 @@ func (p *Parser) parsePrimary() ast.Expr {
 		return p.parseRecordExpr()
 
 	case lexer.IDENT:
-		return p.parseCall(pos)
+		return p.parseCallOrParamRef(pos)
 
 	default:
 		p.fail(pos, "unexpected %s in expression", p.cur)
@@ -131,17 +131,21 @@ func (p *Parser) parsePrimary() ast.Expr {
 	}
 }
 
-// parseCall := IDENT "(" (Expr ("," Expr)*)? ")"
+// parseCallOrParamRef := IDENT "(" (Expr ("," Expr)*)? ")" | IDENT
 //
-// A bare identifier with no call parens is never a valid expression in
-// v0: there are no variable bindings to reference (the only implicit
-// value in scope, the current row, is reached exclusively through
-// `.field`), so every IDENT in expression position must be a function
-// call.
-func (p *Parser) parseCall(pos lexer.Pos) ast.Expr {
+// A bare identifier followed by "(" is a function call, same as always.
+// One with no parens used to be a flat parse error in v0 ("no variable
+// bindings to reference"). design-segments.md §2.2 adds exactly one:
+// a scalar parameter's bare name inside its own segment's body ("min" in
+// `filter(.age >= min)`). The parser can't tell that apart from a typo --
+// it needs the enclosing segment's parameter list, checker business --
+// so every bare identifier now parses as an ast.ParamRef, and the
+// checker's monomorphization pass either substitutes it with the call
+// site's literal argument or rejects it as an undefined name.
+func (p *Parser) parseCallOrParamRef(pos lexer.Pos) ast.Expr {
 	name := p.next().Lit
 	if p.cur.Kind != lexer.LPAREN {
-		p.fail(pos, "unexpected identifier %q in expression (field access is .%s, not %s)", name, name, name)
+		return &ast.ParamRef{Name: name, Pos: pos}
 	}
 	p.next()
 	var args []ast.Expr

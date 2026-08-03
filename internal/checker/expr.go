@@ -44,6 +44,15 @@ func (c *checker) checkExpr(e ast.Expr, schema value.Schema) (value.Type, error)
 		}
 		return f.Type, nil
 
+	case *ast.ParamRef:
+		// A bare identifier that survived to ordinary checking was never
+		// substituted for a scalar parameter's argument (design/segments.md
+		// §2.2) -- either it's outside any parameterized segment body, or
+		// it doesn't name one of the enclosing segment's own parameters.
+		// Either way it's an undefined name, the same diagnostic an
+		// unresolvable stage NameRef gets.
+		return value.Type{}, errorf(e.Pos, "undefined name %q", e.Name)
+
 	case *ast.IntLit:
 		return value.Type{Kind: value.Int}, nil
 

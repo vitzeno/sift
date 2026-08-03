@@ -21,7 +21,15 @@ import (
 // cycle of segments) with a clear error instead of a stack overflow --
 // CLAUDE.md: "no bare panic on user-facing error paths", and an infinite
 // recursion is exactly that if a malformed program can trigger it.
-func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting map[string]bool) ([]ast.Stage, value.Schema, error) {
+//
+// callerName is the name of the pipeline decl whose Body is currently
+// being expanded (the runnable pipeline's name at the top of Check(), or
+// a segment's own name once expansion has recursed into one) -- carried
+// through purely for dual-site diagnostics (design/segments.md §4): a
+// parameterized-call error names both where the bad code lives (the
+// segment definition, via the substituted node's own Pos) and where it
+// was instantiated from (callerName, plus the call's own position).
+func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting map[string]bool, callerName string) ([]ast.Stage, value.Schema, error) {
 	var out []ast.Stage
 
 	for _, s := range stages {
@@ -101,6 +109,14 @@ func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting
 			out = append(out, expanded...)
 			schema = newSchema
 
+		case *ast.SegmentCall:
+			expanded, newSchema, err := c.expandSegmentCall(st, schema, visiting, callerName)
+			if err != nil {
+				return nil, value.Schema{}, err
+			}
+			out = append(out, expanded...)
+			schema = newSchema
+
 		default:
 			panic("checker: unhandled stage type")
 		}
@@ -129,7 +145,7 @@ func (c *checker) expandNameRef(ref *ast.NameRef, schema value.Schema, visiting 
 		visiting[ref.Name] = true
 		defer delete(visiting, ref.Name)
 		seg := c.pipelinesByName[ref.Name]
-		return c.expandStages(seg.Body, schema, visiting)
+		return c.expandStages(seg.Body, schema, visiting, ref.Name)
 	default:
 		return nil, value.Schema{}, errorf(ref.Pos, "undefined name %q", ref.Name)
 	}

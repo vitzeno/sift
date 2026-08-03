@@ -121,7 +121,7 @@ func Check(prog *ast.Program) (*CheckedProgram, error) {
 	}
 
 	middle := runnable.Body[1 : len(runnable.Body)-len(sinkRefs)]
-	stages, schema, err := c.expandStages(middle, c.sourceSchemas[srcName], map[string]bool{})
+	stages, schema, err := c.expandStages(middle, c.sourceSchemas[srcName], map[string]bool{}, runnable.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +242,33 @@ func (c *checker) buildNamespace() error {
 		if err := declare(p.Name, declPipeline, p.Pos); err != nil {
 			return err
 		}
+		if err := c.checkParamList(p); err != nil {
+			return err
+		}
 		c.pipelinesByName[p.Name] = p
+	}
+	return nil
+}
+
+// checkParamList validates a segment's parameter list once, at
+// declaration time, regardless of whether any call site ever
+// instantiates it -- the same "validate the shape once, upfront" spirit
+// as resolveSourceSchemas checking every source's schema literal. Two
+// things can't wait for a call site: a duplicate parameter name (always
+// wrong, no substitution needed to see it), and a scalar parameter's
+// type name not being one of the four v0 scalars.
+func (c *checker) checkParamList(p *ast.PipelineDecl) error {
+	seen := map[string]bool{}
+	for _, param := range p.Params {
+		if seen[param.Name] {
+			return errorf(param.Pos, "duplicate parameter %q in segment %q", param.Name, p.Name)
+		}
+		seen[param.Name] = true
+		if param.Kind == ast.ParamScalar {
+			if _, ok := typeNames[param.TypeName]; !ok {
+				return errorf(param.Pos, "unknown type %q for parameter %q (expected string, int, double, or bool)", param.TypeName, param.Name)
+			}
+		}
 	}
 	return nil
 }

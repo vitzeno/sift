@@ -72,10 +72,42 @@ type SinkDecl struct {
 // branching (no fan-out/fan-in, design.md §5), so the chain is always
 // linear, and a slice matches that directly instead of adding tree
 // structure nothing will ever branch.
+//
+// Params is nil for a parameterless segment or the runnable pipeline
+// (unchanged from v0); non-empty turns Body into a template the checker
+// monomorphizes at each call site (design/segments.md §3) rather than a
+// stage list it inlines as-is.
 type PipelineDecl struct {
-	Name string
-	Body []Stage
-	Pos  lexer.Pos
+	Name   string
+	Params []Param
+	Body   []Stage
+	Pos    lexer.Pos
+}
+
+// ParamKind distinguishes a named segment's two parameter kinds
+// (design/segments.md §2): exactly two, no others planned.
+type ParamKind int
+
+const (
+	// ParamColumn is a bare-identifier parameter, referenced `.name`
+	// inside the body and passed a bare column name at the call site
+	// (design/segments.md §2.1).
+	ParamColumn ParamKind = iota
+	// ParamScalar is a `name: type` parameter, referenced as a bare
+	// value inside the body and passed a literal of that type at the
+	// call site (design/segments.md §2.2).
+	ParamScalar
+)
+
+// Param is one entry in a `pipeline name(params) = body` declaration's
+// parameter list. TypeName is only set when Kind == ParamScalar, and is
+// left as raw identifier text -- like SchemaField.TypeName, resolving it
+// to a value.Kind is the checker's job, not the parser's.
+type Param struct {
+	Name     string
+	Kind     ParamKind
+	TypeName string
+	Pos      lexer.Pos
 }
 
 // SchemaField is one `name: TypeName [@pii]` pair in a schema literal.

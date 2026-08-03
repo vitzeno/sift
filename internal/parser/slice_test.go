@@ -68,13 +68,3 @@ func TestParseStageSkipRejectedWithHint(t *testing.T) {
 		t.Errorf("error = %v, want it to explain the collision and suggest \"offset\"", err)
 	}
 }
-
-func TestParseUnknownStageMessageListsLimitAndOffset(t *testing.T) {
-	_, err := Parse(`pipeline main { in |> bogus(x) |> out }`)
-	if err == nil {
-		t.Fatal("Parse succeeded, want an unknown-stage error")
-	}
-	if !strings.Contains(err.Error(), "limit") || !strings.Contains(err.Error(), "offset") {
-		t.Errorf("error = %v, want it to list limit and offset among the built-ins", err)
-	}
-}

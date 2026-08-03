@@ -335,11 +335,10 @@ func TestParseErrors(t *testing.T) {
 	}{
 		{"garbage at top level", `42`, "expected a source, sink, pipeline, or error-policy declaration"},
 		{"missing comma before schema", `source in = csv("x.csv" schema: {})`, "COMMA"},
-		{"unknown stage", `pipeline main { in |> foo(.x) |> out }`, `unknown stage "foo"`},
+		{"field access as segment call argument", `pipeline main { in |> foo(.x) |> out }`, "not a field access"},
 		{"unknown tag", `source in = csv("x.csv", schema: { name: string @xyz })`, `@pii`},
 		{"unterminated string", `source in = csv("x.csv`, "unterminated string literal"},
-		{"bad pipeline separator", `pipeline main : in`, "expected '{' or '='"},
-		{"bare identifier in expression", `pipeline main { in |> filter(row) |> out }`, "field access is .row"},
+		{"bad pipeline separator", `pipeline main : in`, "expected '(', '{', or '='"},
 		{"comma before any pipe", `pipeline main { in, out }`, "expected RBRACE, got COMMA"},
 	}
 	for _, tt := range tests {
