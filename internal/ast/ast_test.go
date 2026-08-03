@@ -29,6 +29,7 @@ var (
 	_ Stage = (*Rename)(nil)
 	_ Stage = (*Limit)(nil)
 	_ Stage = (*Offset)(nil)
+	_ Stage = (*Declassify)(nil)
 )
 
 // TestAdultsFilterShape hand-builds design.md §7 Case A's adults.sift as

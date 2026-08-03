@@ -8,9 +8,11 @@ package runtime_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vitzeno/sift/internal/checker"
+	"github.com/vitzeno/sift/internal/eval"
 	_ "github.com/vitzeno/sift/internal/format" // registers "csv"/"jsonl" via init()
 	"github.com/vitzeno/sift/internal/parser"
 	"github.com/vitzeno/sift/internal/runtime"
@@ -112,6 +114,54 @@ pipeline main {
 	}
 	if _, err := checker.Check(prog); err == nil {
 		t.Fatal("Check succeeded, want it to reject the renamed field, still @pii and unmasked")
+	}
+}
+
+// TestBuildFullPipelineDeclassifyStage is S4's own demo
+// (design-improvements.md §8): `|> hash(email) |> out` compiles and
+// runs where the bare email column previously could not reach the sink
+// at all, through the real compiler pipeline.
+func TestBuildFullPipelineDeclassifyStage(t *testing.T) {
+	dir := t.TempDir()
+	inPath := filepath.Join(dir, "people.csv")
+	if err := os.WriteFile(inPath, []byte("name,email\nAda,ada@example.com\n"), 0o644); err != nil {
+		t.Fatalf("writing fixture CSV: %v", err)
+	}
+	outPath := filepath.Join(dir, "out.jsonl")
+
+	src := `source in = csv("` + filepath.ToSlash(inPath) + `", schema: { name: string, email: string @pii })
+sink out = jsonl("` + filepath.ToSlash(outPath) + `")
+
+pipeline main {
+  in |> hash(email) |> out
+}`
+
+	prog, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	cp, err := checker.Check(prog)
+	if err != nil {
+		t.Fatalf("Check error: %v", err)
+	}
+	top, runSrc, sink, err := runtime.Build(toBuildInput(cp))
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if err := runtime.Run(top, runSrc, sink, runtime.PolicyAbort, nil); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("reading output: %v", err)
+	}
+	if strings.Contains(string(got), "ada@example.com") {
+		t.Errorf("output = %q, want the raw email replaced by its hash", got)
+	}
+	want := `{"name":"Ada","email":"` + eval.Declassify("hash", "ada@example.com") + `"}` + "\n"
+	if string(got) != want {
+		t.Errorf("output = %q, want %q", got, want)
 	}
 }
 

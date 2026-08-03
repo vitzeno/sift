@@ -35,6 +35,9 @@ var BuiltinStageNames = map[string]bool{
 	"rename": true,
 	"limit":  true,
 	"offset": true,
+	"mask":   true,
+	"hash":   true,
+	"redact": true,
 }
 
 // ColumnRef is a bare column-name reference — the argument form
@@ -116,6 +119,24 @@ type Offset struct {
 }
 
 func (*Offset) stageNode() {}
+
+// Declassify applies Fn (mask, hash, or redact) to each named column in
+// place, clearing its @pii tag (design-improvements.md §4). It's one of
+// only two ways to clear the tag — dropping the column (§1) is the
+// other. Fn and Columns share the same column-list shape select/drop
+// use; unlike them, every named column must already be string @pii.
+//
+// This is the stage-position twin of the same-named expression
+// function (design-improvements.md §6): `|> mask(email)` here,
+// `map({ id: mask(.email) })` there, both backed by one shared
+// implementation.
+type Declassify struct {
+	Fn      string
+	Columns []ColumnRef
+	Pos     lexer.Pos
+}
+
+func (*Declassify) stageNode() {}
 
 // NameRef refers to a declared source, sink, or named pipeline segment
 // by name — the "in" and "out" in `in |> filter(...) |> out`, or a named

@@ -23,6 +23,7 @@ func (p *Parser) parseStageChain() []ast.Stage {
 //	| "select" "(" ColumnRefList ")" | "drop" "(" ColumnRefList ")"
 //	| "rename" "(" RenamePair ("," RenamePair)* ")"
 //	| "limit" "(" INT ")" | "offset" "(" INT ")"
+//	| ("mask" | "hash" | "redact") "(" ColumnRefList ")"
 //
 // decision: built-in stage names are recognized by their literal text
 // here in the parser, not as lexer keywords (module 3's decision).
@@ -68,6 +69,8 @@ func (p *Parser) parseStageElem() ast.Stage {
 		return p.parseLimit(pos)
 	case "offset":
 		return p.parseOffset(pos)
+	case "mask", "hash", "redact":
+		return p.parseDeclassifyStage(name, pos)
 	case "take":
 		// decision: a specific, helpful rejection rather than falling
 		// through to the generic "unknown stage" message
@@ -76,7 +79,7 @@ func (p *Parser) parseStageElem() ast.Stage {
 		p.fail(pos, "unknown stage %q (did you mean %q?)", "take", "limit")
 		return nil
 	default:
-		p.fail(pos, "unknown stage %q (built-in stages are filter, map, check, select, drop, rename, limit, offset)", name)
+		p.fail(pos, "unknown stage %q (built-in stages are filter, map, check, select, drop, rename, limit, offset, mask, hash, redact)", name)
 		return nil
 	}
 }
@@ -164,6 +167,18 @@ func (p *Parser) parseIntLiteralArg() int64 {
 		p.fail(tok.Pos, "invalid integer literal %q", tok.Lit)
 	}
 	return n
+}
+
+// parseDeclassifyStage parses mask/hash/redact in stage position — the
+// same column-list grammar select/drop already use
+// (design-improvements.md §4). fn is the already-consumed stage name,
+// carried through unchanged so the checker/runtime know which
+// declassifier to apply.
+func (p *Parser) parseDeclassifyStage(fn string, pos lexer.Pos) *ast.Declassify {
+	p.expect(lexer.LPAREN)
+	cols := p.parseColumnRefList()
+	p.expect(lexer.RPAREN)
+	return &ast.Declassify{Fn: fn, Columns: cols, Pos: pos}
 }
 
 // parseColumnRefList := ColumnRef ("," ColumnRef)*

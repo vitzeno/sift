@@ -71,6 +71,8 @@ func Build(in BuildInput) (top Stream, src Source, sink Sink, err error) {
 			top = NewLimit(top, st.N)
 		case *ast.Offset:
 			top = NewOffset(top, st.N)
+		case *ast.Declassify:
+			top = NewDeclassify(top, st.Fn, columnNames(st.Columns))
 		default:
 			// The checker only ever emits ast.BuiltinStageNames kinds into
 			// CheckedProgram.Stages (internal/checker/stage.go's

@@ -161,12 +161,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 func evalCall(e *ast.Call, row value.Row) any {
 	arg := Eval(e.Args[0], row).(string)
 	switch e.Fn {
-	case "mask":
-		return maskString(arg)
-	case "hash":
-		return hashString(arg)
-	case "redact":
-		return "[REDACTED]"
+	case "mask", "hash", "redact":
+		return Declassify(e.Fn, arg)
 	case "upper":
 		return strings.ToUpper(arg)
 	case "lower":
@@ -178,6 +174,12 @@ func evalCall(e *ast.Call, row value.Row) any {
 	}
 }
 
+// Declassify applies a named declassifier (mask/hash/redact) to s. It's
+// exported so runtime's Declassify stage (design-improvements.md §4,
+// §6's "two namespaces") shares the exact same implementation as
+// evalCall's expression-position call — one implementation, two call
+// sites, never two definitions of what "mask" means to drift apart.
+//
 // decision: design.md names mask/hash/redact as PII declassifiers but
 // never specifies their algorithms. Picked the simplest reasonable,
 // deterministic behavior for each, using only the standard library
@@ -186,13 +188,17 @@ func evalCall(e *ast.Call, row value.Row) any {
 //     value's shape without its content.
 //   - hash:   SHA-256, hex-encoded — a real one-way hash, not a stub.
 //   - redact: a fixed placeholder, dropping length/shape entirely (the
-//     strictest of the three; implemented as a literal in evalCall).
-
-func maskString(s string) string {
-	return strings.Repeat("*", len(s))
-}
-
-func hashString(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	return fmt.Sprintf("%x", sum)
+//     strictest of the three).
+func Declassify(fn, s string) string {
+	switch fn {
+	case "mask":
+		return strings.Repeat("*", len(s))
+	case "hash":
+		sum := sha256.Sum256([]byte(s))
+		return fmt.Sprintf("%x", sum)
+	case "redact":
+		return "[REDACTED]"
+	default:
+		panic(fmt.Sprintf("eval: unknown declassifier %q", fn))
+	}
 }

@@ -85,6 +85,14 @@ func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting
 			// (design-improvements.md §3).
 			out = append(out, st)
 
+		case *ast.Declassify:
+			newSchema, err := c.checkDeclassify(st, schema)
+			if err != nil {
+				return nil, value.Schema{}, err
+			}
+			out = append(out, st)
+			schema = newSchema
+
 		case *ast.NameRef:
 			expanded, newSchema, err := c.expandNameRef(st, schema, visiting)
 			if err != nil {
