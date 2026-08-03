@@ -6,17 +6,53 @@ pull-based, tree-walking interpreter written in Go. There's no IR and no
 codegen: ETL is I/O-bound, so a native compiler buys almost nothing next
 to disk and network time.
 
-The distinctive feature: **compile-time PII tagging**. Mark a field
+Its one distinctive feature: **compile-time PII tagging**. Mark a field
 `@pii` on a source's schema and Sift tracks it through every expression
 that touches it. A sink that would write an unmasked `@pii` field is a
 compile error, not a runtime surprise.
 
-For the full language reference see [`design/language.md`](design/language.md);
-for error semantics (`on error`, failed rows) see
-[`design/errors.md`](design/errors.md). For how the codebase is organized and
-built, see [`CLAUDE.md`](CLAUDE.md).
+This README is a tutorial: it starts from the smallest possible pipeline
+and adds one concept at a time, each backed by a runnable example under
+[`examples/`](examples/). For the complete grammar and semantics see
+[`design/language.md`](design/language.md); for how the codebase itself is
+organized, see [`CLAUDE.md`](CLAUDE.md).
 
-## Quick example
+## Contents
+
+1. [Building the CLI](#building-the-cli)
+2. [Your first pipeline](#your-first-pipeline)
+3. [Transforming rows with map](#transforming-rows-with-map)
+4. [Gating rows: filter and check](#gating-rows-filter-and-check)
+5. [The PII tag](#the-pii-tag)
+6. [Shaping schemas: select, drop, rename](#shaping-schemas-select-drop-rename)
+7. [Slicing rows: limit and offset](#slicing-rows-limit-and-offset)
+8. [Declassifying stages](#declassifying-stages)
+9. [Putting it together](#putting-it-together)
+10. [When a row fails: error policies](#when-a-row-fails-error-policies)
+11. [Writing to more than one sink](#writing-to-more-than-one-sink)
+12. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
+13. [Parameterized segments](#parameterized-segments)
+14. [Quick reference](#quick-reference)
+15. [Project layout](#project-layout)
+16. [Status](#status)
+
+## Building the CLI
+
+```console
+$ go build -o sift ./cmd/sift
+$ ./sift
+usage: sift run <file> | sift --emit-ast <file> | sift --emit-schema <file>
+```
+
+Everything below assumes a `sift` binary built this way (`make build`
+does the same thing — see [Project layout](#project-layout) for the rest
+of the Makefile).
+
+## Your first pipeline
+
+Every Sift program is three things: a **source**, a **sink**, and a
+**pipeline** connecting them with `|>`. Here's the smallest one that does
+something — filter out anyone under 18.
 
 `people.csv`:
 
@@ -37,23 +73,132 @@ pipeline main {
 }
 ```
 
+- `source in = csv(...)` declares a source named `in`, read as `csv`,
+  with an explicit **schema** — CSV carries no types of its own, so every
+  field's name and type (`string`, `int`, `double`, or `bool`) is spelled
+  out here.
+- `sink out = jsonl(...)` declares a sink named `out`, writing one JSON
+  object per line.
+- `pipeline main { ... }` is the program's entry point: exactly one
+  `|>`-chain, starting at a source and ending at a sink.
+- `filter(.age >= 18)` is a **stage**. `.age` reads a field off the
+  current row; the row survives only if the condition is true.
+
 Run it:
 
 ```console
-$ sift run adults.sift
+$ ./sift run adults.sift
 $ cat adults.jsonl
 {"name":"Ada","age":42}
 ```
 
-Tom is filtered out; only Ada's row reaches the sink.
+Tom is filtered out silently; only Ada's row reaches the sink.
 
-> **Note:** a source or sink's path (`"people.csv"`, `"adults.jsonl"`
-> above) resolves relative to `adults.sift`'s own directory, not the
-> current working directory — so this works the same way whether you run
-> `sift` from right there or from anywhere else, as long as you pass it
-> `path/to/adults.sift`.
+> **Path resolution:** `"people.csv"` and `"adults.jsonl"` resolve
+> relative to `adults.sift`'s own directory, not your current working
+> directory — this runs the same whether you're sitting right next to it
+> or invoking `sift run path/to/adults.sift` from anywhere else.
 
-## PII in one example
+Two more flags are useful while you're learning the language:
+`--emit-ast` shows what the parser built, `--emit-schema` shows what the
+checker computed for the source and sink:
+
+```console
+$ ./sift --emit-ast adults.sift
+source in = csv("people.csv", schema: { name: string, age: int })
+sink out = jsonl("adults.jsonl")
+pipeline main:
+  in
+  filter((.age >= 18))
+  out
+
+$ ./sift --emit-schema adults.sift
+source in: { name: string, age: int }
+sink out: { name: string, age: int }
+```
+
+`examples/adults.sift` is this exact program.
+
+## Transforming rows with map
+
+`filter` only ever keeps or drops a row unchanged. To change one, use
+`map`, which rebuilds it from a **record literal**:
+
+```sift
+source in  = csv("map.csv", schema: { name: string, age: int, balance: double })
+sink   out = jsonl("map_out.jsonl")
+
+pipeline main {
+  in |> map({ ...row, name: upper(.name), balance_ok: .balance >= 100.0, age_next_year: .age + 1 }) |> out
+}
+```
+
+Against `map.csv` (`Ada,42,250.50` / `Tom,15,50.00`):
+
+```console
+$ ./sift run map.sift
+{"name":"ADA","age":42,"balance":250.5,"balance_ok":true,"age_next_year":43}
+{"name":"TOM","age":15,"balance":50,"balance_ok":false,"age_next_year":16}
+```
+
+`{ ...row, ... }` spreads every field of the current row first; each named
+field after it either overrides one in place (`name`) or adds a new one
+(`balance_ok`, `age_next_year`). The output schema follows the same rule —
+original position first, new fields appended in the order written.
+
+This is also your first real look at Sift's expressions:
+
+| Kind | Examples |
+|---|---|
+| Field access | `.age`, `.name` |
+| Literals | `42`, `3.14`, `"hi"`, `true` |
+| Arithmetic | `+ - * /` |
+| Comparison | `< > <= >= == !=` |
+| Boolean | `&& \|\|` |
+| Function call | `upper(.name)`, `mask(.email)` |
+
+There's no chained access (`.a.b`) and no user-defined scalar functions —
+just field access, the operators above, and a fixed set of built-ins
+(`upper`, `lower`, `trim`, and the three declassifiers you'll meet next).
+
+`examples/map.sift` is this exact program.
+
+## Gating rows: filter and check
+
+`filter` and `check` both take a boolean condition, but they mean
+different things when it's false:
+
+- `filter(cond)` **silently drops** the row — it never existed downstream.
+- `check(cond, "reason")` **marks the row as failed**, citing the reason.
+  It doesn't disappear; it becomes a problem for the pipeline's error
+  policy to deal with (see [When a row fails](#when-a-row-fails-error-policies)).
+
+```sift
+source in  = csv("check.csv", schema: { name: string, email: string })
+sink   out = jsonl("check_out.jsonl")
+
+pipeline main {
+  in |> check(.email != "", "missing email") |> out
+}
+```
+
+```console
+$ ./sift run check.sift
+{"name":"Ada","email":"ada@example.com"}
+{"name":"Tom","email":"tom@example.com"}
+```
+
+Every row in `check.csv` has a non-blank email, so `check` never fires
+here — `examples/check.sift` shows the pass-through case; a failing one
+is coming up once error policies are on the table.
+
+## The PII tag
+
+This is Sift's reason for existing. Tag a field `@pii` in a source's
+schema and the checker tracks it through every expression that touches
+it — arithmetic, function calls, `map`, all of it. A sink that would
+receive a field still tagged `@pii` is a **compile error**, not a runtime
+surprise:
 
 ```sift
 source in  = csv("people.csv", schema: { name: string, email: string @pii })
@@ -65,11 +210,13 @@ pipeline main {
 ```
 
 ```console
-$ sift run leaky.sift
+$ ./sift run leaky.sift
 leaky.sift:4:1: error: field "email" is @pii and reaches sink "out" unmasked; declassify with mask/hash/redact
 ```
 
-Declassify it explicitly and the same program compiles and runs:
+Three functions, and only three, can turn a `string @pii` back into a
+plain `string`: `mask`, `hash`, `redact`. Apply one and the same shape of
+program compiles and runs:
 
 ```sift
 pipeline main {
@@ -77,170 +224,397 @@ pipeline main {
 }
 ```
 
-`mask`, `hash`, and `redact` are the only three functions that can turn
-a `string @pii` back into a plain `string`. Every other function or
-operator that touches a `@pii` value propagates the tag — transforming
-PII never launders it.
-
-## More stages: select, drop, rename, limit/offset, declassifiers
-
-Beyond `filter`/`map`/`check`, five more built-ins round out v0's stage
-set. `select`/`drop` project columns — and dropping a `@pii` column is a
-legitimate way to satisfy the sink rule, with no `mask` call at all.
-`rename` remaps a column name while preserving its exact type,
-**including a `@pii` tag** — a renamed PII column is still rejected
-unmasked. `limit`/`offset` slice rows positionally, counting a failed
-row the same as a healthy one. And `mask`/`hash`/`redact` exist as
-stages as well as functions: `|> hash(email)` declassifies the whole
-column in one step, where `map({ ...row, email: hash(.email) })` is one
-missing `...row` away from silently dropping every other column.
-
-```sift
-in
-  |> drop(ssn, internal_notes)
-  |> rename(full_name: name, signup_date: joined_at)
-  |> hash(email)
-  |> mask(phone)
-  |> select(id, name, email, phone, plan, joined_at)
-  |> limit(3)
-  |> out
+```console
+$ ./sift run pii.sift
+{"name":"Ada","email":"***************"}
 ```
 
-See `examples/select.sift`, `drop.sift`, `rename.sift`,
-`limit-offset.sift`, and `declassify.sift` for one runnable example per
-stage, and `examples/customer-export.sift` for the composite pipeline
-above in full — a CRM dump turned into a GDPR-safe analytics extract.
+Every other function or operator that touches a `@pii` value **propagates
+the tag** to its result — `upper(.email)` is still `@pii`. There's no way
+to accidentally launder PII by transforming it: only `mask`/`hash`/`redact`
+clear the tag, because the checker special-cases exactly those three.
+`examples/pii.sift` is the runnable version.
 
-## Error policies
+## Shaping schemas: select, drop, rename
 
-A row can fail — a `check` condition is false, or a source cell won't
-coerce to its declared type (a non-numeric `age`, say). What happens
-next is controlled by one `on error` declaration, and it's the same
-mechanism either way: the row is marked, not thrown as an exception, and
-the driver disposes of it per the active policy.
+Three stages reshape a row's schema without changing PII semantics.
+
+**`select(col, ...)`** keeps only the named columns, in the order you
+name them:
 
 ```sift
-source in  = csv("people.csv", schema: { name: string, age: int, email: string })
-sink   out = jsonl("out.jsonl")
+in |> select(email, name, plan) |> out
+```
+
+**`drop(col, ...)`** removes columns entirely — and dropping a `@pii`
+column is a legitimate way to satisfy the sink rule with no `mask` call
+at all, since the field is simply gone before the check ever runs:
+
+```sift
+source in  = csv("drop.csv", schema: { name: string, ssn: string @pii, department: string })
+sink   out = jsonl("drop_out.jsonl")
+
+pipeline main {
+  in |> drop(ssn) |> out
+}
+```
+
+```console
+$ ./sift run drop.sift
+{"name":"Ada","department":"Engineering"}
+{"name":"Tom","department":"Sales"}
+```
+
+**`rename(old: new, ...)`** remaps a column's name while preserving its
+exact type and position — **including a `@pii` tag**. Renaming is not a
+way to launder PII either:
+
+```sift
+source in  = csv("rename.csv", schema: { name: string, dob: string, email_addr: string @pii })
+sink   out = jsonl("rename_out.jsonl")
+
+pipeline main {
+  in |> rename(dob: birth_date, email_addr: email) |> map({ ...row, email: mask(.email) }) |> out
+}
+```
+
+`mask(.email)` is still required after the rename: `email_addr`'s `@pii`
+tag rode along onto `email` unchanged. See `examples/select.sift`,
+`drop.sift`, and `rename.sift`.
+
+## Slicing rows: limit and offset
+
+`limit(n)` emits at most the first `n` rows then stops; `offset(n)`
+discards the first `n` rows and passes the rest through. Both count
+*every* row that reaches them positionally, healthy or failed:
+
+```sift
+source in  = csv("limit-offset.csv", schema: { name: string, event: string })
+sink   out = jsonl("limit-offset_out.jsonl")
+
+pipeline main {
+  in |> offset(2) |> limit(2) |> out
+}
+```
+
+Against a six-row log, `offset(2)` discards the first two rows and
+`limit(2)` takes exactly the next two, then stops — the remaining rows
+are never even read:
+
+```console
+$ ./sift run limit-offset.sift
+{"name":"Grace","event":"purchase"}
+{"name":"Liam","event":"logout"}
+```
+
+`examples/limit-offset.sift` is the runnable version.
+
+## Declassifying stages
+
+`mask`/`hash`/`redact` also exist as **stages**, not just functions —
+`|> hash(email)` declassifies the whole column in one step, where
+`map({ ...row, email: hash(.email) })` is one missing `...row` away from
+silently dropping every other column:
+
+```sift
+source in  = csv("declassify.csv", schema: { ticket_id: int, email: string @pii, phone: string @pii, subject: string })
+sink   out = jsonl("declassify_out.jsonl")
+
+pipeline main {
+  in |> hash(email) |> redact(phone) |> out
+}
+```
+
+```console
+$ ./sift run declassify.sift
+{"ticket_id":1,"email":"b5fc85e55755f9e0d030a10ab4429b6b2944855f9a0d60077fe832becbc41d72","phone":"[REDACTED]","subject":"Billing question"}
+{"ticket_id":2,"email":"72bb75a959e1785b79ffe7230eaeec25880707a91b4a4f98330fc1510bd40e03","phone":"[REDACTED]","subject":"Login issue"}
+```
+
+`hash` is SHA-256, hex-encoded — stable and one-way, good for a join key
+that shouldn't reveal the original value. `redact` drops the value to a
+fixed placeholder entirely. `mask` (seen earlier) replaces each character
+with `*`, preserving only the value's length. All three clear `@pii`;
+nothing else does. As a stage, each takes a column-name list the same way
+`select`/`drop` do, and only ever applies to a column that's already
+`string @pii` — using one anywhere else is a compile error.
+
+## Putting it together
+
+A realistic pipeline chains several of these. This one turns a full CRM
+dump into a GDPR-safe analytics extract:
+
+```sift
+source in  = csv("customer-export.csv", schema: {
+  id: int,
+  full_name: string,
+  email: string @pii,
+  phone: string @pii,
+  ssn: string @pii,
+  signup_date: string,
+  plan: string,
+  internal_notes: string
+})
+sink   out = jsonl("customer-export_out.jsonl")
+
+pipeline main {
+  in
+    |> drop(ssn, internal_notes)
+    |> rename(full_name: name, signup_date: joined_at)
+    |> hash(email)
+    |> mask(phone)
+    |> select(id, name, email, phone, plan, joined_at)
+    |> limit(3)
+    |> out
+}
+```
+
+Reading top to bottom: `ssn` and `internal_notes` never leave at all, not
+even masked; the two legacy column names land on the warehouse's
+canonical names; `email` becomes a stable hash and `phone` a masked
+placeholder; `select` fixes the exact output shape and order; `limit(3)`
+caps this run to a schema-preview export. Every `@pii` column is gone or
+declassified by the time `select` runs, so the sink accepts the result
+with no further work:
+
+```console
+$ ./sift run customer-export.sift
+{"id":1,"name":"Ada Lovelace","email":"b5fc85e55755f9e0d030a10ab4429b6b2944855f9a0d60077fe832becbc41d72","phone":"********","plan":"pro","joined_at":"2024-01-15"}
+{"id":2,"name":"Tom Reed","email":"72bb75a959e1785b79ffe7230eaeec25880707a91b4a4f98330fc1510bd40e03","phone":"********","plan":"free","joined_at":"2024-02-20"}
+{"id":3,"name":"Grace Hopper","email":"b533d4547eaa5a0fa955965a1ca393ccd2ea013032a105726f232eb41bddc4fa","phone":"********","plan":"pro","joined_at":"2024-03-05"}
+```
+
+`examples/customer-export.sift` is the full, runnable version.
+
+## When a row fails: error policies
+
+A row can fail two ways: a `check` condition is false, or a source cell
+won't coerce to its declared type (a non-numeric `age`, say). Either way
+it becomes a **marked row**, not a thrown exception — and one `on error`
+declaration controls what the driver does with it. There are three
+policies.
+
+**`abort`** (the default, no declaration needed) stops the run at the
+first failure:
+
+```sift
+source in  = csv("on-error-abort.csv", schema: { name: string, age: int, email: string })
+sink   out = jsonl("on-error-abort_out.jsonl")
 
 pipeline main {
   in |> filter(.age >= 18) |> check(.email != "", "missing email") |> out
 }
 ```
 
-`people.csv` has one row (`Grace`) with a blank email. With no `on error`
-declaration, the default is **abort**:
+Against a CSV where Grace's email is blank:
 
 ```console
-$ sift run errors.sift
-errors.sift: error: row 2 from "in": missing email
+$ ./sift run on-error-abort.sift
+on-error-abort.sift: error: row 2 from "in": missing email
+$ cat on-error-abort_out.jsonl
+{"name":"Ada","age":42,"email":"ada@example.com"}
 ```
 
-Add `on error skip` and the same program drops Grace's row instead and
-keeps going — every other healthy row still reaches the sink, and the
-run exits successfully:
+Tom was already filtered out (age 15); Grace's check fails and the whole
+run stops right there — Liam, who comes after her in the file, is never
+even read.
+
+**`on error skip`** drops just the failing row and keeps going:
 
 ```sift
 on error skip
 
-source in  = csv("people.csv", schema: { name: string, age: int, email: string })
-sink   out = jsonl("out.jsonl")
-...
-```
-
-Or route failures to a second sink with `on error |> errors` instead of
-dropping them. The error sink never receives a failed row's own fields —
-only a fixed envelope of where and why it failed, so a `@pii` field can
-never leak through a routed failure the way it could if raw rows were
-forwarded:
-
-```console
-$ cat errors.jsonl
-{"source":"in","ordinal":2,"offset":4,"reason":"missing email","stage":"check"}
-```
-
-See `examples/on-error-abort.sift`, `on-error-skip.sift`,
-`on-error-route.sift`, and `bad-cell.sift` for complete, runnable
-versions of each.
-
-## Multiple sinks (broadcast)
-
-A pipeline's terminal production can be a comma-separated list of sinks,
-not just one — every row goes to every listed sink, in declared order:
-
-```sift
-sink out       = jsonl("out.jsonl")
-sink out_audit = jsonl("audit.jsonl")
+source in  = csv("on-error-skip.csv", schema: { name: string, age: int, email: string })
+sink   out = jsonl("on-error-skip_out.jsonl")
 
 pipeline main {
-  in |> map({ ...row, email: mask(.email) }) |> out, out_audit
+  in |> filter(.age >= 18) |> check(.email != "", "missing email") |> out
 }
 ```
 
-This is terminal broadcast, not branching fan-out: the stream is pulled
-once, and the driver's write step fans that one row out to each sink
-instead of transforming it differently per branch — no buffering, no
-rate mismatch, no DAG. It composes with error routing exactly the way
-you'd expect: `on error |> errsink` still sends a failed row to `errsink`
-alone, while every healthy row reaches all of `out` and `out_audit`.
-
-The same sink listed twice (`|> out, out`) is a compile error — it's
-always a literal double-write of the same row. And since broadcast
-performs no transform, the unmasked-`@pii` sink check runs once against
-the one shared schema and names every sink it applies to, rather than
-repeating the error per sink.
-
-See `examples/broadcast.sift` for a complete, runnable example.
-
-## Building and running
-
 ```console
-$ make build          # go build ./...
-$ make test           # go test ./...
-$ make check          # gofmt -l, go vet, go test
-$ make run            # runs examples/adults.sift, prints nothing, writes adults.jsonl
-$ make emit-ast       # dumps the parsed AST for examples/adults.sift
-$ make emit-schema    # dumps the checked source/sink schemas
+$ ./sift run on-error-skip.sift
+$ cat on-error-skip_out.jsonl
+{"name":"Ada","age":42,"email":"ada@example.com"}
+{"name":"Liam","age":25,"email":"liam@example.com"}
 ```
 
-Or drive the CLI directly:
+**`on error |> errors`** routes failures to a second sink instead of
+dropping or aborting:
 
-```console
-$ go build -o sift ./cmd/sift
-$ ./sift run examples/adults.sift
-$ ./sift --emit-ast examples/adults.sift
-$ ./sift --emit-schema examples/adults.sift
+```sift
+on error |> errors
+
+source in     = csv("on-error-route.csv", schema: { name: string, age: int, email: string })
+sink   out    = jsonl("on-error-route_out.jsonl")
+sink   errors = jsonl("on-error-route_errors.jsonl")
+
+pipeline main {
+  in |> filter(.age >= 18) |> check(.email != "", "missing email") |> out
+}
 ```
 
-## Language at a glance
+```console
+$ ./sift run on-error-route.sift
+$ cat on-error-route_errors.jsonl
+{"source":"in","ordinal":2,"offset":4,"reason":"missing email","stage":"check"}
+```
 
-- **Sources and sinks** declare a format (`csv`, `jsonl`, ...) and a
-  path. A source also declares its schema — CSV has no inherent types,
-  so schemas are always explicit in v0.
-- **Pipelines** are a linear chain: `in |> stage |> ... |> out`, where the
-  terminal production can be a comma-separated sink list (`|> out,
-  out_2`) to broadcast every row to more than one sink. A pipeline with
-  no source/sink (`pipeline clean = check(...) |> map(...)`) is a
-  reusable `stream<T> -> stream<U>` segment you can drop into another
-  pipeline by name.
-- **Stages** (v0's complete set): `filter(<bool>)` keeps matching rows;
-  `map({ ...row, field: expr })` rebuilds each row; `check(<bool>, "reason")`
-  fails a row when the condition is false; `select(col, ...)`/`drop(col, ...)`
-  project columns; `rename(old: new, ...)` remaps a column name, preserving
-  type and any `@pii` tag; `limit(n)`/`offset(n)` slice rows positionally;
-  `mask(col, ...)`/`hash(col, ...)`/`redact(col, ...)` declassify a `@pii`
-  column in place.
-- **Expressions**: field access (`.age`), int/double/string/bool
-  literals, `+ - * /`, comparisons, `&& ||`, function calls, and record
+The error sink never receives a failed row's own fields — only a fixed
+envelope of where and why it failed (source, position, reason, stage). A
+`@pii` field can't leak through a routed failure the way it could if raw
+rows were forwarded as-is.
+
+A source cell that won't coerce to its declared type fails exactly the
+same way, governed by the same policy — see `examples/bad-cell.sift`,
+where a non-numeric `age` cell is skipped like any other failed row.
+`examples/on-error-abort.sift`, `on-error-skip.sift`, and
+`on-error-route.sift` are the complete programs above.
+
+## Writing to more than one sink
+
+A pipeline's terminal production can name more than one sink,
+comma-separated — every row reaches all of them, in declared order:
+
+```sift
+source in        = csv("broadcast.csv", schema: { name: string, email: string @pii })
+sink   warehouse = jsonl("broadcast_out.jsonl")
+sink   audit     = jsonl("broadcast_audit.jsonl")
+
+pipeline main {
+  in |> map({ ...row, email: mask(.email) }) |> warehouse, audit
+}
+```
+
+```console
+$ ./sift run broadcast.sift
+$ diff broadcast_out.jsonl broadcast_audit.jsonl && echo identical
+identical
+```
+
+This is terminal *broadcast*, not branching fan-out: the stream is pulled
+once, and the driver's write step fans that single row out to every
+listed sink — no buffering, no per-branch transform, no DAG. It composes
+with error routing exactly as you'd expect (`on error |> errsink` still
+sends a failed row to `errsink` alone, while every healthy row reaches
+all of `warehouse` and `audit`), and the unmasked-`@pii` check runs once
+against the shared schema, naming every sink it applies to rather than
+repeating the error per sink. The same sink listed twice (`|> out, out`)
+is a compile error — it's always a literal double-write. `examples/broadcast.sift`
+is the runnable version.
+
+## Reusable pipelines: named segments
+
+A `pipeline` declaration with no source or sink of its own is a reusable
+`stream<T> -> stream<U>` value — a **named segment** you drop into
+another pipeline by name, exactly like a built-in stage:
+
+```sift
+source in  = csv("named-segment.csv", schema: { name: string, email: string })
+sink   out = jsonl("named-segment_out.jsonl")
+
+pipeline clean =
+     check(.email != "", "missing email")
+  |> map({ ...row, email: lower(trim(.email)) })
+
+pipeline main {
+  in |> clean |> out
+}
+```
+
+```console
+$ ./sift run named-segment.sift
+{"name":"Ada","email":"ada@example.com"}
+{"name":"Tom","email":"tom@example.com"}
+```
+
+`clean`'s two stages are inlined wherever it's referenced — there's no
+runtime indirection — and a segment that references itself, directly or
+through a cycle of segments, is a compile error, not infinite recursion.
+`examples/named-segment.sift` is the runnable version.
+
+## Parameterized segments
+
+A named segment can take parameters, turning it into Sift's own extension
+mechanism for the stage vocabulary — no Go plugin required. There are
+exactly two parameter kinds:
+
+- A **column parameter** is a bare name in the parameter list, referenced
+  `.col` inside the body, and bound to a bare column name at the call
+  site: `pipeline scrub(col) = map({ ...row, col: mask(.col) })`, called
+  `scrub(email)`.
+- A **scalar parameter** is `name: type`, referenced as a bare value
+  inside the body, and bound to a literal at the call site:
+  `pipeline adults(min: int) = filter(.age >= min)`, called `adults(18)`.
+
+```sift
+source in  = csv("segments.csv", schema: { name: string, age: int, email: string @pii, backup_email: string @pii })
+sink   out = jsonl("segments_out.jsonl")
+
+pipeline scrub(col)       = map({ ...row, col: mask(.col) })
+pipeline adults(min: int) = filter(.age >= min)
+
+pipeline main {
+  in |> scrub(email) |> scrub(backup_email) |> adults(18) |> out
+}
+```
+
+```console
+$ ./sift run segments.sift
+{"name":"Ada","age":42,"email":"********","backup_email":"*********"}
+```
+
+`scrub(email)` and `scrub(backup_email)` are two independent
+instantiations of one definition, each checked against the real schema at
+its own call site: the checker copies `scrub`'s body, substitutes the
+bound column or literal, and type-checks the copy with the ordinary stage
+rules — PII propagation and field-existence checks fall out for free,
+with no new rules of their own. A mistake inside a substituted body — a
+misspelled column, an argument of the wrong type — is reported with
+**dual-site** context: which segment, which argument it was called with,
+and where the call itself is, on top of the position inside the
+definition where the mistake actually is:
+
+```console
+$ ./sift run segments-typo.sift
+segments-typo.sift:4:47: error: field "emial" not in schema { name: string, age: int }
+  in segment scrub(col = emial)
+  instantiated at main:7
+```
+
+Parameters are positional only — no defaults, no variadics, no named
+arguments — and a segment never takes another segment as a parameter
+(that would pull toward a functional core, deliberately out of scope; see
+`design/segments.md` §8). `examples/segments.sift` is the runnable
+version.
+
+## Quick reference
+
+- **Sources and sinks** declare a format (`csv`, `jsonl`) and a path. A
+  source also declares its schema, since CSV carries no types of its own.
+- **Pipelines** are a linear `in |> stage |> ... |> out` chain; the
+  terminal production can be a comma-separated sink list to broadcast. A
+  pipeline with no source/sink is a reusable named segment, optionally
+  parameterized over columns and/or scalars.
+- **Stages:** `filter(<bool>)`, `map({ ...row, field: expr })`,
+  `check(<bool>, "reason")`, `select(col, ...)`, `drop(col, ...)`,
+  `rename(old: new, ...)`, `limit(n)`, `offset(n)`,
+  `mask(col, ...)`/`hash(col, ...)`/`redact(col, ...)`.
+- **Expressions:** field access (`.field`), int/double/string/bool
+  literals, `+ - * /`, `< > <= >= == !=`, `&& ||`, function calls
+  (`upper`, `lower`, `trim`, `mask`, `hash`, `redact`), and record
   literals with spread (`{ ...row, ... }`).
-- **PII tags** attach at the source, propagate through every expression,
-  and are only cleared by `mask`/`hash`/`redact`. A sink rejects any
-  field still tagged `@pii`.
-- **Error policy** (`on error abort | skip | |> <sink>`) controls what
-  happens to a row that fails a `check` or a source cell that won't
-  coerce to its declared type. `abort` (the default) stops the run;
-  `skip` drops the row and continues; routing sends a fixed envelope —
-  provenance and reason, never the row's own fields — to a second sink.
+- **PII:** `@pii` attaches at the source, propagates through every
+  expression, and is only cleared by `mask`/`hash`/`redact`. A sink
+  rejects any field still tagged `@pii`.
+- **Error policy:** `on error abort | skip | |> <sink>`. `abort` (default)
+  stops the run; `skip` drops the failing row; routing sends a fixed
+  envelope — never the row's own fields — to a second sink.
+
+For the complete grammar and semantics, see
+[`design/language.md`](design/language.md); each later feature has its
+own design doc under [`design/`](design/) — see [Status](#status) for
+which are shipped.
 
 ## Project layout
 
@@ -258,45 +632,37 @@ examples/             one .sift + fixture pair per language feature or error pol
 design/               language spec + one design doc per build phase
 ```
 
+```console
+$ make build          # go build ./...
+$ make test           # go test ./...
+$ make check          # gofmt -l, go vet, go test
+$ make run            # runs examples/adults.sift, writes adults.jsonl
+$ make emit-ast       # dumps the parsed AST for examples/adults.sift
+$ make emit-schema    # dumps the checked source/sink schemas
+```
+
 ## Status
 
 v0 is complete: both acceptance cases in `design/language.md` §7 pass end
-to end through the CLI, and every module (1 through 8) has unit tests.
-v0's scope is deliberately closed — see `design/language.md` §5 for
-what's built and what's explicitly deferred (joins, dedupe, fan-out, an
-optimizer, schema inference, and more formats beyond csv/jsonl).
+to end through the CLI, and every module has unit tests. v0's scope is
+deliberately closed — see `design/language.md` §5 for what's built and
+what's explicitly deferred (joins, dedupe, fan-out, an optimizer, schema
+inference, and more formats beyond csv/jsonl).
 
-`design/errors.md`'s error-semantics phase is also complete: failures are
-data, not exceptions (a failed row is marked and flows to the driver
-rather than panicking), `on error abort/skip/route` is a real language
-feature, and a source cell that won't coerce to its declared type fails
-the same way a `check` does — governed by the same policy, with its own
-acceptance tests (`design/errors.md` §7, ERR-A through ERR-E).
+Four phases have shipped on top of it, each with its own acceptance tests
+and a runnable `examples/` fixture:
 
-`design/improvements.md`'s built-in stages batch is also complete:
-`select`/`drop`, `rename`, `limit`/`offset`, and `mask`/`hash`/`redact`
-as first-class stages, each with its own acceptance tests
-(`design/improvements.md` §9, S1-A through S4-B) and a runnable
-`examples/` example.
+- `design/errors.md` — failures are data, not exceptions; `on error
+  abort/skip/route` is a real language feature (§7, ERR-A through ERR-E).
+- `design/improvements.md` — `select`/`drop`/`rename`/`limit`/`offset` and
+  `mask`/`hash`/`redact` as first-class stages (§9, S1-A through S4-B).
+- `design/multisink.md` — a pipeline's terminal production can broadcast
+  to more than one sink (§9, MS-A through MS-E).
+- `design/segments.md` — named segments take column and/or scalar
+  parameters and monomorphize at each call site, with dual-site
+  diagnostics (§9, PS-A through PS-H).
 
-`design/multisink.md`'s terminal broadcast is also complete: a pipeline's
-final `|>` can name more than one sink, every row reaches all of them in
-declared order, a duplicate sink in the list is rejected, and the PII
-check runs once against the shared terminal schema (`design/multisink.md`
-§9, MS-A through MS-E). `design/routing.md` documents the sibling
-per-row conditional routing feature — not built yet; it reuses this
-phase's multi-sink driver spine.
-
-`design/segments.md`'s parameterized segments are also complete: a named
-segment now takes column and/or scalar parameters and reads exactly like
-a built-in stage at its call site (`scrub(email)`, `adults(18)`); the
-checker monomorphizes at each call site (copy the body, substitute
-arguments, check the copy against the real schema) rather than row
-polymorphism, and every error from inside a substituted body carries
-dual-site context — the segment, its bindings, and the call site — on
-top of the original in-definition position (`design/segments.md` §9,
-PS-A through PS-H).
-
-`design/xlsx.md` and `design/parquet.md` document two more connector
-phases — neither is built yet; xlsx depends on this phase's
-`value.Coerce`, parquet depends on nothing beyond the registry.
+Two more are designed but not built: `design/routing.md` (per-row
+conditional dispatch, depends on the multi-sink driver spine), and
+`design/xlsx.md`/`design/parquet.md` (connectors — xlsx depends on this
+phase's `value.Coerce`, parquet depends on nothing beyond the registry).
