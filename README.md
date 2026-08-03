@@ -11,9 +11,10 @@ The distinctive feature: **compile-time PII tagging**. Mark a field
 that touches it. A sink that would write an unmasked `@pii` field is a
 compile error, not a runtime surprise.
 
-For the full language reference see [`design.md`](design.md); for error
-semantics (`on error`, failed rows) see [`design-errors.md`](design-errors.md).
-For how the codebase is organized and built, see [`CLAUDE.md`](CLAUDE.md).
+For the full language reference see [`design/language.md`](design/language.md);
+for error semantics (`on error`, failed rows) see
+[`design/errors.md`](design/errors.md). For how the codebase is organized and
+built, see [`CLAUDE.md`](CLAUDE.md).
 
 ## Quick example
 
@@ -254,37 +255,38 @@ internal/eval/        eval(expr, row) any
 internal/runtime/     Stream/Source/Sink, driver loop, error policy, format registry, build
 internal/format/      csv source, jsonl sink
 examples/             one .sift + fixture pair per language feature or error policy
+design/               language spec + one design doc per build phase
 ```
 
 ## Status
 
-v0 is complete: both acceptance cases in `design.md` §7 pass end to end
-through the CLI, and every module (1 through 8) has unit tests. v0's
-scope is deliberately closed — see `design.md` §5 for what's built and
-what's explicitly deferred (joins, dedupe, fan-out, an optimizer, schema
-inference, and more formats beyond csv/jsonl).
+v0 is complete: both acceptance cases in `design/language.md` §7 pass end
+to end through the CLI, and every module (1 through 8) has unit tests.
+v0's scope is deliberately closed — see `design/language.md` §5 for
+what's built and what's explicitly deferred (joins, dedupe, fan-out, an
+optimizer, schema inference, and more formats beyond csv/jsonl).
 
-`design-errors.md`'s error-semantics phase is also complete: failures are
+`design/errors.md`'s error-semantics phase is also complete: failures are
 data, not exceptions (a failed row is marked and flows to the driver
 rather than panicking), `on error abort/skip/route` is a real language
 feature, and a source cell that won't coerce to its declared type fails
 the same way a `check` does — governed by the same policy, with its own
-acceptance tests (`design-errors.md` §7, ERR-A through ERR-E).
+acceptance tests (`design/errors.md` §7, ERR-A through ERR-E).
 
-`design-improvements.md`'s built-in stages batch is also complete:
+`design/improvements.md`'s built-in stages batch is also complete:
 `select`/`drop`, `rename`, `limit`/`offset`, and `mask`/`hash`/`redact`
 as first-class stages, each with its own acceptance tests
-(`design-improvements.md` §9, S1-A through S4-B) and a runnable
+(`design/improvements.md` §9, S1-A through S4-B) and a runnable
 `examples/` example.
 
-`design-multisink.md`'s terminal broadcast is also complete: a pipeline's
+`design/multisink.md`'s terminal broadcast is also complete: a pipeline's
 final `|>` can name more than one sink, every row reaches all of them in
 declared order, a duplicate sink in the list is rejected, and the PII
-check runs once against the shared terminal schema (`design-multisink.md`
-§9, MS-A through MS-E). `design-routing.md` documents the sibling
+check runs once against the shared terminal schema (`design/multisink.md`
+§9, MS-A through MS-E). `design/routing.md` documents the sibling
 per-row conditional routing feature — not built yet; it reuses this
 phase's multi-sink driver spine.
 
-`design-xlsx.md` and `design-parquet.md` document two more connector
+`design/xlsx.md` and `design/parquet.md` document two more connector
 phases — neither is built yet; xlsx depends on this phase's
 `value.Coerce`, parquet depends on nothing beyond the registry.
