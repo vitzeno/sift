@@ -1,0 +1,30 @@
+// Exercises every v0 feature together: all four scalar kinds, a @pii
+// field, a named reusable segment (clean), check, filter (a numeric
+// comparison combined with a bare bool field via &&), and two map
+// stages — one overriding existing fields (declassifying email with
+// mask(), transforming name with upper()), one adding new ones (a
+// comparison and an arithmetic expression). check's condition holds for
+// every row in complex.csv on purpose: a failed check aborts the whole
+// run, so a fixture meant to demonstrate a full successful pipeline
+// can't also trigger that path — check's abort behavior has its own
+// dedicated unit test (internal/runtime/check_test.go).
+source in = csv("complex.csv", schema: {
+  name: string,
+  age: int,
+  balance: double,
+  active: bool,
+  email: string @pii
+})
+sink out = jsonl("complex_out.jsonl")
+
+pipeline clean =
+     check(.email != "", "missing email")
+  |> map({ ...row, email: mask(lower(trim(.email))), name: upper(.name) })
+
+pipeline main {
+  in
+    |> clean
+    |> filter(.age >= 18 && .active)
+    |> map({ ...row, balance_ok: .balance >= 100.0, age_next_year: .age + 1 })
+    |> out
+}

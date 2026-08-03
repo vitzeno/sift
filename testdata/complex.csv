@@ -1,0 +1,5 @@
+name,age,balance,active,email
+Ada,42,250.50,true,"  ada@example.com  "
+Tom,15,50.00,true,tom@example.com
+Grace,30,89.99,false,grace@example.com
+Liam,25,500.00,true,LIAM@EXAMPLE.COM
