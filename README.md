@@ -194,11 +194,10 @@ is coming up once error policies are on the table.
 
 ## The PII tag
 
-This is Sift's reason for existing. Tag a field `@pii` in a source's
-schema and the checker tracks it through every expression that touches
-it — arithmetic, function calls, `map`, all of it. A sink that would
-receive a field still tagged `@pii` is a **compile error**, not a runtime
-surprise:
+Tag a field `@pii` in a source's schema and the checker tracks it through
+every expression that touches it — arithmetic, function calls, `map`, all
+of it. A sink that would receive a field still tagged `@pii` is a
+**compile error**, not a runtime surprise:
 
 ```sift
 source in  = csv("people.csv", schema: { name: string, email: string @pii })
@@ -215,25 +214,25 @@ leaky.sift:4:1: error: field "email" is @pii and reaches sink "out" unmasked; de
 ```
 
 Three functions, and only three, can turn a `string @pii` back into a
-plain `string`: `mask`, `hash`, `redact`. Apply one and the same shape of
-program compiles and runs:
+plain `string`: `mask`, `hash`, `redact`. Apply one directly as a stage
+and the same shape of program compiles and runs:
 
 ```sift
 pipeline main {
-  in |> map({ ...row, email: mask(.email) }) |> out
+  in |> hash(email) |> out
 }
 ```
 
 ```console
 $ ./sift run pii.sift
-{"name":"Ada","email":"***************"}
+{"name":"Ada","email":"b5fc85e55755f9e0d030a10ab4429b6b2944855f9a0d60077fe832becbc41d72"}
 ```
 
 Every other function or operator that touches a `@pii` value **propagates
 the tag** to its result — `upper(.email)` is still `@pii`. There's no way
 to accidentally launder PII by transforming it: only `mask`/`hash`/`redact`
 clear the tag, because the checker special-cases exactly those three.
-`examples/pii.sift` is the runnable version.
+`examples/pii.sift` demonstrates the same rule.
 
 ## Shaping schemas: select, drop, rename
 
