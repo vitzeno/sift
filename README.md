@@ -287,6 +287,16 @@ check runs once against the shared terminal schema (`design/multisink.md`
 per-row conditional routing feature — not built yet; it reuses this
 phase's multi-sink driver spine.
 
+`design/segments.md`'s parameterized segments are also complete: a named
+segment now takes column and/or scalar parameters and reads exactly like
+a built-in stage at its call site (`scrub(email)`, `adults(18)`); the
+checker monomorphizes at each call site (copy the body, substitute
+arguments, check the copy against the real schema) rather than row
+polymorphism, and every error from inside a substituted body carries
+dual-site context — the segment, its bindings, and the call site — on
+top of the original in-definition position (`design/segments.md` §9,
+PS-A through PS-H).
+
 `design/xlsx.md` and `design/parquet.md` document two more connector
 phases — neither is built yet; xlsx depends on this phase's
 `value.Coerce`, parquet depends on nothing beyond the registry.
