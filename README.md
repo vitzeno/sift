@@ -33,9 +33,10 @@ organized, see [`CLAUDE.md`](CLAUDE.md).
 12. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
 13. [Parameterized segments](#parameterized-segments)
 14. [A complete ETL, with error routing](#a-complete-etl-with-error-routing)
-15. [Quick reference](#quick-reference)
-16. [Project layout](#project-layout)
-17. [Status](#status)
+15. [Reading xlsx workbooks](#reading-xlsx-workbooks)
+16. [Quick reference](#quick-reference)
+17. [Project layout](#project-layout)
+18. [Status](#status)
 
 ## Building the CLI
 
@@ -681,10 +682,83 @@ rows behind them in the file, leaving `out`/`audit` empty — a real
 interaction worth knowing about, not a bug. `examples/etl-errors.sift` is
 the full, runnable version.
 
+## Reading xlsx workbooks
+
+Every source so far has been `csv`. Swap the format name for `xlsx` and
+nothing else about the pipeline changes — that's exactly what the format
+registry ([Project layout](#project-layout)) buys: a format is one Go
+struct plus one registry entry, never a special case in the lexer,
+parser, checker, or executor.
+
+`people.xlsx`, sheet "People":
+
+| | A | B |
+|---|---|---|
+| **1** | People Export | |
+| **2** | name | age |
+| **3** | Ada | 42 |
+| **4** | Tom | 15 |
+
+`xlsx.sift`:
+
+```sift
+source in = xlsx("people.xlsx", sheet: "People", header_row: 2, schema: { name: string, age: int })
+sink out = jsonl("xlsx_out.jsonl")
+
+pipeline main {
+  in |> filter(.age >= 18) |> out
+}
+```
+
+```console
+$ ./sift run xlsx.sift
+$ cat xlsx_out.jsonl
+{"name":"Ada","age":42}
+```
+
+Two keyword arguments beyond `schema:` that `csv` never needed:
+
+- `sheet:` picks the worksheet by name; omit it and Sift reads the
+  workbook's first sheet.
+- `header_row:` is **1-based**, matching the row gutter you're looking at
+  in Excel, and defaults to `1`. Real workbooks put a title or an export
+  timestamp above the real header — row 1 here is a title, so the header
+  itself is row 2.
+
+A few things worth knowing about how the header binds to your schema:
+column **order in the sheet doesn't matter** — each declared field is
+matched to a header cell by name, same as `csv` — and **extra columns are
+simply ignored**. A declared field missing from the header, or a
+duplicate header name, fails when the source is constructed, before any
+row flows — the same fail-fast contract as a missing `csv` column, just
+with a message naming the sheet and the header row it read:
+
+```console
+$ ./sift run xlsx-typo.sift
+xlsx-typo.sift: error: source "in": column "yeras" not found in header row 2 of sheet "People"
+       header columns: name, age
+```
+
+A blank row (every mapped column empty) is skipped — not treated as
+data, and not treated as end of the sheet, since trailing blank rows are
+common enough in real exports that stopping on the first one would
+silently truncate everything after it. A cell that won't coerce to its
+declared type is a row failure exactly like a bad `csv` cell, governed by
+the same [error policy](#when-a-row-fails-error-policies) — the stage
+name in the envelope reads `xlsx:age` instead of `csv:age`. And a failed
+row's `offset` is the real spreadsheet row number, not a data-row count:
+with a title row above the header the two diverge, and the offset is the
+one you can act on — open the workbook and go straight to that row.
+
+`examples/xlsx.sift` is this exact program; `examples/people.xlsx` is the
+workbook it reads.
+
 ## Quick reference
 
-- **Sources and sinks** declare a format (`csv`, `jsonl`) and a path. A
-  source also declares its schema, since CSV carries no types of its own.
+- **Sources and sinks** declare a format (`csv`, `jsonl`, `xlsx` for
+  sources) and a path. A source also declares its schema, since neither
+  CSV nor xlsx carries reliable types of its own; `xlsx` additionally
+  takes `sheet:` and `header_row:`.
 - **Pipelines** are a linear `in |> stage |> ... |> out` chain; the
   terminal production can be a comma-separated sink list to broadcast. A
   pipeline with no source/sink is a reusable named segment, optionally
@@ -720,7 +794,7 @@ internal/parser/      recursive descent + Pratt expression parsing
 internal/checker/     name resolution, schema recompute, PII + error-policy enforcement
 internal/eval/        eval(expr, row) any
 internal/runtime/     Stream/Source/Sink, driver loop, error policy, format registry, build
-internal/format/      csv source, jsonl sink
+internal/format/      csv source, jsonl sink, xlsx source
 examples/             one .sift + fixture pair per language feature or error policy
 design/               language spec + one design doc per build phase
 ```
@@ -742,7 +816,7 @@ deliberately closed — see `design/language.md` §5 for what's built and
 what's explicitly deferred (joins, dedupe, fan-out, an optimizer, schema
 inference, and more formats beyond csv/jsonl).
 
-Four phases have shipped on top of it, each with its own acceptance tests
+Five phases have shipped on top of it, each with its own acceptance tests
 and a runnable `examples/` fixture:
 
 - `design/errors.md` — failures are data, not exceptions; `on error
@@ -754,8 +828,13 @@ and a runnable `examples/` fixture:
 - `design/segments.md` — named segments take column and/or scalar
   parameters and monomorphize at each call site, with dual-site
   diagnostics (§9, PS-A through PS-H).
+- `design/xlsx.md` — an `xlsx` source, streaming via excelize's row
+  iterator, declared schema and explicit `header_row`/`sheet:` matching
+  the csv contract (§5, XLSX-A through XLSX-G).
 
-Two more are designed but not built: `design/routing.md` (per-row
-conditional dispatch, depends on the multi-sink driver spine), and
-`design/xlsx.md`/`design/parquet.md` (connectors — xlsx depends on this
-phase's `value.Coerce`, parquet depends on nothing beyond the registry).
+One more is designed but not built: `design/routing.md` (per-row
+conditional dispatch, depends on the multi-sink driver spine).
+`design/parquet.md` (a sink connector), `design/optional-fields.md`
+(`T?` source-schema fields), `design/type-conversions.md`
+(`T(x)`/`try_T(x)` mid-pipeline conversion), and `design/cloud-storage.md`
+(s3/gs/az backends) are drafted but not yet built either.
