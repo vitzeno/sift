@@ -1,0 +1,194 @@
+package checker
+
+import (
+	"fmt"
+
+	"github.com/vitzeno/sift/internal/ast"
+	"github.com/vitzeno/sift/internal/lexer"
+	"github.com/vitzeno/sift/internal/value"
+)
+
+// funcSig is a built-in scalar function's signature. v0's function table
+// is closed and every entry takes exactly one string and returns a
+// string, so one shape covers all of it -- Declassify marks the three
+// that clear @pii (design.md §3, rule 4).
+type funcSig struct {
+	Param      value.Kind
+	Return     value.Kind
+	Declassify bool
+}
+
+// builtinFuncs is the complete v0 function table. Custom scalar
+// functions (design.md §4) are optional for v0 and unused by either
+// acceptance case (see ast.Program's decision comment); this table can
+// grow a lookup for them later without changing checkCall's shape.
+var builtinFuncs = map[string]funcSig{
+	"mask":   {Param: value.String, Return: value.String, Declassify: true},
+	"hash":   {Param: value.String, Return: value.String, Declassify: true},
+	"redact": {Param: value.String, Return: value.String, Declassify: true},
+	"upper":  {Param: value.String, Return: value.String},
+	"lower":  {Param: value.String, Return: value.String},
+	"trim":   {Param: value.String, Return: value.String},
+}
+
+// checkExpr computes an expression's value.Type against schema,
+// propagating @pii per design.md §3 rule 2 as it goes: any expression
+// that consumes a @pii value yields a @pii result, uniformly across
+// every operator and function (except the three declassifiers).
+func (c *checker) checkExpr(e ast.Expr, schema value.Schema) (value.Type, error) {
+	switch e := e.(type) {
+	case *ast.FieldAccess:
+		f, ok := schema.Lookup(e.Field)
+		if !ok {
+			return value.Type{}, errorf(e.Pos, "field %q not in schema %s", e.Field, schema)
+		}
+		return f.Type, nil
+
+	case *ast.IntLit:
+		return value.Type{Kind: value.Int}, nil
+
+	case *ast.DoubleLit:
+		return value.Type{Kind: value.Double}, nil
+
+	case *ast.StringLit:
+		return value.Type{Kind: value.String}, nil
+
+	case *ast.BoolLit:
+		return value.Type{Kind: value.Bool}, nil
+
+	case *ast.BinaryOp:
+		return c.checkBinaryOp(e, schema)
+
+	case *ast.Call:
+		return c.checkCall(e, schema)
+
+	case *ast.RecordExpr:
+		// A record literal has no scalar type in v0 (value.Kind has no
+		// record variant) -- it's only meaningful as map's direct
+		// argument, handled by checkMapRecord, never as a general
+		// sub-expression.
+		return value.Type{}, errorf(e.Pos, "record literal is only valid as map's argument")
+
+	default:
+		panic(fmt.Sprintf("checker: unhandled expression type %T", e))
+	}
+}
+
+// checkBinaryOp types design.md §2's binary operators.
+//
+// decision: no implicit int<->double promotion. + - * / require both
+// operands to already share the same Kind; design.md shows no example
+// mixing them, and adding a coercion matrix now would be unused surface
+// area (CLAUDE.md non-negotiable #2). A future `1 + 1.5` can be
+// supported by loosening this one function later.
+func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Type, error) {
+	left, err := c.checkExpr(e.Left, schema)
+	if err != nil {
+		return value.Type{}, err
+	}
+	right, err := c.checkExpr(e.Right, schema)
+	if err != nil {
+		return value.Type{}, err
+	}
+	pii := left.PII || right.PII
+
+	switch e.Op {
+	case lexer.PLUS:
+		if left.Kind != right.Kind || !isNumericOrString(left.Kind) {
+			return value.Type{}, errorf(e.Pos, "cannot apply + to %s and %s", left, right)
+		}
+		return value.Type{Kind: left.Kind, PII: pii}, nil
+
+	case lexer.MINUS, lexer.STAR, lexer.SLASH:
+		if left.Kind != right.Kind || !isNumeric(left.Kind) {
+			return value.Type{}, errorf(e.Pos, "cannot apply %s to %s and %s", opSymbol(e.Op), left, right)
+		}
+		return value.Type{Kind: left.Kind, PII: pii}, nil
+
+	case lexer.LT, lexer.GT, lexer.LE, lexer.GE:
+		if left.Kind != right.Kind || !isNumeric(left.Kind) {
+			return value.Type{}, errorf(e.Pos, "cannot compare %s and %s", left, right)
+		}
+		return value.Type{Kind: value.Bool, PII: pii}, nil
+
+	case lexer.EQ, lexer.NE:
+		if left.Kind != right.Kind {
+			return value.Type{}, errorf(e.Pos, "cannot compare %s and %s", left, right)
+		}
+		return value.Type{Kind: value.Bool, PII: pii}, nil
+
+	case lexer.AND, lexer.OR:
+		if left.Kind != value.Bool || right.Kind != value.Bool {
+			return value.Type{}, errorf(e.Pos, "%s requires bool operands, got %s and %s", opSymbol(e.Op), left, right)
+		}
+		return value.Type{Kind: value.Bool, PII: pii}, nil
+
+	default:
+		panic(fmt.Sprintf("checker: unhandled binary operator %s", e.Op))
+	}
+}
+
+func isNumeric(k value.Kind) bool {
+	return k == value.Int || k == value.Double
+}
+
+func isNumericOrString(k value.Kind) bool {
+	return isNumeric(k) || k == value.String
+}
+
+// opSymbol renders a binary operator's surface syntax ("+", ">=", ...)
+// for error messages, rather than its lexer.Kind name ("PLUS", "GE").
+func opSymbol(k lexer.Kind) string {
+	switch k {
+	case lexer.PLUS:
+		return "+"
+	case lexer.MINUS:
+		return "-"
+	case lexer.STAR:
+		return "*"
+	case lexer.SLASH:
+		return "/"
+	case lexer.LT:
+		return "<"
+	case lexer.GT:
+		return ">"
+	case lexer.LE:
+		return "<="
+	case lexer.GE:
+		return ">="
+	case lexer.EQ:
+		return "=="
+	case lexer.NE:
+		return "!="
+	case lexer.AND:
+		return "&&"
+	case lexer.OR:
+		return "||"
+	default:
+		return k.String()
+	}
+}
+
+// checkCall types a function call against builtinFuncs. An unrecognized
+// name is a compile error, not a silent no-op -- v0's function set is
+// closed, same as its stage set (design.md §4).
+func (c *checker) checkCall(e *ast.Call, schema value.Schema) (value.Type, error) {
+	sig, ok := builtinFuncs[e.Fn]
+	if !ok {
+		return value.Type{}, errorf(e.Pos, "unknown function %q", e.Fn)
+	}
+	if len(e.Args) != 1 {
+		return value.Type{}, errorf(e.Pos, "%s() takes 1 argument, got %d", e.Fn, len(e.Args))
+	}
+
+	argType, err := c.checkExpr(e.Args[0], schema)
+	if err != nil {
+		return value.Type{}, err
+	}
+	if argType.Kind != sig.Param {
+		return value.Type{}, errorf(e.Pos, "%s() argument: expected %s, got %s", e.Fn, sig.Param, argType.Kind)
+	}
+
+	pii := argType.PII && !sig.Declassify
+	return value.Type{Kind: sig.Return, PII: pii}, nil
+}
