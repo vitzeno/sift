@@ -1,0 +1,15 @@
+# Built CLI binary (see README's `go build -o sift ./cmd/sift`)
+/sift
+*.exe
+*.test
+
+# Generated pipeline output — testdata/ only ever commits .sift/.csv
+# fixtures; every .jsonl there is produced by running one of them
+# (see Makefile's `clean` target).
+testdata/*.jsonl
+
+# Coverage output
+*.out
+
+# OS cruft
+.DS_Store
