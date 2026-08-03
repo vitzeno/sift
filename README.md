@@ -162,6 +162,35 @@ See `testdata/on-error-abort.sift`, `on-error-skip.sift`,
 `on-error-route.sift`, and `bad-cell.sift` for complete, runnable
 versions of each.
 
+## Multiple sinks (broadcast)
+
+A pipeline's terminal production can be a comma-separated list of sinks,
+not just one — every row goes to every listed sink, in declared order:
+
+```sift
+sink out       = jsonl("out.jsonl")
+sink out_audit = jsonl("audit.jsonl")
+
+pipeline main {
+  in |> map({ ...row, email: mask(.email) }) |> out, out_audit
+}
+```
+
+This is terminal broadcast, not branching fan-out: the stream is pulled
+once, and the driver's write step fans that one row out to each sink
+instead of transforming it differently per branch — no buffering, no
+rate mismatch, no DAG. It composes with error routing exactly the way
+you'd expect: `on error |> errsink` still sends a failed row to `errsink`
+alone, while every healthy row reaches all of `out` and `out_audit`.
+
+The same sink listed twice (`|> out, out`) is a compile error — it's
+always a literal double-write of the same row. And since broadcast
+performs no transform, the unmasked-`@pii` sink check runs once against
+the one shared schema and names every sink it applies to, rather than
+repeating the error per sink.
+
+See `testdata/broadcast.sift` for a complete, runnable example.
+
 ## Building and running
 
 ```console
@@ -187,10 +216,12 @@ $ ./sift --emit-schema testdata/adults.sift
 - **Sources and sinks** declare a format (`csv`, `jsonl`, ...) and a
   path. A source also declares its schema — CSV has no inherent types,
   so schemas are always explicit in v0.
-- **Pipelines** are a linear chain: `in |> stage |> ... |> out`. A
-  pipeline with no source/sink (`pipeline clean = check(...) |> map(...)`)
-  is a reusable `stream<T> -> stream<U>` segment you can drop into
-  another pipeline by name.
+- **Pipelines** are a linear chain: `in |> stage |> ... |> out`, where the
+  terminal production can be a comma-separated sink list (`|> out,
+  out_2`) to broadcast every row to more than one sink. A pipeline with
+  no source/sink (`pipeline clean = check(...) |> map(...)`) is a
+  reusable `stream<T> -> stream<U>` segment you can drop into another
+  pipeline by name.
 - **Stages** (v0's complete set): `filter(<bool>)` keeps matching rows;
   `map({ ...row, field: expr })` rebuilds each row; `check(<bool>, "reason")`
   fails a row when the condition is false; `select(col, ...)`/`drop(col, ...)`
@@ -245,6 +276,14 @@ acceptance tests (`design-errors.md` §7, ERR-A through ERR-E).
 as first-class stages, each with its own acceptance tests
 (`design-improvements.md` §9, S1-A through S4-B) and a runnable
 `testdata/` example.
+
+`design-multisink.md`'s terminal broadcast is also complete: a pipeline's
+final `|>` can name more than one sink, every row reaches all of them in
+declared order, a duplicate sink in the list is rejected, and the PII
+check runs once against the shared terminal schema (`design-multisink.md`
+§9, MS-A through MS-E). `design-routing.md` documents the sibling
+per-row conditional routing feature — not built yet; it reuses this
+phase's multi-sink driver spine.
 
 `design-xlsx.md` and `design-parquet.md` document two more connector
 phases — neither is built yet; xlsx depends on this phase's
