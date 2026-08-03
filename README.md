@@ -11,8 +11,9 @@ The distinctive feature: **compile-time PII tagging**. Mark a field
 that touches it. A sink that would write an unmasked `@pii` field is a
 compile error, not a runtime surprise.
 
-For the full language reference see [`design.md`](design.md). For how
-the codebase is organized and built, see [`CLAUDE.md`](CLAUDE.md).
+For the full language reference see [`design.md`](design.md); for error
+semantics (`on error`, failed rows) see [`design-errors.md`](design-errors.md).
+For how the codebase is organized and built, see [`CLAUDE.md`](CLAUDE.md).
 
 ## Quick example
 
@@ -80,6 +81,58 @@ a `string @pii` back into a plain `string`. Every other function or
 operator that touches a `@pii` value propagates the tag — transforming
 PII never launders it.
 
+## Error policies
+
+A row can fail — a `check` condition is false, or a source cell won't
+coerce to its declared type (a non-numeric `age`, say). What happens
+next is controlled by one `on error` declaration, and it's the same
+mechanism either way: the row is marked, not thrown as an exception, and
+the driver disposes of it per the active policy.
+
+```sift
+source in  = csv("people.csv", schema: { name: string, age: int, email: string })
+sink   out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> filter(.age >= 18) |> check(.email != "", "missing email") |> out
+}
+```
+
+`people.csv` has one row (`Grace`) with a blank email. With no `on error`
+declaration, the default is **abort**:
+
+```console
+$ sift run errors.sift
+errors.sift: error: row 2 from "in": missing email
+```
+
+Add `on error skip` and the same program drops Grace's row instead and
+keeps going — every other healthy row still reaches the sink, and the
+run exits successfully:
+
+```sift
+on error skip
+
+source in  = csv("people.csv", schema: { name: string, age: int, email: string })
+sink   out = jsonl("out.jsonl")
+...
+```
+
+Or route failures to a second sink with `on error |> errors` instead of
+dropping them. The error sink never receives a failed row's own fields —
+only a fixed envelope of where and why it failed, so a `@pii` field can
+never leak through a routed failure the way it could if raw rows were
+forwarded:
+
+```console
+$ cat errors.jsonl
+{"source":"in","ordinal":2,"offset":4,"reason":"missing email","stage":"check"}
+```
+
+See `testdata/on-error-abort.sift`, `on-error-skip.sift`,
+`on-error-route.sift`, and `bad-cell.sift` for complete, runnable
+versions of each.
+
 ## Building and running
 
 ```console
@@ -118,20 +171,25 @@ $ ./sift --emit-schema testdata/adults.sift
 - **PII tags** attach at the source, propagate through every expression,
   and are only cleared by `mask`/`hash`/`redact`. A sink rejects any
   field still tagged `@pii`.
+- **Error policy** (`on error abort | skip | |> <sink>`) controls what
+  happens to a row that fails a `check` or a source cell that won't
+  coerce to its declared type. `abort` (the default) stops the run;
+  `skip` drops the row and continues; routing sends a fixed envelope —
+  provenance and reason, never the row's own fields — to a second sink.
 
 ## Project layout
 
 ```
 cmd/sift/            CLI: run, --emit-ast, --emit-schema
-internal/value/       Row, Provenance, Type (+ @pii), Schema
+internal/value/       Row, Provenance, Type (+ @pii), Schema, Coerce
 internal/lexer/       source text -> tokens
 internal/ast/         AST node types
 internal/parser/      recursive descent + Pratt expression parsing
-internal/checker/     name resolution, schema recompute, PII enforcement
+internal/checker/     name resolution, schema recompute, PII + error-policy enforcement
 internal/eval/        eval(expr, row) any
-internal/runtime/     Stream/Source/Sink, driver loop, format registry, build
+internal/runtime/     Stream/Source/Sink, driver loop, error policy, format registry, build
 internal/format/      csv source, jsonl sink
-testdata/             .sift programs and their input/expected-output fixtures
+testdata/             one .sift + fixture pair per language feature or error policy
 ```
 
 ## Status
@@ -141,3 +199,14 @@ through the CLI, and every module (1 through 8) has unit tests. v0's
 scope is deliberately closed — see `design.md` §5 for what's built and
 what's explicitly deferred (joins, dedupe, fan-out, an optimizer, schema
 inference, and more formats beyond csv/jsonl).
+
+`design-errors.md`'s error-semantics phase is also complete: failures are
+data, not exceptions (a failed row is marked and flows to the driver
+rather than panicking), `on error abort/skip/route` is a real language
+feature, and a source cell that won't coerce to its declared type fails
+the same way a `check` does — governed by the same policy, with its own
+acceptance tests (`design-errors.md` §7, ERR-A through ERR-E).
+
+`design-xlsx.md` and `design-parquet.md` document two more connector
+phases — neither is built yet; xlsx depends on this phase's
+`value.Coerce`, parquet depends on nothing beyond the registry.
