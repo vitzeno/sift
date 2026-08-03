@@ -105,9 +105,9 @@ in
   |> out
 ```
 
-See `testdata/select.sift`, `drop.sift`, `rename.sift`,
+See `examples/select.sift`, `drop.sift`, `rename.sift`,
 `limit-offset.sift`, and `declassify.sift` for one runnable example per
-stage, and `testdata/customer-export.sift` for the composite pipeline
+stage, and `examples/customer-export.sift` for the composite pipeline
 above in full — a CRM dump turned into a GDPR-safe analytics extract.
 
 ## Error policies
@@ -158,7 +158,7 @@ $ cat errors.jsonl
 {"source":"in","ordinal":2,"offset":4,"reason":"missing email","stage":"check"}
 ```
 
-See `testdata/on-error-abort.sift`, `on-error-skip.sift`,
+See `examples/on-error-abort.sift`, `on-error-skip.sift`,
 `on-error-route.sift`, and `bad-cell.sift` for complete, runnable
 versions of each.
 
@@ -189,7 +189,7 @@ performs no transform, the unmasked-`@pii` sink check runs once against
 the one shared schema and names every sink it applies to, rather than
 repeating the error per sink.
 
-See `testdata/broadcast.sift` for a complete, runnable example.
+See `examples/broadcast.sift` for a complete, runnable example.
 
 ## Building and running
 
@@ -197,8 +197,8 @@ See `testdata/broadcast.sift` for a complete, runnable example.
 $ make build          # go build ./...
 $ make test           # go test ./...
 $ make check          # gofmt -l, go vet, go test
-$ make run            # runs testdata/adults.sift, prints nothing, writes adults.jsonl
-$ make emit-ast       # dumps the parsed AST for testdata/adults.sift
+$ make run            # runs examples/adults.sift, prints nothing, writes adults.jsonl
+$ make emit-ast       # dumps the parsed AST for examples/adults.sift
 $ make emit-schema    # dumps the checked source/sink schemas
 ```
 
@@ -206,9 +206,9 @@ Or drive the CLI directly:
 
 ```console
 $ go build -o sift ./cmd/sift
-$ ./sift run testdata/adults.sift
-$ ./sift --emit-ast testdata/adults.sift
-$ ./sift --emit-schema testdata/adults.sift
+$ ./sift run examples/adults.sift
+$ ./sift --emit-ast examples/adults.sift
+$ ./sift --emit-schema examples/adults.sift
 ```
 
 ## Language at a glance
@@ -253,7 +253,7 @@ internal/checker/     name resolution, schema recompute, PII + error-policy enfo
 internal/eval/        eval(expr, row) any
 internal/runtime/     Stream/Source/Sink, driver loop, error policy, format registry, build
 internal/format/      csv source, jsonl sink
-testdata/             one .sift + fixture pair per language feature or error policy
+examples/             one .sift + fixture pair per language feature or error policy
 ```
 
 ## Status
@@ -275,7 +275,7 @@ acceptance tests (`design-errors.md` §7, ERR-A through ERR-E).
 `select`/`drop`, `rename`, `limit`/`offset`, and `mask`/`hash`/`redact`
 as first-class stages, each with its own acceptance tests
 (`design-improvements.md` §9, S1-A through S4-B) and a runnable
-`testdata/` example.
+`examples/` example.
 
 `design-multisink.md`'s terminal broadcast is also complete: a pipeline's
 final `|>` can name more than one sink, every row reaches all of them in

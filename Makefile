@@ -21,15 +21,15 @@ check: fmt-check vet test
 
 # Source/sink paths in a .sift file resolve relative to the script's own
 # directory (see cmd/sift/run.go), so this works from the repo root
-# without cd'ing into testdata/ first.
+# without cd'ing into examples/ first.
 run: build
-	go run ./cmd/sift run testdata/adults.sift
+	go run ./cmd/sift run examples/adults.sift
 
 emit-ast: build
-	go run ./cmd/sift --emit-ast testdata/adults.sift
+	go run ./cmd/sift --emit-ast examples/adults.sift
 
 emit-schema: build
-	go run ./cmd/sift --emit-schema testdata/adults.sift
+	go run ./cmd/sift --emit-schema examples/adults.sift
 
 clean:
-	rm -f testdata/adults.jsonl testdata/*_out.jsonl testdata/*_errors.jsonl
+	rm -f examples/adults.jsonl examples/*_out.jsonl examples/*_errors.jsonl

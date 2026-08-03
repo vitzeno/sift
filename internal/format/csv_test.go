@@ -19,7 +19,7 @@ func peopleSchema() value.Schema {
 func TestCSVSourceTypedParseAndProvenance(t *testing.T) {
 	src, err := NewCSVSource(runtime.SourceOptions{
 		Name:   "in",
-		Path:   "../../testdata/people.csv",
+		Path:   "../../examples/people.csv",
 		Schema: peopleSchema(),
 	})
 	if err != nil {
@@ -58,7 +58,7 @@ func TestCSVSourceTypedParseAndProvenance(t *testing.T) {
 func TestCSVSourceMissingSchemaField(t *testing.T) {
 	_, err := NewCSVSource(runtime.SourceOptions{
 		Name: "in",
-		Path: "../../testdata/people.csv",
+		Path: "../../examples/people.csv",
 		Schema: value.Schema{Fields: []value.Field{
 			{Name: "emial", Type: value.Type{Kind: value.String}},
 		}},

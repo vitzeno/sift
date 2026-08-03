@@ -19,7 +19,7 @@ import (
 // `some/dir/people.csv` regardless of where it's invoked from. An
 // already-absolute path is left untouched. This matches how a shell
 // script or Makefile resolves paths relative to itself, and is what
-// lets `go run ./cmd/sift run testdata/adults.sift` (CLAUDE.md's
+// lets `go run ./cmd/sift run examples/adults.sift` (CLAUDE.md's
 // documented command) work unmodified from the repo root. The same
 // resolution applies to an `on error |> <name>` route target's path.
 func runFile(path string) error {
