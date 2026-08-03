@@ -150,6 +150,56 @@ pipeline main {
 	}
 }
 
+// TestParseMultiSinkTerminalList covers design-multisink.md §2: after
+// the final "|>", a comma-separated list of sink NameRefs becomes
+// multiple trailing elements in the pipeline body, in declared order.
+func TestParseMultiSinkTerminalList(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string })
+sink out = jsonl("out.jsonl")
+sink out2 = jsonl("out2.jsonl")
+sink out3 = jsonl("out3.jsonl")
+
+pipeline main {
+  in |> out, out2, out3
+}`
+
+	prog, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	main := prog.Pipelines[0]
+	if len(main.Body) != 4 {
+		t.Fatalf("pipeline body has %d stages, want 4 (source + 3 sinks)", len(main.Body))
+	}
+	wantNames := []string{"in", "out", "out2", "out3"}
+	for i, want := range wantNames {
+		ref, ok := main.Body[i].(*ast.NameRef)
+		if !ok || ref.Name != want {
+			t.Errorf("body[%d] = %#v, want NameRef{%s}", i, main.Body[i], want)
+		}
+	}
+}
+
+// TestParseSingleSinkIsOneElementCase confirms the pre-multisink grammar
+// still parses unchanged: a single sink with no trailing comma is just
+// the one-element case of the same terminal production.
+func TestParseSingleSinkIsOneElementCase(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	prog, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	main := prog.Pipelines[0]
+	if len(main.Body) != 2 {
+		t.Fatalf("pipeline body has %d stages, want 2", len(main.Body))
+	}
+}
+
 // TestParsePIIDeclassify covers design.md §7 Case B's shape: a @pii
 // schema field, and a map stage that clears it with mask().
 func TestParsePIIDeclassify(t *testing.T) {
@@ -290,6 +340,7 @@ func TestParseErrors(t *testing.T) {
 		{"unterminated string", `source in = csv("x.csv`, "unterminated string literal"},
 		{"bad pipeline separator", `pipeline main : in`, "expected '{' or '='"},
 		{"bare identifier in expression", `pipeline main { in |> filter(row) |> out }`, "field access is .row"},
+		{"comma before any pipe", `pipeline main { in, out }`, "expected RBRACE, got COMMA"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

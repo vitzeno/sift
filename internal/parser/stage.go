@@ -7,12 +7,35 @@ import (
 	"github.com/vitzeno/sift/internal/lexer"
 )
 
-// parseStageChain := StageElem ( "|>" StageElem )*
+// parseStageChain := StageElem ( "|>" StageElem )* ( "," IDENT )*
+//
+// The trailing comma-list is design-multisink.md §2's terminal
+// broadcast: after the final "|>", the terminal production may be a
+// comma-separated list of sink NameRefs (`|> out, out_2`), not just one.
+// A single sink is the one-element case, so no grammar changes for
+// existing programs. It's checked here only if the chain's last element
+// parsed as a bare NameRef -- the only shape a trailing name can take,
+// since every built-in stage requires "(" -- and a top-level comma is
+// not otherwise valid in stage-chain position, so this is unambiguous
+// with no new lexer token.
 func (p *Parser) parseStageChain() []ast.Stage {
 	stages := []ast.Stage{p.parseStageElem()}
 	for p.cur.Kind == lexer.PIPE {
 		p.next()
 		stages = append(stages, p.parseStageElem())
+	}
+	// len(stages) > 1 guards against treating the leading source ref
+	// itself as the start of a sink list if it happens to be followed by
+	// a stray comma with no "|>" ever consumed (e.g. a malformed `in,
+	// out`) -- the comma-list only ever continues a chain that has
+	// already reached its terminal "|>".
+	if _, ok := stages[len(stages)-1].(*ast.NameRef); ok && len(stages) > 1 {
+		for p.cur.Kind == lexer.COMMA {
+			p.next()
+			pos := p.cur.Pos
+			name := p.expectIdent()
+			stages = append(stages, &ast.NameRef{Name: name, Pos: pos})
+		}
 	}
 	return stages
 }
