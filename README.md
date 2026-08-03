@@ -273,11 +273,11 @@ source in  = csv("rename.csv", schema: { name: string, dob: string, email_addr: 
 sink   out = jsonl("rename_out.jsonl")
 
 pipeline main {
-  in |> rename(dob: birth_date, email_addr: email) |> map({ ...row, email: mask(.email) }) |> out
+  in |> rename(dob: birth_date, email_addr: email) |> mask(email) |> out
 }
 ```
 
-`mask(.email)` is still required after the rename: `email_addr`'s `@pii`
+`mask(email)` is still required after the rename: `email_addr`'s `@pii`
 tag rode along onto `email` unchanged. See `examples/select.sift`,
 `drop.sift`, and `rename.sift`.
 
@@ -481,7 +481,7 @@ sink   warehouse = jsonl("broadcast_out.jsonl")
 sink   audit     = jsonl("broadcast_audit.jsonl")
 
 pipeline main {
-  in |> map({ ...row, email: mask(.email) }) |> warehouse, audit
+  in |> mask(email) |> warehouse, audit
 }
 ```
 
@@ -500,7 +500,7 @@ all of `warehouse` and `audit`), and the unmasked-`@pii` check runs once
 against the shared schema, naming every sink it applies to rather than
 repeating the error per sink. The same sink listed twice (`|> out, out`)
 is a compile error — it's always a literal double-write. `examples/broadcast.sift`
-is the runnable version.
+demonstrates the same broadcast pattern.
 
 ## Reusable pipelines: named segments
 
@@ -538,10 +538,11 @@ A named segment can take parameters, turning it into Sift's own extension
 mechanism for the stage vocabulary — no Go plugin required. There are
 exactly two parameter kinds:
 
-- A **column parameter** is a bare name in the parameter list, referenced
-  `.col` inside the body, and bound to a bare column name at the call
-  site: `pipeline scrub(col) = map({ ...row, col: mask(.col) })`, called
-  `scrub(email)`.
+- A **column parameter** is a bare name in the parameter list — referenced
+  `.col` inside an expression (`filter`/`map`/`check`), or as a bare
+  column name in a column-list stage like `mask(col)`/`select(col)` — and
+  bound to a bare column name at the call site: `pipeline scrub(col) =
+  mask(col)`, called `scrub(email)`.
 - A **scalar parameter** is `name: type`, referenced as a bare value
   inside the body, and bound to a literal at the call site:
   `pipeline adults(min: int) = filter(.age >= min)`, called `adults(18)`.
@@ -550,7 +551,7 @@ exactly two parameter kinds:
 source in  = csv("segments.csv", schema: { name: string, age: int, email: string @pii, backup_email: string @pii })
 sink   out = jsonl("segments_out.jsonl")
 
-pipeline scrub(col)       = map({ ...row, col: mask(.col) })
+pipeline scrub(col)       = mask(col)
 pipeline adults(min: int) = filter(.age >= min)
 
 pipeline main {
@@ -576,7 +577,7 @@ definition where the mistake actually is:
 
 ```console
 $ ./sift run segments-typo.sift
-segments-typo.sift:4:47: error: field "emial" not in schema { name: string, age: int }
+segments-typo.sift:4:28: error: column "emial" not in schema { name: string, age: int }
   in segment scrub(col = emial)
   instantiated at main:7
 ```
@@ -584,8 +585,8 @@ segments-typo.sift:4:47: error: field "emial" not in schema { name: string, age:
 Parameters are positional only — no defaults, no variadics, no named
 arguments — and a segment never takes another segment as a parameter
 (that would pull toward a functional core, deliberately out of scope; see
-`design/segments.md` §8). `examples/segments.sift` is the runnable
-version.
+`design/segments.md` §8). `examples/segments.sift` demonstrates the same
+reuse.
 
 ## Quick reference
 
