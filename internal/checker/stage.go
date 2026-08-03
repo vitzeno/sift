@@ -78,6 +78,13 @@ func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting
 			out = append(out, st)
 			schema = newSchema
 
+		case *ast.Limit, *ast.Offset:
+			// Pure row-slicing: schema passes through unchanged, and
+			// there's nothing to validate — the parser only ever
+			// produces a non-negative int literal for N
+			// (design-improvements.md §3).
+			out = append(out, st)
+
 		case *ast.NameRef:
 			expanded, newSchema, err := c.expandNameRef(st, schema, visiting)
 			if err != nil {

@@ -33,6 +33,8 @@ var BuiltinStageNames = map[string]bool{
 	"select": true,
 	"drop":   true,
 	"rename": true,
+	"limit":  true,
+	"offset": true,
 }
 
 // ColumnRef is a bare column-name reference — the argument form
@@ -87,6 +89,33 @@ type Rename struct {
 }
 
 func (*Rename) stageNode() {}
+
+// Limit emits at most N rows then stops; schema passes through
+// unchanged. N is always a non-negative compile-time constant — v0's
+// grammar has no unary minus, so a negative int literal can't even be
+// written (design-improvements.md §3).
+//
+// N counts every row Limit sees, healthy or failed
+// (design-improvements.md §3's positional-over-all-rows rule): Limit
+// has no way to know the active error policy, so it can't know whether
+// a failed row will later be skipped, routed, or abort the run — it
+// just counts what it itself emits.
+type Limit struct {
+	N   int64
+	Pos lexer.Pos
+}
+
+func (*Limit) stageNode() {}
+
+// Offset discards the first N rows pulled from upstream, then passes
+// the rest through unchanged; schema passes through unchanged. Like
+// Limit, N counts every row including failed ones.
+type Offset struct {
+	N   int64
+	Pos lexer.Pos
+}
+
+func (*Offset) stageNode() {}
 
 // NameRef refers to a declared source, sink, or named pipeline segment
 // by name — the "in" and "out" in `in |> filter(...) |> out`, or a named

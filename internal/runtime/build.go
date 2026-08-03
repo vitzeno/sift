@@ -67,6 +67,10 @@ func Build(in BuildInput) (top Stream, src Source, sink Sink, err error) {
 			top = NewDrop(top, columnNames(st.Columns))
 		case *ast.Rename:
 			top = NewRename(top, renamePairs(st.Pairs))
+		case *ast.Limit:
+			top = NewLimit(top, st.N)
+		case *ast.Offset:
+			top = NewOffset(top, st.N)
 		default:
 			// The checker only ever emits ast.BuiltinStageNames kinds into
 			// CheckedProgram.Stages (internal/checker/stage.go's
