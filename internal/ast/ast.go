@@ -8,28 +8,41 @@ package ast
 import "github.com/vitzeno/sift/internal/lexer"
 
 // Program is a whole parsed .sift file: some source declarations, some
-// sink declarations, and some pipeline declarations (both the runnable
+// sink declarations, some pipeline declarations (both the runnable
 // `pipeline main { ... }` and reusable named segments like
 // `pipeline clean = ...` — the AST doesn't distinguish them; that's a
-// checker concern, not a syntax one).
+// checker concern, not a syntax one), and at most one error policy.
 //
-// decision: no ErrorPolicy field yet. `on error abort` is v0's default
-// and takes effect by doing nothing extra; `on error skip` and
-// `on error |> errors` add real behavior (catch-and-continue, a second
-// sink) and the latter is structurally fan-out, which design.md §5
-// defers explicitly. CLAUDE.md's v0 feature list doesn't call for
-// configurable error policy either. Add the node once a module actually
-// consumes it.
-//
-// decision: no FuncDecl either. design.md §5 lists scalar user functions
-// as "optional" for v0, and neither acceptance case (§7) uses one. The
+// decision: no FuncDecl. design.md §5 lists scalar user functions as
+// "optional" for v0, and neither acceptance case (§7) uses one. The
 // lexer already reserves `func`; the AST node can follow once something
 // needs it.
 type Program struct {
-	Sources   []*SourceDecl
-	Sinks     []*SinkDecl
-	Pipelines []*PipelineDecl
-	Pos       lexer.Pos
+	Sources     []*SourceDecl
+	Sinks       []*SinkDecl
+	Pipelines   []*PipelineDecl
+	ErrorPolicy *ErrorPolicyDecl // nil = absent; the checker defaults to Abort
+	Pos         lexer.Pos
+}
+
+// ErrorPolicyKind classifies an ErrorPolicyDecl (design-errors.md §3.1).
+type ErrorPolicyKind int
+
+const (
+	ErrorAbort ErrorPolicyKind = iota
+	ErrorSkip
+	ErrorRoute
+)
+
+// ErrorPolicyDecl is `on error (abort | skip | |> <name>)`
+// (design-errors.md §5, reintroducing what v0 deferred). Target is only
+// set when Kind == ErrorRoute, and names a sink by the same NameRef path
+// a pipeline body's stage-chain NameRefs already use — resolving it to
+// an actual sink declaration is the checker's job, not the parser's.
+type ErrorPolicyDecl struct {
+	Kind   ErrorPolicyKind
+	Target *NameRef
+	Pos    lexer.Pos
 }
 
 // SourceDecl is `source NAME = FORMAT(PATH, schema: { ... })`. Format is

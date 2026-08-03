@@ -5,7 +5,7 @@ import (
 	"github.com/vitzeno/sift/internal/lexer"
 )
 
-// parseProgram := (SourceDecl | SinkDecl | PipelineDecl)* EOF
+// parseProgram := (SourceDecl | SinkDecl | PipelineDecl | ErrorPolicyDecl)* EOF
 func (p *Parser) parseProgram() *ast.Program {
 	prog := &ast.Program{Pos: p.cur.Pos}
 	for p.cur.Kind != lexer.EOF {
@@ -16,13 +16,55 @@ func (p *Parser) parseProgram() *ast.Program {
 			prog.Sinks = append(prog.Sinks, p.parseSinkDecl())
 		case lexer.PIPELINE:
 			prog.Pipelines = append(prog.Pipelines, p.parsePipelineDecl())
+		case lexer.ON:
+			// decision: "at most one on error declaration" is a purely
+			// structural constraint — no namespace/type resolution is
+			// needed to see a second one coming — so it's rejected
+			// here, in the parser, rather than deferred to the checker
+			// the way "more than one runnable pipeline" is (that check
+			// genuinely needs the namespace built first).
+			if prog.ErrorPolicy != nil {
+				p.fail(p.cur.Pos, "only one 'on error' declaration is allowed per program")
+			}
+			prog.ErrorPolicy = p.parseErrorPolicyDecl()
 		case lexer.ILLEGAL:
 			p.fail(p.cur.Pos, "%s", p.cur.Lit)
 		default:
-			p.fail(p.cur.Pos, "expected a source, sink, or pipeline declaration, got %s", p.cur)
+			p.fail(p.cur.Pos, "expected a source, sink, pipeline, or error-policy declaration, got %s", p.cur)
 		}
 	}
 	return prog
+}
+
+// parseErrorPolicyDecl := "on" "error" ( "abort" | "skip" | "|>" IDENT )
+func (p *Parser) parseErrorPolicyDecl() *ast.ErrorPolicyDecl {
+	pos := p.cur.Pos
+	p.expect(lexer.ON)
+	p.expect(lexer.ERROR)
+
+	switch p.cur.Kind {
+	case lexer.ABORT:
+		p.next()
+		return &ast.ErrorPolicyDecl{Kind: ast.ErrorAbort, Pos: pos}
+	case lexer.SKIP:
+		p.next()
+		return &ast.ErrorPolicyDecl{Kind: ast.ErrorSkip, Pos: pos}
+	case lexer.PIPE:
+		p.next()
+		targetPos := p.cur.Pos
+		name := p.expectIdent()
+		return &ast.ErrorPolicyDecl{
+			Kind:   ast.ErrorRoute,
+			Target: &ast.NameRef{Name: name, Pos: targetPos},
+			Pos:    pos,
+		}
+	case lexer.ILLEGAL:
+		p.fail(p.cur.Pos, "%s", p.cur.Lit)
+		return nil
+	default:
+		p.fail(p.cur.Pos, "expected 'abort', 'skip', or '|>' after 'on error', got %s", p.cur)
+		return nil
+	}
 }
 
 // parseSourceDecl := "source" IDENT "=" IDENT "(" STRING "," "schema" ":" SchemaLit ")"

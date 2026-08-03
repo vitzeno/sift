@@ -18,16 +18,8 @@ const (
 	PolicyAbort Policy = iota
 	// PolicySkip discards a failed row silently and continues.
 	PolicySkip
-	// PolicyRoute writes a failed row's envelope to a second sink
-	// instead of the main one.
-	//
-	// decision: Run's switch below has no case for it yet. Wiring it up
-	// needs an error sink and the fixed envelope Row (design-errors.md
-	// §4) — that's phase E2's job, alongside the frontend
-	// (ErrorPolicyDecl) that lets a program actually select this value.
-	// Nothing can construct PolicyRoute today, so hitting the default
-	// panic below can only mean the checker/Build and this switch have
-	// drifted out of sync with each other later, not a user-facing case.
+	// PolicyRoute writes a failed row's envelope (design-errors.md §4)
+	// to Run's errSink instead of the main one.
 	PolicyRoute
 )
 
@@ -48,18 +40,25 @@ func (e *FailureError) Error() string {
 // failed one per policy, until top is exhausted. Exactly one row is in
 // flight at a time — nothing here buffers the stream.
 //
+// errSink is only used, and only need be non-nil, under PolicyRoute; it
+// is nil for every program that doesn't declare `on error |> <name>`
+// (design-errors.md §5).
+//
 // decision: Run takes both top (the fully-built stage chain, for
 // pulling rows) and src (the original Source Build constructed, before
 // any stage wrapped it) as separate parameters, rather than adding Err()
 // to the general Stream interface. Only Source gained Err()
 // (design-errors.md §2.4) — Filter/Map/Check didn't need a matching
 // method just to forward it, and top's static type stays plain Stream.
-func Run(top Stream, src Source, sink Sink, policy Policy) error {
+func Run(top Stream, src Source, sink Sink, policy Policy, errSink Sink) error {
 	for {
 		row, ok := top.Next()
 		if !ok {
 			if srcErr := src.Err(); srcErr != nil {
 				sink.Close()
+				if errSink != nil {
+					errSink.Close()
+				}
 				return srcErr
 			}
 			break
@@ -68,16 +67,31 @@ func Run(top Stream, src Source, sink Sink, policy Policy) error {
 			switch policy {
 			case PolicyAbort:
 				sink.Close()
+				if errSink != nil {
+					errSink.Close()
+				}
 				return &FailureError{Fail: row.Fail, Prov: row.Prov}
 			case PolicySkip:
 				continue
+			case PolicyRoute:
+				if err := errSink.Write(envelopeRow(row.Prov, row.Fail)); err != nil {
+					sink.Close()
+					return err
+				}
+				continue
 			default:
-				panic(fmt.Sprintf("runtime: policy %v not supported by Run yet", policy))
+				panic(fmt.Sprintf("runtime: unknown policy %v", policy))
 			}
 		}
 		if err := sink.Write(row); err != nil {
 			return err
 		}
 	}
-	return sink.Close()
+	if err := sink.Close(); err != nil {
+		return err
+	}
+	if errSink != nil {
+		return errSink.Close()
+	}
+	return nil
 }

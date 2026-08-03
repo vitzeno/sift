@@ -283,7 +283,7 @@ func TestParseErrors(t *testing.T) {
 		src     string
 		wantSub string
 	}{
-		{"garbage at top level", `42`, "expected a source, sink, or pipeline declaration"},
+		{"garbage at top level", `42`, "expected a source, sink, pipeline, or error-policy declaration"},
 		{"missing comma before schema", `source in = csv("x.csv" schema: {})`, "COMMA"},
 		{"unknown stage", `pipeline main { in |> foo(.x) |> out }`, `unknown stage "foo"`},
 		{"unknown tag", `source in = csv("x.csv", schema: { name: string @xyz })`, `@pii`},

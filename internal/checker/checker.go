@@ -37,12 +37,19 @@ func errorf(pos lexer.Pos, format string, args ...any) *CheckError {
 // (stage.go's expandStages), and the source/sink boundary NameRefs are
 // represented by the Source/Sink fields instead of appearing in the
 // list.
+//
+// ErrorPolicy defaults to ast.ErrorAbort when the program declares none
+// (design-errors.md §5). ErrorSink is non-nil only when ErrorPolicy is
+// ast.ErrorRoute, and carries no schema of its own — it's always built
+// against the fixed envelope (design-errors.md §4).
 type CheckedProgram struct {
 	Source       *ast.SourceDecl
 	SourceSchema value.Schema
 	Sink         *ast.SinkDecl
 	SinkSchema   value.Schema
 	Stages       []ast.Stage
+	ErrorPolicy  ast.ErrorPolicyKind
+	ErrorSink    *ast.SinkDecl
 }
 
 // declKind classifies a name in the program-wide namespace: a source,
@@ -91,6 +98,10 @@ func Check(prog *ast.Program) (*CheckedProgram, error) {
 	if err := c.resolveSourceSchemas(); err != nil {
 		return nil, err
 	}
+	errPolicy, errSink, err := c.resolveErrorPolicy()
+	if err != nil {
+		return nil, err
+	}
 
 	runnable, err := c.findRunnablePipeline()
 	if err != nil {
@@ -118,6 +129,8 @@ func Check(prog *ast.Program) (*CheckedProgram, error) {
 		Sink:         c.sinksByName[sinkRef.Name],
 		SinkSchema:   schema,
 		Stages:       stages,
+		ErrorPolicy:  errPolicy,
+		ErrorSink:    errSink,
 	}, nil
 }
 

@@ -67,7 +67,7 @@ func TestDriverFilterAndEOF(t *testing.T) {
 	})
 	sink := &fakeSink{}
 
-	if err := Run(filtered, src, sink, PolicyAbort); err != nil {
+	if err := Run(filtered, src, sink, PolicyAbort, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestDriverEmptyStream(t *testing.T) {
 	src := &fakeStream{}
 	sink := &fakeSink{}
 
-	if err := Run(src, src, sink, PolicyAbort); err != nil {
+	if err := Run(src, src, sink, PolicyAbort, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink.written) != 0 {
@@ -117,7 +117,7 @@ func TestDriverAbortOnFailedRow(t *testing.T) {
 	}}
 	sink := &fakeSink{}
 
-	err := Run(src, src, sink, PolicyAbort)
+	err := Run(src, src, sink, PolicyAbort, nil)
 	if err == nil {
 		t.Fatal("Run succeeded, want a FailureError")
 	}
@@ -150,7 +150,7 @@ func TestDriverSkipOnFailedRow(t *testing.T) {
 	}}
 	sink := &fakeSink{}
 
-	if err := Run(src, src, sink, PolicySkip); err != nil {
+	if err := Run(src, src, sink, PolicySkip, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink.written) != 2 {
@@ -172,7 +172,7 @@ func TestDriverInfraFatalAbortsRegardlessOfPolicy(t *testing.T) {
 	src := &fakeStream{err: infraErr}
 	sink := &fakeSink{}
 
-	err := Run(src, src, sink, PolicySkip)
+	err := Run(src, src, sink, PolicySkip, nil)
 	if err == nil {
 		t.Fatal("Run succeeded, want the infra-fatal error")
 	}
@@ -181,5 +181,55 @@ func TestDriverInfraFatalAbortsRegardlessOfPolicy(t *testing.T) {
 	}
 	if !sink.closed {
 		t.Error("sink.Close was not called after the infra-fatal abort")
+	}
+}
+
+// TestDriverRouteWritesEnvelopeToErrSink is ERR-C at the runtime layer:
+// under PolicyRoute, a healthy row still reaches the main sink and a
+// failed row's envelope (design-errors.md §4) — not its raw fields —
+// reaches errSink instead. The run completes with no error either way.
+func TestDriverRouteWritesEnvelopeToErrSink(t *testing.T) {
+	src := &fakeStream{rows: []value.Row{
+		{Fields: map[string]any{"name": "Ada"}, Prov: value.Provenance{Source: "in", Ordinal: 0}},
+		{
+			Fail: &value.Failure{Reason: "missing email", Stage: "check"},
+			Prov: value.Provenance{Source: "in", Ordinal: 1, Offset: 3},
+		},
+		{Fields: map[string]any{"name": "Tom"}, Prov: value.Provenance{Source: "in", Ordinal: 2}},
+	}}
+	sink := &fakeSink{}
+	errSink := &fakeSink{}
+
+	if err := Run(src, src, sink, PolicyRoute, errSink); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	if len(sink.written) != 2 {
+		t.Fatalf("main sink received %d rows, want 2 (Ada and Tom)", len(sink.written))
+	}
+	if sink.written[0].Fields["name"] != "Ada" || sink.written[1].Fields["name"] != "Tom" {
+		t.Errorf("main sink.written = %+v, want Ada then Tom", sink.written)
+	}
+
+	if len(errSink.written) != 1 {
+		t.Fatalf("error sink received %d rows, want 1", len(errSink.written))
+	}
+	envelope := errSink.written[0]
+	if envelope.Fields["source"] != "in" || envelope.Fields["ordinal"] != 1 ||
+		envelope.Fields["offset"] != 3 || envelope.Fields["reason"] != "missing email" ||
+		envelope.Fields["stage"] != "check" {
+		t.Errorf("envelope Fields = %#v, want the full provenance+reason envelope", envelope.Fields)
+	}
+	// The envelope must never carry the failed row's own (possibly
+	// suspect, possibly @pii) fields.
+	if _, ok := envelope.Fields["name"]; ok {
+		t.Error("envelope carries a raw pipeline field (\"name\") — it must only ever carry the fixed envelope fields")
+	}
+
+	if !sink.closed {
+		t.Error("main sink.Close was not called")
+	}
+	if !errSink.closed {
+		t.Error("error sink.Close was not called")
 	}
 }
