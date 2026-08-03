@@ -23,6 +23,14 @@ type SourceOptions struct {
 	Name   string
 	Path   string
 	Schema value.Schema
+	// Opts holds every source keyword argument beyond schema (e.g.
+	// xlsx's "sheet"/"header_row", design/xlsx.md §1), decoded from
+	// their ast.SourceOpt literals into plain Go values — string,
+	// int64, float64, or bool. A format that needs no extra options
+	// (csv, jsonl) simply never looks here. Only the registered
+	// constructor for a given format interprets a key's meaning or
+	// validates its type; the registry itself stays format-agnostic.
+	Opts map[string]any
 }
 
 type SinkOptions struct {

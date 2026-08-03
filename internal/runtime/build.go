@@ -43,6 +43,7 @@ func Build(in BuildInput) (top Stream, src Source, sinks []Sink, err error) {
 		Name:   in.Source.Name,
 		Path:   in.Source.Path,
 		Schema: in.SourceSchema,
+		Opts:   sourceOptValues(in.Source.Opts),
 	})
 	if err != nil {
 		return nil, nil, nil, err
@@ -101,6 +102,32 @@ func columnNames(cols []ast.ColumnRef) []string {
 		names[i] = c.Name
 	}
 	return names
+}
+
+// sourceOptValues decodes a source declaration's extra keyword arguments
+// (design/xlsx.md §1) into the plain-value map SourceOptions.Opts
+// exposes to a format constructor. The parser guarantees every
+// ast.SourceOpt.Value is one of the four scalar literal kinds
+// (parseSourceOptValue), so the switch below is exhaustive by
+// construction, not defensive coding against a case that can't occur.
+func sourceOptValues(opts []ast.SourceOpt) map[string]any {
+	if len(opts) == 0 {
+		return nil
+	}
+	m := make(map[string]any, len(opts))
+	for _, o := range opts {
+		switch v := o.Value.(type) {
+		case *ast.IntLit:
+			m[o.Name] = v.Value
+		case *ast.DoubleLit:
+			m[o.Name] = v.Value
+		case *ast.StringLit:
+			m[o.Name] = v.Value
+		case *ast.BoolLit:
+			m[o.Name] = v.Value
+		}
+	}
+	return m
 }
 
 // renamePairs flattens a rename stage's pair list into the old->new map

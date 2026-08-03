@@ -45,16 +45,38 @@ type ErrorPolicyDecl struct {
 	Pos    lexer.Pos
 }
 
-// SourceDecl is `source NAME = FORMAT(PATH, schema: { ... })`. Format is
-// stored as the bare identifier text (e.g. "csv") — the AST never
+// SourceDecl is `source NAME = FORMAT(PATH, schema: { ... }, ...)`. Format
+// is stored as the bare identifier text (e.g. "csv") — the AST never
 // validates it; resolving it to a registered Source constructor is the
 // checker/executor's job (CLAUDE.md non-negotiable #4).
+//
+// Opts carries every keyword argument other than the required `schema:`
+// (e.g. xlsx's `sheet: "Q1"`, `header_row: 3`, design/xlsx.md §1) —
+// format-specific options the parser and checker never interpret, only
+// pass through opaquely. Only the registered constructor for Format
+// knows what a given opt name means or validates its type; that keeps
+// the "no format special-cased in the frontend" rule (CLAUDE.md
+// non-negotiable #2) intact even as formats grow options csv/jsonl never
+// needed.
 type SourceDecl struct {
 	Name   string
 	Format string
 	Path   string
 	Schema SchemaLit
+	Opts   []SourceOpt
 	Pos    lexer.Pos
+}
+
+// SourceOpt is one keyword argument in a source declaration beyond
+// `schema:` — `sheet: "Q1"` or `header_row: 3`. Value is always a
+// compile-time scalar literal (IntLit/DoubleLit/StringLit/BoolLit),
+// never a general expression: like a segment call's scalar argument
+// (design/segments.md §2.2), there is no row in scope yet at a source
+// declaration.
+type SourceOpt struct {
+	Name  string
+	Value Expr
+	Pos   lexer.Pos
 }
 
 // SinkDecl is `sink NAME = FORMAT(PATH)`. Unlike SourceDecl, it carries

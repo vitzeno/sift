@@ -67,7 +67,14 @@ func (p *Parser) parseErrorPolicyDecl() *ast.ErrorPolicyDecl {
 	}
 }
 
-// parseSourceDecl := "source" IDENT "=" IDENT "(" STRING "," "schema" ":" SchemaLit ")"
+// parseSourceDecl := "source" IDENT "=" IDENT "(" STRING ("," SourceKwArg)* ")"
+// SourceKwArg      := "schema" ":" SchemaLit | IDENT ":" Literal
+//
+// Exactly one "schema" kwarg is required (in any position among the
+// kwargs, not necessarily first); every other kwarg is a format-specific
+// option collected into ast.SourceDecl.Opts and left uninterpreted here
+// — design/xlsx.md §1's "widen the generic kwarg handling", not an
+// xlsx-specific grammar change (CLAUDE.md non-negotiable #2).
 func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 	pos := p.cur.Pos
 	p.expect(lexer.SOURCE)
@@ -76,12 +83,47 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 	format := p.expectIdent()
 	p.expect(lexer.LPAREN)
 	path := p.expectString()
-	p.expect(lexer.COMMA)
-	p.expectKeyword("schema")
-	p.expect(lexer.COLON)
-	schema := p.parseSchemaLit()
+
+	var schema ast.SchemaLit
+	haveSchema := false
+	var opts []ast.SourceOpt
+	for p.cur.Kind == lexer.COMMA {
+		p.next()
+		kwPos := p.cur.Pos
+		kw := p.expectIdent()
+		p.expect(lexer.COLON)
+		if kw == "schema" {
+			if haveSchema {
+				p.fail(kwPos, "duplicate %q keyword argument", "schema")
+			}
+			schema = p.parseSchemaLit()
+			haveSchema = true
+			continue
+		}
+		opts = append(opts, ast.SourceOpt{Name: kw, Value: p.parseSourceOptValue(), Pos: kwPos})
+	}
 	p.expect(lexer.RPAREN)
-	return &ast.SourceDecl{Name: name, Format: format, Path: path, Schema: schema, Pos: pos}
+	if !haveSchema {
+		p.fail(pos, "source %q: missing required %q keyword argument", name, "schema")
+	}
+	return &ast.SourceDecl{Name: name, Format: format, Path: path, Schema: schema, Opts: opts, Pos: pos}
+}
+
+// parseSourceOptValue := INT | DOUBLE | STRING | "true" | "false"
+//
+// A source option's value is always a compile-time scalar literal, the
+// same restriction a segment call's scalar argument follows
+// (parseCallArg) — there is no row in scope at a source declaration, so
+// a general expression would have nothing to evaluate against.
+func (p *Parser) parseSourceOptValue() ast.Expr {
+	pos := p.cur.Pos
+	switch p.cur.Kind {
+	case lexer.INT, lexer.DOUBLE, lexer.STRING, lexer.TRUE, lexer.FALSE:
+		return p.parsePrimary()
+	default:
+		p.fail(pos, "expected a literal value for keyword argument, got %s", p.cur)
+		return nil
+	}
 }
 
 // parseSinkDecl := "sink" IDENT "=" IDENT "(" STRING ")"

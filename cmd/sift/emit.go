@@ -26,7 +26,7 @@ func emitAST(path string) error {
 	}
 
 	for _, s := range prog.Sources {
-		fmt.Printf("source %s = %s(%q, schema: %s)\n", s.Name, s.Format, s.Path, schemaLitString(s.Schema))
+		fmt.Printf("source %s = %s(%q, schema: %s%s)\n", s.Name, s.Format, s.Path, schemaLitString(s.Schema), sourceOptsString(s.Opts))
 	}
 	for _, s := range prog.Sinks {
 		fmt.Printf("sink %s = %s(%q)\n", s.Name, s.Format, s.Path)
@@ -74,6 +74,19 @@ func schemaLitString(s ast.SchemaLit) string {
 		parts[i] = fmt.Sprintf("%s: %s%s", f.Name, f.TypeName, tag)
 	}
 	return "{ " + strings.Join(parts, ", ") + " }"
+}
+
+// sourceOptsString renders a source's extra keyword arguments (beyond
+// schema) as ", name: value" suffixes, in declared order, reusing
+// exprString for the literal value — an xlsx source's `sheet:`/
+// `header_row:` opts (design/xlsx.md §1) round-trip through --emit-ast
+// exactly like schema does, rather than being silently dropped.
+func sourceOptsString(opts []ast.SourceOpt) string {
+	var b strings.Builder
+	for _, o := range opts {
+		fmt.Fprintf(&b, ", %s: %s", o.Name, exprString(o.Value))
+	}
+	return b.String()
 }
 
 func stageString(s ast.Stage) string {

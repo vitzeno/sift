@@ -94,20 +94,6 @@ func (p *Parser) expectString() string {
 	return p.expect(lexer.STRING).Lit
 }
 
-// expectKeyword matches an identifier by its exact text, for the one
-// keyword-argument label v0's grammar needs: `schema:` in a source
-// declaration. It's spelled as a plain identifier check, not a lexer
-// keyword, since it only has meaning in that one argument position.
-func (p *Parser) expectKeyword(word string) {
-	if p.cur.Kind == lexer.ILLEGAL {
-		p.fail(p.cur.Pos, "%s", p.cur.Lit)
-	}
-	if p.cur.Kind != lexer.IDENT || p.cur.Lit != word {
-		p.fail(p.cur.Pos, "expected %q, got %s", word, p.cur)
-	}
-	p.next()
-}
-
 // Parse parses a complete .sift program.
 func Parse(src string) (prog *ast.Program, err error) {
 	defer recoverErr(&err)
