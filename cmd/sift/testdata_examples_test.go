@@ -156,6 +156,18 @@ func TestExampleNamedSegment(t *testing.T) {
 	}
 }
 
+// TestExampleSegments is design/segments.md's flagship demo: `scrub(col)`
+// reused across two different @pii columns and `adults(min: int)` called
+// with a literal, both composing with each other in one `|>` chain.
+func TestExampleSegments(t *testing.T) {
+	got := runExample(t, "segments")
+	want := `{"name":"Ada","age":42,"email":"********","backup_email":"*********"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
 // TestExampleOnErrorAbort confirms on-error-abort.sift's own claim:
 // Grace's blank email aborts the run, and Liam (after her in the CSV)
 // is never even reached — only Ada's row, read before the failure,
