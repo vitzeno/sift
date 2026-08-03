@@ -19,12 +19,11 @@ fmt-check:
 # fmt-check, vet, and test together: what CI would run.
 check: fmt-check vet test
 
-# Source paths in a .sift file resolve relative to the process's working
-# directory (see cmd/sift/run.go), not the script's own directory — so
-# this run from testdata/, not the repo root, mirrors the one real
-# constraint that choice puts on how adults.sift must be invoked.
+# Source/sink paths in a .sift file resolve relative to the script's own
+# directory (see cmd/sift/run.go), so this works from the repo root
+# without cd'ing into testdata/ first.
 run: build
-	cd testdata && go run ../cmd/sift run adults.sift
+	go run ./cmd/sift run testdata/adults.sift
 
 emit-ast: build
 	go run ./cmd/sift --emit-ast testdata/adults.sift

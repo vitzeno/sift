@@ -48,15 +48,16 @@ func chdir(t *testing.T, dir string) {
 	t.Cleanup(func() { os.Chdir(cwd) })
 }
 
-// TestRunFileResolvesSourcePathRelativeToCWD is this session's explicit
+// TestRunFileResolvesSourcePathRelativeToScriptDir is this session's
 // scope decision made concrete: an input file ("in") and the output file
-// it produces ("out"), in one directory, with the .sift program's source
-// path resolving against the process's cwd rather than the script's own
-// directory.
-func TestRunFileResolvesSourcePathRelativeToCWD(t *testing.T) {
+// it produces ("out"), sitting next to a script invoked from a totally
+// different working directory. If paths resolved against cwd instead,
+// this would fail to find people.csv.
+func TestRunFileResolvesSourcePathRelativeToScriptDir(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\nTom,15\n")
-	writeFile(t, filepath.Join(dir, "adults.sift"), `source in = csv("people.csv", schema: { name: string, age: int })
+	siftPath := filepath.Join(dir, "adults.sift")
+	writeFile(t, siftPath, `source in = csv("people.csv", schema: { name: string, age: int })
 sink out = jsonl("adults.jsonl")
 
 pipeline main {
@@ -64,9 +65,11 @@ pipeline main {
 }
 `)
 
-	chdir(t, dir)
+	// cwd is deliberately somewhere else entirely, to prove path
+	// resolution doesn't depend on it.
+	chdir(t, t.TempDir())
 
-	if err := runFile("adults.sift"); err != nil {
+	if err := runFile(siftPath); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -80,17 +83,17 @@ pipeline main {
 	}
 }
 
-// TestRunFileSourcePathNotResolvedAgainstScriptDir confirms the flip
-// side of the decision above: a source path is NOT resolved relative to
-// the .sift file's own directory. Placing the script in a subdirectory
-// while the CSV stays at cwd must still work.
-func TestRunFileSourcePathNotResolvedAgainstScriptDir(t *testing.T) {
+// TestRunFileScriptInSubdirectory confirms resolution walks from the
+// script's own directory even when that's several levels below cwd —
+// exactly CLAUDE.md's documented `sift run testdata/adults.sift`
+// invoked from the repo root.
+func TestRunFileScriptInSubdirectory(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
 	sub := filepath.Join(dir, "scripts")
 	if err := os.Mkdir(sub, 0o755); err != nil {
 		t.Fatalf("Mkdir: %v", err)
 	}
+	writeFile(t, filepath.Join(sub, "people.csv"), "name,age\nAda,42\n")
 	writeFile(t, filepath.Join(sub, "adults.sift"), `source in = csv("people.csv", schema: { name: string, age: int })
 sink out = jsonl("adults.jsonl")
 
@@ -104,8 +107,33 @@ pipeline main {
 	if err := runFile("scripts/adults.sift"); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
-	if _, err := os.ReadFile(filepath.Join(dir, "adults.jsonl")); err != nil {
-		t.Fatalf("expected adults.jsonl next to cwd, not next to the script: %v", err)
+	if _, err := os.ReadFile(filepath.Join(sub, "adults.jsonl")); err != nil {
+		t.Fatalf("expected adults.jsonl next to the script, not cwd: %v", err)
+	}
+}
+
+// TestRunFileAbsoluteSourcePathIsUnchanged confirms an already-absolute
+// path is never rewritten, even when it points somewhere other than the
+// script's directory.
+func TestRunFileAbsoluteSourcePathIsUnchanged(t *testing.T) {
+	dataDir := t.TempDir()
+	writeFile(t, filepath.Join(dataDir, "people.csv"), "name,age\nAda,42\n")
+
+	scriptDir := t.TempDir()
+	siftPath := filepath.Join(scriptDir, "adults.sift")
+	writeFile(t, siftPath, `source in = csv("`+filepath.ToSlash(filepath.Join(dataDir, "people.csv"))+`", schema: { name: string, age: int })
+sink out = jsonl("adults.jsonl")
+
+pipeline main {
+  in |> filter(.age >= 18) |> out
+}
+`)
+
+	if err := runFile(siftPath); err != nil {
+		t.Fatalf("runFile error: %v", err)
+	}
+	if _, err := os.ReadFile(filepath.Join(scriptDir, "adults.jsonl")); err != nil {
+		t.Fatalf("expected adults.jsonl next to the script: %v", err)
 	}
 }
 
@@ -119,8 +147,8 @@ func TestRunFilePIIRejected(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@example.com\n")
 	siftPath := filepath.Join(dir, "leaky.sift")
-	writeFile(t, siftPath, `source in = csv("`+filepath.ToSlash(filepath.Join(dir, "people.csv"))+`", schema: { name: string, email: string @pii })
-sink out = jsonl("`+filepath.ToSlash(filepath.Join(dir, "out.jsonl"))+`")
+	writeFile(t, siftPath, `source in = csv("people.csv", schema: { name: string, email: string @pii })
+sink out = jsonl("out.jsonl")
 
 pipeline main {
   in |> out

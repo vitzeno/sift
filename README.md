@@ -45,10 +45,11 @@ $ cat adults.jsonl
 
 Tom is filtered out; only Ada's row reaches the sink.
 
-> **Note:** a source's path (`"people.csv"` above) resolves relative to
-> the current working directory, not to `adults.sift`'s own location —
-> so run `sift` from the directory containing both files. This is a
-> deliberate v0 simplification (see `cmd/sift/run.go`), not a bug.
+> **Note:** a source or sink's path (`"people.csv"`, `"adults.jsonl"`
+> above) resolves relative to `adults.sift`'s own directory, not the
+> current working directory — so this works the same way whether you run
+> `sift` from right there or from anywhere else, as long as you pass it
+> `path/to/adults.sift`.
 
 ## PII in one example
 
@@ -94,7 +95,7 @@ Or drive the CLI directly:
 
 ```console
 $ go build -o sift ./cmd/sift
-$ ./sift run testdata/adults.sift            # from within testdata/
+$ ./sift run testdata/adults.sift
 $ ./sift --emit-ast testdata/adults.sift
 $ ./sift --emit-schema testdata/adults.sift
 ```

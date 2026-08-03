@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/vitzeno/sift/internal/checker"
 	"github.com/vitzeno/sift/internal/parser"
@@ -11,15 +12,14 @@ import (
 // runFile lexes, parses, checks, builds, and executes the program at
 // path — design.md §4's full compilation pipeline end to end.
 //
-// decision: a source's path (e.g. csv("people.csv", ...)) resolves
-// relative to the process's current working directory, the same as any
-// relative path passed to os.Open — not relative to path's own
-// directory. Making a source path script-relative (so `sift run
-// some/dir/x.sift` finds `some/dir/people.csv` regardless of the
-// caller's cwd) is a real CLI convenience, but it's an added path-
-// resolution feature, not something design.md or CLAUDE.md's v0 scope
-// calls for. Kept as plain relative-to-cwd for v0; revisit if it's
-// actually needed.
+// decision: a source or sink's path (e.g. csv("people.csv", ...))
+// resolves relative to path's own directory, not the process's current
+// working directory — so `sift run some/dir/x.sift` finds
+// `some/dir/people.csv` regardless of where it's invoked from. An
+// already-absolute path is left untouched. This matches how a shell
+// script or Makefile resolves paths relative to itself, and is what
+// lets `go run ./cmd/sift run testdata/adults.sift` (CLAUDE.md's
+// documented command) work unmodified from the repo root.
 func runFile(path string) error {
 	src, err := os.ReadFile(path)
 	if err != nil {
@@ -36,10 +36,16 @@ func runFile(path string) error {
 		return err
 	}
 
-	top, sink, err := runtime.Build(runtime.BuildInput{
-		Source:       cp.Source,
+	base := filepath.Dir(path)
+	source := *cp.Source
+	source.Path = resolvePath(base, source.Path)
+	sink := *cp.Sink
+	sink.Path = resolvePath(base, sink.Path)
+
+	top, runSink, err := runtime.Build(runtime.BuildInput{
+		Source:       &source,
 		SourceSchema: cp.SourceSchema,
-		Sink:         cp.Sink,
+		Sink:         &sink,
 		SinkSchema:   cp.SinkSchema,
 		Stages:       cp.Stages,
 	})
@@ -47,5 +53,15 @@ func runFile(path string) error {
 		return err
 	}
 
-	return runtime.Run(top, sink)
+	return runtime.Run(top, runSink)
+}
+
+// resolvePath joins path onto base unless path is already absolute, in
+// which case it's returned unchanged — an absolute path always means
+// exactly that, regardless of where the script lives.
+func resolvePath(base, path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(base, path)
 }
