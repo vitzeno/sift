@@ -1,0 +1,11 @@
+// Demonstrates drop satisfying the PII sink rule by removing a column
+// entirely (design-improvements.md S1): an internal HR export carries a
+// @pii ssn column that should never leave the building at all — not
+// even masked. drop(ssn) removes it from the schema before the sink
+// check runs, so the pipeline compiles with no mask/hash/redact call.
+source in  = csv("drop.csv", schema: { name: string, ssn: string @pii, department: string })
+sink   out = jsonl("drop_out.jsonl")
+
+pipeline main {
+  in |> drop(ssn) |> out
+}

@@ -81,6 +81,26 @@ func TestExamplePII(t *testing.T) {
 	}
 }
 
+func TestExampleSelect(t *testing.T) {
+	got := runExample(t, "select")
+	want := `{"email":"ada@example.com","name":"Ada","plan":"pro"}
+{"email":"tom@example.com","name":"Tom","plan":"free"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestExampleDrop(t *testing.T) {
+	got := runExample(t, "drop")
+	want := `{"name":"Ada","department":"Engineering"}
+{"name":"Tom","department":"Sales"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestExampleNamedSegment(t *testing.T) {
 	got := runExample(t, "named-segment")
 	want := `{"name":"Ada","email":"ada@example.com"}
