@@ -1,0 +1,167 @@
+// This file runs every example program in testdata/ through the real
+// CLI entry point (runFile) and asserts on its output byte-exact — the
+// same discipline complex_test.go used to apply to one big combined
+// program, now spread across testdata/'s per-feature examples (filter,
+// map, check, pii, named-segment) and the new design-errors.md examples
+// (on-error-abort/skip/route, bad-cell). Every example here doubles as
+// documentation: each demonstrates exactly one language feature or error
+// policy, in isolation, matching CLAUDE.md's own testdata/ convention
+// (".sift programs + input / expected-output fixtures").
+package main
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/vitzeno/sift/internal/runtime"
+)
+
+// runExample runs testdata/name.sift and returns name_out.jsonl's
+// contents, cleaning up every file the program writes (which, thanks to
+// script-relative path resolution, land directly in testdata/ next to
+// the .sift file itself — not in some test-private temp directory).
+func runExample(t *testing.T, name string, extraOutputs ...string) []byte {
+	t.Helper()
+	siftPath := filepath.Join("..", "..", "testdata", name+".sift")
+	outPath := filepath.Join("..", "..", "testdata", name+"_out.jsonl")
+	t.Cleanup(func() { os.Remove(outPath) })
+	for _, extra := range extraOutputs {
+		path := filepath.Join("..", "..", "testdata", extra)
+		t.Cleanup(func() { os.Remove(path) })
+	}
+
+	if err := runFile(siftPath); err != nil {
+		t.Fatalf("runFile(%s) error: %v", siftPath, err)
+	}
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("reading %s: %v", outPath, err)
+	}
+	return got
+}
+
+func TestExampleFilter(t *testing.T) {
+	got := runExample(t, "filter")
+	want := `{"name":"Ada","age":42,"active":true}
+{"name":"Liam","age":25,"active":true}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestExampleMap(t *testing.T) {
+	got := runExample(t, "map")
+	want := `{"name":"ADA","age":42,"balance":250.5,"balance_ok":true,"age_next_year":43}
+{"name":"TOM","age":15,"balance":50,"balance_ok":false,"age_next_year":16}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestExampleCheck(t *testing.T) {
+	got := runExample(t, "check")
+	want := `{"name":"Ada","email":"ada@example.com"}
+{"name":"Tom","email":"tom@example.com"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestExamplePII(t *testing.T) {
+	got := runExample(t, "pii")
+	want := `{"name":"Ada","email":"***************"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestExampleNamedSegment(t *testing.T) {
+	got := runExample(t, "named-segment")
+	want := `{"name":"Ada","email":"ada@example.com"}
+{"name":"Tom","email":"tom@example.com"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestExampleOnErrorAbort confirms on-error-abort.sift's own claim:
+// Grace's blank email aborts the run, and Liam (after her in the CSV)
+// is never even reached — only Ada's row, read before the failure,
+// lands in the sink.
+func TestExampleOnErrorAbort(t *testing.T) {
+	siftPath := filepath.Join("..", "..", "testdata", "on-error-abort.sift")
+	outPath := filepath.Join("..", "..", "testdata", "on-error-abort_out.jsonl")
+	t.Cleanup(func() { os.Remove(outPath) })
+
+	err := runFile(siftPath)
+	if err == nil {
+		t.Fatal("runFile succeeded, want the default abort policy to stop the run")
+	}
+	var fe *runtime.FailureError
+	if !errors.As(err, &fe) {
+		t.Fatalf("error type = %T, want *runtime.FailureError", err)
+	}
+	if fe.Fail.Reason != "missing email" {
+		t.Errorf("Reason = %q, want %q", fe.Fail.Reason, "missing email")
+	}
+
+	got, readErr := os.ReadFile(outPath)
+	if readErr != nil {
+		t.Fatalf("reading output: %v", readErr)
+	}
+	want := `{"name":"Ada","age":42,"email":"ada@example.com"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s (only Ada, written before the abort)", got, want)
+	}
+}
+
+func TestExampleOnErrorSkip(t *testing.T) {
+	got := runExample(t, "on-error-skip")
+	want := `{"name":"Ada","age":42,"email":"ada@example.com"}
+{"name":"Liam","age":25,"email":"liam@example.com"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestExampleOnErrorRoute checks both sinks on-error-route.sift writes
+// to: healthy rows in the main sink, Grace's envelope — provenance and
+// reason, never her raw fields — in the error sink.
+func TestExampleOnErrorRoute(t *testing.T) {
+	got := runExample(t, "on-error-route", "on-error-route_errors.jsonl")
+	want := `{"name":"Ada","age":42,"email":"ada@example.com"}
+{"name":"Liam","age":25,"email":"liam@example.com"}
+`
+	if string(got) != want {
+		t.Errorf("main output =\n%s\nwant\n%s", got, want)
+	}
+
+	errPath := filepath.Join("..", "..", "testdata", "on-error-route_errors.jsonl")
+	gotErr, err := os.ReadFile(errPath)
+	if err != nil {
+		t.Fatalf("reading error sink: %v", err)
+	}
+	wantErr := `{"source":"in","ordinal":2,"offset":4,"reason":"missing email","stage":"check"}
+`
+	if string(gotErr) != wantErr {
+		t.Errorf("error sink =\n%s\nwant\n%s", gotErr, wantErr)
+	}
+}
+
+func TestExampleBadCell(t *testing.T) {
+	got := runExample(t, "bad-cell")
+	want := `{"name":"Ada","age":42}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}

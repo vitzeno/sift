@@ -32,4 +32,4 @@ emit-schema: build
 	go run ./cmd/sift --emit-schema testdata/adults.sift
 
 clean:
-	rm -f testdata/adults.jsonl testdata/complex_out.jsonl
+	rm -f testdata/adults.jsonl testdata/*_out.jsonl testdata/*_errors.jsonl
