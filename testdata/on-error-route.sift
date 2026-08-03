@@ -1,0 +1,13 @@
+// Same shape again, but `on error |> errors` routes Grace's failure to
+// a second sink (design-errors.md §4) instead of dropping or aborting.
+// The "errors" sink never sees Grace's raw fields — only a fixed
+// envelope of where and why she failed: provenance plus reason.
+on error |> errors
+
+source in     = csv("on-error-route.csv", schema: { name: string, age: int, email: string })
+sink   out    = jsonl("on-error-route_out.jsonl")
+sink   errors = jsonl("on-error-route_errors.jsonl")
+
+pipeline main {
+  in |> filter(.age >= 18) |> check(.email != "", "missing email") |> out
+}

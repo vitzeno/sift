@@ -1,0 +1,13 @@
+// Demonstrates a source cell that won't coerce to its declared type
+// (design-errors.md §2.3, phase E3): Tom's "age" cell fails to parse as
+// int right at the source — not in a check or a parser — and becomes a
+// row failure governed by the same `on error` policy as any other
+// failure. Here it's skipped, so only Ada's row reaches the sink.
+on error skip
+
+source in = csv("bad-cell.csv", schema: { name: string, age: int })
+sink   out = jsonl("bad-cell_out.jsonl")
+
+pipeline main {
+  in |> out
+}

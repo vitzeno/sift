@@ -1,0 +1,12 @@
+// Same shape as on-error-abort.sift, but `on error skip` drops the
+// failing row instead of stopping the run: Grace's blank email fails
+// check and is discarded, but Liam (read after her) still reaches the
+// sink and the program exits successfully.
+on error skip
+
+source in  = csv("on-error-skip.csv", schema: { name: string, age: int, email: string })
+sink   out = jsonl("on-error-skip_out.jsonl")
+
+pipeline main {
+  in |> filter(.age >= 18) |> check(.email != "", "missing email") |> out
+}
