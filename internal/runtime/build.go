@@ -61,8 +61,12 @@ func Build(in BuildInput) (top Stream, src Source, sink Sink, err error) {
 			top = NewMap(top, st.Record)
 		case *ast.Check:
 			top = NewCheck(top, st.Cond, st.Reason)
+		case *ast.Select:
+			top = NewSelect(top, columnNames(st.Columns))
+		case *ast.Drop:
+			top = NewDrop(top, columnNames(st.Columns))
 		default:
-			// The checker only ever emits these three stage kinds into
+			// The checker only ever emits ast.BuiltinStageNames kinds into
 			// CheckedProgram.Stages (internal/checker/stage.go's
 			// expandStages) — anything else means the checker and Build
 			// have drifted out of sync with each other, an internal bug.
@@ -71,4 +75,15 @@ func Build(in BuildInput) (top Stream, src Source, sink Sink, err error) {
 	}
 
 	return top, src, sink, nil
+}
+
+// columnNames extracts the bare names from a column-ref list — Build
+// only ever needs the names themselves; positions are a checker-time
+// diagnostic concern the runtime layer has no use for.
+func columnNames(cols []ast.ColumnRef) []string {
+	names := make([]string, len(cols))
+	for i, c := range cols {
+		names[i] = c.Name
+	}
+	return names
 }

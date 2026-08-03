@@ -10,11 +10,11 @@ import (
 // NameRef) or a named segment's entire body -- threading schema through
 // each one and inlining any *ast.NameRef to another named segment.
 //
-// The return slice holds only *ast.Filter/*ast.Map/*ast.Check: by the
-// time a NameRef is resolved here, it either expands into more of the
-// same three (recursively) or fails, so nothing else can reach the
-// output. This is exactly the flat chain module 7 needs to build
-// Stream objects from.
+// The return slice holds only built-in stage nodes (ast.BuiltinStageNames):
+// by the time a NameRef is resolved here, it either expands into more of
+// those (recursively) or fails, so nothing else can reach the output.
+// This is exactly the flat chain module 7 needs to build Stream objects
+// from.
 //
 // visiting is the in-progress call stack of segment names, used to
 // reject a segment defined in terms of itself (directly or through a
@@ -48,6 +48,22 @@ func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting
 
 		case *ast.Map:
 			newSchema, err := c.checkMapRecord(st.Record, schema)
+			if err != nil {
+				return nil, value.Schema{}, err
+			}
+			out = append(out, st)
+			schema = newSchema
+
+		case *ast.Select:
+			newSchema, err := c.checkSelect(st, schema)
+			if err != nil {
+				return nil, value.Schema{}, err
+			}
+			out = append(out, st)
+			schema = newSchema
+
+		case *ast.Drop:
+			newSchema, err := c.checkDrop(st, schema)
 			if err != nil {
 				return nil, value.Schema{}, err
 			}

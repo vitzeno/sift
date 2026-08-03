@@ -18,15 +18,16 @@ func (p *Parser) parseStageChain() []ast.Stage {
 // parseStageElem := IDENT | "filter" "(" Expr ")" | "map" "(" RecordExpr ")"
 //
 //	| "check" "(" Expr "," STRING ")"
+//	| "select" "(" ColumnRefList ")" | "drop" "(" ColumnRefList ")"
 //
-// decision: filter/map/check are recognized by their literal name here
-// in the parser, not as lexer keywords (module 3's decision). They're
-// not a pluggable set like formats -- v0's stage grammar is closed to
-// exactly these three, each with its own argument shape, so the parser
-// has to know their names to know how to parse what follows the '('.
-// A bare identifier with no following '(' is a NameRef to a declared
-// source, sink, or named pipeline segment; resolving which is the
-// checker's job.
+// decision: built-in stage names are recognized by their literal text
+// here in the parser, not as lexer keywords (module 3's decision).
+// They're not a pluggable set like formats -- v0's stage grammar is
+// closed to a fixed list (ast.BuiltinStageNames), each with its own
+// argument shape, so the parser has to know their names to know how to
+// parse what follows the '('. A bare identifier with no following '(' is
+// a NameRef to a declared source, sink, or named pipeline segment;
+// resolving which is the checker's job.
 func (p *Parser) parseStageElem() ast.Stage {
 	pos := p.cur.Pos
 	if p.cur.Kind == lexer.ILLEGAL {
@@ -43,8 +44,12 @@ func (p *Parser) parseStageElem() ast.Stage {
 		return p.parseMap(pos)
 	case "check":
 		return p.parseCheck(pos)
+	case "select":
+		return p.parseSelect(pos)
+	case "drop":
+		return p.parseDrop(pos)
 	default:
-		p.fail(pos, "unknown stage %q (built-in stages are filter, map, check)", name)
+		p.fail(pos, "unknown stage %q (built-in stages are filter, map, check, select, drop)", name)
 		return nil
 	}
 }
@@ -70,6 +75,51 @@ func (p *Parser) parseCheck(pos lexer.Pos) *ast.Check {
 	reason := p.expectString()
 	p.expect(lexer.RPAREN)
 	return &ast.Check{Cond: cond, Reason: reason, Pos: pos}
+}
+
+func (p *Parser) parseSelect(pos lexer.Pos) *ast.Select {
+	p.expect(lexer.LPAREN)
+	cols := p.parseColumnRefList()
+	p.expect(lexer.RPAREN)
+	return &ast.Select{Columns: cols, Pos: pos}
+}
+
+func (p *Parser) parseDrop(pos lexer.Pos) *ast.Drop {
+	p.expect(lexer.LPAREN)
+	cols := p.parseColumnRefList()
+	p.expect(lexer.RPAREN)
+	return &ast.Drop{Columns: cols, Pos: pos}
+}
+
+// parseColumnRefList := ColumnRef ("," ColumnRef)*
+//
+// Always at least one: the grammar has no way to write an empty list,
+// so `select()` fails here with a plain "expected IDENT" parse error
+// rather than needing a dedicated "zero names" check later.
+func (p *Parser) parseColumnRefList() []ast.ColumnRef {
+	cols := []ast.ColumnRef{p.parseColumnRef()}
+	for p.cur.Kind == lexer.COMMA {
+		p.next()
+		cols = append(cols, p.parseColumnRef())
+	}
+	return cols
+}
+
+// parseColumnRef consumes a bare column-name identifier — the argument
+// form select/drop/rename/mask/hash/redact all share
+// (design-improvements.md §5). Writing `.field` here is a specific,
+// anticipated mistake (the expression form, valid inside
+// filter/map/check but not here), so it gets its own diagnostic instead
+// of a generic "expected IDENT, got DOT".
+func (p *Parser) parseColumnRef() ast.ColumnRef {
+	pos := p.cur.Pos
+	if p.cur.Kind == lexer.DOT {
+		p.next()
+		name := p.expectIdent()
+		p.fail(pos, "expected a column name %q, not a field access %q", name, "."+name)
+	}
+	name := p.expectIdent()
+	return ast.ColumnRef{Name: name, Pos: pos}
 }
 
 // parseRecordExpr := "{" ("..." IDENT ","?)? (RecordField ("," RecordField)*)? "}"

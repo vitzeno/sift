@@ -164,6 +164,13 @@ func (c *checker) buildNamespace() error {
 		c.sinksByName[s.Name] = s
 	}
 	for _, p := range c.prog.Pipelines {
+		// A named segment invoked as a bare NameRef (no parens) would be
+		// ambiguous with a built-in stage of the same name written with
+		// parens elsewhere in the same program (design-improvements.md
+		// §7) — reject the shadow outright rather than leave a footgun.
+		if ast.BuiltinStageNames[p.Name] {
+			return errorf(p.Pos, "%q is a built-in stage name", p.Name)
+		}
 		if err := declare(p.Name, declPipeline, p.Pos); err != nil {
 			return err
 		}

@@ -24,6 +24,8 @@ var (
 	_ Stage = (*Filter)(nil)
 	_ Stage = (*Map)(nil)
 	_ Stage = (*Check)(nil)
+	_ Stage = (*Select)(nil)
+	_ Stage = (*Drop)(nil)
 )
 
 // TestAdultsFilterShape hand-builds design.md §7 Case A's adults.sift as
