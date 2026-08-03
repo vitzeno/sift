@@ -285,3 +285,135 @@ pipeline main {
 		t.Errorf("error = %v, want a clear non-PII-target message", err)
 	}
 }
+
+// TestACC_MS_C_DuplicateSinkInBroadcastListRejected is
+// design-multisink.md MS-C: `|> out, out` is a compile error through the
+// real CLI, not just the checker in isolation.
+func TestACC_MS_C_DuplicateSinkInBroadcastListRejected(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
+	siftPath := filepath.Join(dir, "prog.sift")
+	writeFile(t, siftPath, `source in = csv("people.csv", schema: { name: string, age: int })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out, out
+}
+`)
+	err := runFile(siftPath)
+	if err == nil {
+		t.Fatal("runFile succeeded, want the duplicate sink rejected")
+	}
+	if !strings.Contains(err.Error(), `sink "out" listed twice`) {
+		t.Errorf("error = %v, want a duplicate-sink error", err)
+	}
+}
+
+// TestACC_MS_D_PIIRejectedOnceAcrossBroadcastList is design-multisink.md
+// MS-D: an unmasked @pii field reaching `|> out, out2` is a single
+// compile error naming both sinks, not one error per sink; masking
+// fixes it for both.
+func TestACC_MS_D_PIIRejectedOnceAcrossBroadcastList(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@example.com\n")
+
+	badPath := filepath.Join(dir, "bad.sift")
+	writeFile(t, badPath, `source in = csv("people.csv", schema: { name: string, email: string @pii })
+sink out = jsonl("out.jsonl")
+sink out2 = jsonl("out2.jsonl")
+
+pipeline main {
+  in |> out, out2
+}
+`)
+	err := runFile(badPath)
+	if err == nil {
+		t.Fatal("runFile succeeded, want the unmasked @pii field rejected")
+	}
+	if !strings.Contains(err.Error(), `field "email" is @pii and reaches sink "out", "out2" unmasked`) {
+		t.Errorf("error = %v, want one error naming both sinks", err)
+	}
+
+	okPath := filepath.Join(dir, "ok.sift")
+	outPath := filepath.Join(dir, "out.jsonl")
+	out2Path := filepath.Join(dir, "out2.jsonl")
+	writeFile(t, okPath, `source in = csv("people.csv", schema: { name: string, email: string @pii })
+sink out = jsonl("out.jsonl")
+sink out2 = jsonl("out2.jsonl")
+
+pipeline main {
+  in |> map({ ...row, email: mask(.email) }) |> out, out2
+}
+`)
+	if err := runFile(okPath); err != nil {
+		t.Fatalf("runFile error: %v", err)
+	}
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("reading out: %v", err)
+	}
+	got2, err := os.ReadFile(out2Path)
+	if err != nil {
+		t.Fatalf("reading out2: %v", err)
+	}
+	if string(got) != string(got2) {
+		t.Errorf("out = %s, out2 = %s, want byte-identical masked output on both", got, got2)
+	}
+}
+
+// TestACC_MS_E_ErrorRoutingAndBroadcastCompose is design-multisink.md
+// MS-E: `on error |> errsink` with `|> out, out2` routes failed rows to
+// errsink and sends every healthy row to both out and out2 — three
+// sinks, one per-row decision.
+func TestACC_MS_E_ErrorRoutingAndBroadcastCompose(t *testing.T) {
+	dir := t.TempDir()
+	// Ada healthy, Grace fails check (blank email), Tom healthy.
+	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@example.com\nGrace,\nTom,tom@example.com\n")
+	siftPath := filepath.Join(dir, "prog.sift")
+	outPath := filepath.Join(dir, "out.jsonl")
+	out2Path := filepath.Join(dir, "out2.jsonl")
+	errPath := filepath.Join(dir, "errors.jsonl")
+	writeFile(t, siftPath, `on error |> errsink
+
+source in     = csv("people.csv", schema: { name: string, email: string })
+sink out      = jsonl("out.jsonl")
+sink out2     = jsonl("out2.jsonl")
+sink errsink  = jsonl("errors.jsonl")
+
+pipeline main {
+  in |> check(.email != "", "missing email") |> out, out2
+}
+`)
+	if err := runFile(siftPath); err != nil {
+		t.Fatalf("runFile error: %v", err)
+	}
+
+	want := `{"name":"Ada","email":"ada@example.com"}
+{"name":"Tom","email":"tom@example.com"}
+`
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("reading out: %v", err)
+	}
+	if string(got) != want {
+		t.Errorf("out =\n%s\nwant\n%s", got, want)
+	}
+	got2, err := os.ReadFile(out2Path)
+	if err != nil {
+		t.Fatalf("reading out2: %v", err)
+	}
+	if string(got2) != want {
+		t.Errorf("out2 =\n%s\nwant\n%s (byte-identical to out)", got2, want)
+	}
+
+	gotErr, err := os.ReadFile(errPath)
+	if err != nil {
+		t.Fatalf("reading errsink: %v", err)
+	}
+	if !strings.Contains(string(gotErr), `"reason":"missing email"`) {
+		t.Errorf("errsink = %s, want Grace's envelope with reason \"missing email\"", gotErr)
+	}
+	if strings.Contains(string(gotErr), "Grace") {
+		t.Error("errsink must never carry the failed row's raw fields, only its envelope")
+	}
+}

@@ -1,0 +1,12 @@
+// Demonstrates terminal broadcast (design-multisink.md): one masked
+// stream, pulled once, lands in two destinations at once -- a warehouse
+// export and an audit copy -- with no branching or per-row selection.
+// The PII check runs once against the shared terminal schema and covers
+// both sinks.
+source in        = csv("broadcast.csv", schema: { name: string, email: string @pii })
+sink   warehouse = jsonl("broadcast_out.jsonl")
+sink   audit     = jsonl("broadcast_audit.jsonl")
+
+pipeline main {
+  in |> map({ ...row, email: mask(.email) }) |> warehouse, audit
+}

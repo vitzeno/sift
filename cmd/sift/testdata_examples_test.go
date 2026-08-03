@@ -222,6 +222,27 @@ func TestExampleOnErrorRoute(t *testing.T) {
 	}
 }
 
+// TestExampleBroadcast is design-multisink.md MS-A: `|> warehouse, audit`
+// writes byte-identical masked output to both sinks.
+func TestExampleBroadcast(t *testing.T) {
+	got := runExample(t, "broadcast", "broadcast_audit.jsonl")
+	want := `{"name":"Ada","email":"***************"}
+{"name":"Tom","email":"***************"}
+`
+	if string(got) != want {
+		t.Errorf("warehouse output =\n%s\nwant\n%s", got, want)
+	}
+
+	auditPath := filepath.Join("..", "..", "testdata", "broadcast_audit.jsonl")
+	gotAudit, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatalf("reading audit sink: %v", err)
+	}
+	if string(gotAudit) != string(got) {
+		t.Errorf("audit output =\n%s\nwant byte-identical to warehouse output\n%s", gotAudit, got)
+	}
+}
+
 func TestExampleBadCell(t *testing.T) {
 	got := runExample(t, "bad-cell")
 	want := `{"name":"Ada","age":42}
