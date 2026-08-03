@@ -101,7 +101,7 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 
 	case lexer.MINUS, lexer.STAR, lexer.SLASH:
 		if left.Kind != right.Kind || !isNumeric(left.Kind) {
-			return value.Type{}, errorf(e.Pos, "cannot apply %s to %s and %s", opSymbol(e.Op), left, right)
+			return value.Type{}, errorf(e.Pos, "cannot apply %s to %s and %s", e.Op.Symbol(), left, right)
 		}
 		return value.Type{Kind: left.Kind, PII: pii}, nil
 
@@ -119,7 +119,7 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 
 	case lexer.AND, lexer.OR:
 		if left.Kind != value.Bool || right.Kind != value.Bool {
-			return value.Type{}, errorf(e.Pos, "%s requires bool operands, got %s and %s", opSymbol(e.Op), left, right)
+			return value.Type{}, errorf(e.Pos, "%s requires bool operands, got %s and %s", e.Op.Symbol(), left, right)
 		}
 		return value.Type{Kind: value.Bool, PII: pii}, nil
 
@@ -134,39 +134,6 @@ func isNumeric(k value.Kind) bool {
 
 func isNumericOrString(k value.Kind) bool {
 	return isNumeric(k) || k == value.String
-}
-
-// opSymbol renders a binary operator's surface syntax ("+", ">=", ...)
-// for error messages, rather than its lexer.Kind name ("PLUS", "GE").
-func opSymbol(k lexer.Kind) string {
-	switch k {
-	case lexer.PLUS:
-		return "+"
-	case lexer.MINUS:
-		return "-"
-	case lexer.STAR:
-		return "*"
-	case lexer.SLASH:
-		return "/"
-	case lexer.LT:
-		return "<"
-	case lexer.GT:
-		return ">"
-	case lexer.LE:
-		return "<="
-	case lexer.GE:
-		return ">="
-	case lexer.EQ:
-		return "=="
-	case lexer.NE:
-		return "!="
-	case lexer.AND:
-		return "&&"
-	case lexer.OR:
-		return "||"
-	default:
-		return k.String()
-	}
 }
 
 // checkCall types a function call against builtinFuncs. An unrecognized

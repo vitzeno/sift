@@ -108,6 +108,33 @@ func (k Kind) String() string {
 	return "UNKNOWN"
 }
 
+var opSymbols = map[Kind]string{
+	PLUS:  "+",
+	MINUS: "-",
+	STAR:  "*",
+	SLASH: "/",
+	LT:    "<",
+	GT:    ">",
+	LE:    "<=",
+	GE:    ">=",
+	EQ:    "==",
+	NE:    "!=",
+	AND:   "&&",
+	OR:    "||",
+}
+
+// Symbol renders a binary operator's surface syntax ("+", ">=", ...)
+// rather than its debug name ("PLUS", "GE") — for output meant to read
+// like the .sift source a user actually typed: checker diagnostics and
+// --emit-ast both need this, so it lives here rather than being
+// duplicated in each.
+func (k Kind) Symbol() string {
+	if sym, ok := opSymbols[k]; ok {
+		return sym
+	}
+	return k.String()
+}
+
 // keywords is the complete, closed set of reserved words in v0. Stage
 // names (filter/map/check), format names (csv/jsonl), and function names
 // (mask/hash/upper/...) are deliberately absent — they're ordinary
