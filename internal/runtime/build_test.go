@@ -1,0 +1,146 @@
+// This file is package runtime_test, not runtime: internal/format
+// imports internal/runtime (to register with it), so a build_test.go
+// inside package runtime importing internal/format for its init() side
+// effect would be a real import cycle. An external test package is a
+// separate compilation unit that can import both sides.
+package runtime_test
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/vitzeno/sift/internal/checker"
+	_ "github.com/vitzeno/sift/internal/format" // registers "csv"/"jsonl" via init()
+	"github.com/vitzeno/sift/internal/parser"
+	"github.com/vitzeno/sift/internal/runtime"
+)
+
+// toBuildInput adapts a *checker.CheckedProgram to runtime.BuildInput —
+// the one place, in tests, that bridges the two packages Build is
+// deliberately decoupled from at the type level (see build.go's decision
+// comment). Module 8's CLI will do the same thing in production code.
+func toBuildInput(cp *checker.CheckedProgram) runtime.BuildInput {
+	return runtime.BuildInput{
+		Source:       cp.Source,
+		SourceSchema: cp.SourceSchema,
+		Sink:         cp.Sink,
+		SinkSchema:   cp.SinkSchema,
+		Stages:       cp.Stages,
+	}
+}
+
+// TestBuildFullPipelineAdultsFilter is design.md §7 Case A, this time
+// proven through the complete compiler pipeline -- lex, parse, check,
+// build, execute -- rather than module 2's hand-wired Go chain or module
+// 6's checker-only assertions. Every module from 1 through 7 participates
+// in producing this one output file.
+//
+// decision: the source path here is "../../testdata/people.csv",
+// relative to this package's test working directory, not the bare
+// "people.csv" design.md §7 writes (and that testdata/adults.sift uses).
+// Resolving a source path relative to the .sift file's own directory is
+// a real CLI concern for module 8, not yet built; this test only needs
+// *a* path that resolves correctly from here.
+func TestBuildFullPipelineAdultsFilter(t *testing.T) {
+	src := `source in = csv("../../testdata/people.csv", schema: { name: string, age: int })
+sink out = jsonl("` + filepath.ToSlash(t.TempDir()+"/adults.jsonl") + `")
+
+pipeline main {
+  in |> filter(.age >= 18) |> out
+}`
+
+	prog, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	cp, err := checker.Check(prog)
+	if err != nil {
+		t.Fatalf("Check error: %v", err)
+	}
+	top, sink, err := runtime.Build(toBuildInput(cp))
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if err := runtime.Run(top, sink); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	got, err := os.ReadFile(cp.Sink.Path)
+	if err != nil {
+		t.Fatalf("reading output: %v", err)
+	}
+	want := `{"name":"Ada","age":42}` + "\n"
+	if string(got) != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+// TestBuildFullPipelinePIIRejectedBeforeBuild confirms Case B's failure
+// mode holds across the real parser+checker, not just hand-built ASTs:
+// Build is never reached at all, since Check fails first.
+func TestBuildFullPipelinePIIRejectedBeforeBuild(t *testing.T) {
+	src := `source in = csv("../../testdata/people.csv", schema: { name: string, age: int, email: string @pii })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	prog, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if _, err := checker.Check(prog); err == nil {
+		t.Fatal("Check succeeded, want it to reject the unmasked @pii field")
+	}
+}
+
+// TestBuildFullPipelineMapFilterCheck exercises all three v0 stages
+// together through the full pipeline, including a named segment
+// (design.md §2) inlined by the checker before Build ever sees it. It
+// uses its own small CSV fixture (with an email column check/map need)
+// rather than testdata/people.csv, which only has name/age.
+func TestBuildFullPipelineMapFilterCheck(t *testing.T) {
+	dir := t.TempDir()
+	inPath := filepath.Join(dir, "people.csv")
+	if err := os.WriteFile(inPath, []byte("name,age,email\nAda,42,  ADA@EXAMPLE.COM  \nTom,15,tom@example.com\n"), 0o644); err != nil {
+		t.Fatalf("writing fixture CSV: %v", err)
+	}
+	outPath := filepath.Join(dir, "out.jsonl")
+
+	src := `pipeline clean =
+     check(.email != "", "missing email")
+  |> map({ ...row, email: lower(trim(.email)) })
+
+source in = csv("` + filepath.ToSlash(inPath) + `", schema: { name: string, age: int, email: string })
+sink out = jsonl("` + filepath.ToSlash(outPath) + `")
+
+pipeline main {
+  in |> clean |> filter(.age >= 18) |> out
+}`
+
+	prog, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	cp, err := checker.Check(prog)
+	if err != nil {
+		t.Fatalf("Check error: %v", err)
+	}
+	top, sink, err := runtime.Build(toBuildInput(cp))
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if err := runtime.Run(top, sink); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("reading output: %v", err)
+	}
+	want := `{"name":"Ada","age":42,"email":"ada@example.com"}` + "\n"
+	if string(got) != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}

@@ -1,23 +1,34 @@
 package runtime
 
-import "github.com/vitzeno/sift/internal/value"
+import (
+	"github.com/vitzeno/sift/internal/ast"
+	"github.com/vitzeno/sift/internal/eval"
+	"github.com/vitzeno/sift/internal/value"
+)
 
 // Filter keeps rows from in for which pred returns true, per design.md
 // §7's trace: a false predicate re-pulls from in rather than returning,
 // so a run of rejected rows costs no output but still visits every input
 // row exactly once.
-//
-// decision: pred is a Go func(value.Row) bool for now, since eval(expr,
-// row) doesn't exist until module 7. Once the checker/eval land, this
-// becomes an AST expression evaluated per row; the re-pull loop below
-// won't need to change.
 type Filter struct {
 	in   Stream
 	pred func(value.Row) bool
 }
 
+// NewFilter builds a Filter from a plain Go predicate. Used directly by
+// tests that want to exercise the re-pull loop in isolation, without
+// pulling in the AST/eval machinery NewFilterExpr needs.
 func NewFilter(in Stream, pred func(value.Row) bool) *Filter {
 	return &Filter{in: in, pred: pred}
+}
+
+// NewFilterExpr builds a Filter from a checked ast.Expr — module 2's
+// decision to defer this until eval existed (module 7). The re-pull loop
+// in Next below is untouched; only how a predicate is evaluated changed.
+func NewFilterExpr(in Stream, pred ast.Expr) *Filter {
+	return NewFilter(in, func(row value.Row) bool {
+		return eval.Eval(pred, row).(bool)
+	})
 }
 
 func (f *Filter) Next() (value.Row, bool) {

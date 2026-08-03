@@ -3,7 +3,24 @@ package runtime
 // Run is the driver loop (design.md §4): pull one row from top, write it
 // to sink, repeat until top is exhausted. Exactly one row is in flight at
 // a time — nothing here buffers the stream.
-func Run(top Stream, sink Sink) error {
+//
+// A *Check stage signals a failed row by panicking with a
+// *CheckFailedError (see check.go) rather than through Next()'s return
+// values. Run is the one place that recovers it, closes the sink so its
+// file handle isn't leaked, and returns it as a plain error — any other
+// panic is a genuine bug and is left to propagate.
+func Run(top Stream, sink Sink) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			cf, ok := r.(*CheckFailedError)
+			if !ok {
+				panic(r)
+			}
+			sink.Close()
+			err = cf
+		}
+	}()
+
 	for {
 		row, ok := top.Next()
 		if !ok {
