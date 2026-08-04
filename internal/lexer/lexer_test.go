@@ -88,6 +88,20 @@ map({ email: mask(.email) })`
 	assertTokens(t, src, want)
 }
 
+// TestOptionalSchemaField covers design/optional-fields.md's `T?` schema
+// syntax, alone and combined with @pii (§4: the two tags coexist).
+func TestOptionalSchemaField(t *testing.T) {
+	src := `phone: string?
+email: string? @pii`
+
+	want := []tok{
+		{IDENT, "phone"}, {COLON, ""}, {IDENT, "string"}, {QUESTION, ""},
+		{IDENT, "email"}, {COLON, ""}, {IDENT, "string"}, {QUESTION, ""}, {AT, ""}, {IDENT, "pii"},
+		{EOF, ""},
+	}
+	assertTokens(t, src, want)
+}
+
 // TestRecordSpreadEllipsis checks "..." lexes as one ELLIPSIS token, not
 // three DOTs, and that a lone "." next to it still lexes as DOT.
 func TestRecordSpreadEllipsis(t *testing.T) {

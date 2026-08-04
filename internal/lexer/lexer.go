@@ -171,6 +171,9 @@ func (l *Lexer) Next() Token {
 	case '@':
 		l.advance()
 		return Token{Kind: AT, Pos: start}
+	case '?':
+		l.advance()
+		return Token{Kind: QUESTION, Pos: start}
 	case '+':
 		l.advance()
 		return Token{Kind: PLUS, Pos: start}

@@ -42,6 +42,7 @@ const (
 	DOT      // .
 	ELLIPSIS // ...
 	AT       // @
+	QUESTION // ?
 
 	PLUS  // +
 	MINUS // -
@@ -87,6 +88,7 @@ var kindNames = map[Kind]string{
 	DOT:      "DOT",
 	ELLIPSIS: "ELLIPSIS",
 	AT:       "AT",
+	QUESTION: "QUESTION",
 	PLUS:     "PLUS",
 	MINUS:    "MINUS",
 	STAR:     "STAR",
