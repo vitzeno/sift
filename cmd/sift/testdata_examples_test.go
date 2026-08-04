@@ -410,3 +410,16 @@ func TestExampleXLSX(t *testing.T) {
 		t.Errorf("output =\n%s\nwant\n%s", got, want)
 	}
 }
+
+// TestExampleColumns is design/column-aliases.md's own example end to
+// end: a header with a space ("Transaction ID") is named via the
+// columns kwarg, since no identifier could ever equal it.
+func TestExampleColumns(t *testing.T) {
+	got := runExample(t, "columns")
+	want := `{"txn_id":1001,"txn_date":"2026-01-05","amount":42.5}
+{"txn_id":1002,"txn_date":"2026-01-06","amount":17.25}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}

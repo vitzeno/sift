@@ -1,0 +1,15 @@
+// Demonstrates column aliasing (design/column-aliases.md): a header
+// with a space, like "Transaction ID", can never be a schema identifier,
+// so the columns kwarg maps a clean identifier to the raw header text
+// instead. amount is aliased too, purely for a consistent lowercase
+// schema; without an alias it would need to be spelled "Amount" to
+// match the header (the bare-identifier fallback is case-sensitive).
+source in = csv("columns.csv",
+  schema:  { txn_id: int, txn_date: string, amount: double },
+  columns: { txn_id: "Transaction ID", txn_date: "Date", amount: "Amount" }
+)
+sink out = jsonl("columns_out.jsonl")
+
+pipeline main {
+  in |> out
+}
