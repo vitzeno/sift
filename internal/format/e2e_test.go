@@ -38,7 +38,7 @@ func TestAdultsFilterEndToEnd(t *testing.T) {
 		return r.Fields["age"].(int) >= 18
 	})
 
-	if err := runtime.Run(adults, src, []runtime.Sink{sink}, runtime.PolicyAbort, nil); err != nil {
+	if err := runtime.Run(adults, src, []runtime.Sink{sink}, nil, runtime.PolicyAbort, nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 

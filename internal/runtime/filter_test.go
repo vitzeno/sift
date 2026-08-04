@@ -24,7 +24,7 @@ func TestNewFilterExprUsesEval(t *testing.T) {
 	})
 	sink := &fakeSink{}
 
-	if err := Run(filtered, src, []Sink{sink}, PolicyAbort, nil); err != nil {
+	if err := Run(filtered, src, []Sink{sink}, nil, PolicyAbort, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink.written) != 1 || sink.written[0].Fields["name"] != "Ada" {

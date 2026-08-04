@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vitzeno/sift/internal/ast"
+	"github.com/vitzeno/sift/internal/lexer"
 	"github.com/vitzeno/sift/internal/value"
 )
 
@@ -68,7 +70,7 @@ func TestDriverFilterAndEOF(t *testing.T) {
 	})
 	sink := &fakeSink{}
 
-	if err := Run(filtered, src, []Sink{sink}, PolicyAbort, nil); err != nil {
+	if err := Run(filtered, src, []Sink{sink}, nil, PolicyAbort, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 
@@ -94,7 +96,7 @@ func TestDriverEmptyStream(t *testing.T) {
 	src := &fakeStream{}
 	sink := &fakeSink{}
 
-	if err := Run(src, src, []Sink{sink}, PolicyAbort, nil); err != nil {
+	if err := Run(src, src, []Sink{sink}, nil, PolicyAbort, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink.written) != 0 {
@@ -118,7 +120,7 @@ func TestDriverAbortOnFailedRow(t *testing.T) {
 	}}
 	sink := &fakeSink{}
 
-	err := Run(src, src, []Sink{sink}, PolicyAbort, nil)
+	err := Run(src, src, []Sink{sink}, nil, PolicyAbort, nil)
 	if err == nil {
 		t.Fatal("Run succeeded, want a FailureError")
 	}
@@ -151,7 +153,7 @@ func TestDriverSkipOnFailedRow(t *testing.T) {
 	}}
 	sink := &fakeSink{}
 
-	if err := Run(src, src, []Sink{sink}, PolicySkip, nil); err != nil {
+	if err := Run(src, src, []Sink{sink}, nil, PolicySkip, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink.written) != 2 {
@@ -173,7 +175,7 @@ func TestDriverInfraFatalAbortsRegardlessOfPolicy(t *testing.T) {
 	src := &fakeStream{err: infraErr}
 	sink := &fakeSink{}
 
-	err := Run(src, src, []Sink{sink}, PolicySkip, nil)
+	err := Run(src, src, []Sink{sink}, nil, PolicySkip, nil)
 	if err == nil {
 		t.Fatal("Run succeeded, want the infra-fatal error")
 	}
@@ -195,7 +197,7 @@ func TestDriverBroadcastsToEveryMainSink(t *testing.T) {
 	sink1 := &fakeSink{}
 	sink2 := &fakeSink{}
 
-	if err := Run(src, src, []Sink{sink1, sink2}, PolicyAbort, nil); err != nil {
+	if err := Run(src, src, []Sink{sink1, sink2}, nil, PolicyAbort, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink1.written) != 1 || len(sink2.written) != 1 {
@@ -226,7 +228,7 @@ func TestDriverCloseAllAggregatesErrors(t *testing.T) {
 	sink1 := &failingCloseSink{closeErr: fmt.Errorf("disk full")}
 	sink2 := &failingCloseSink{closeErr: fmt.Errorf("permission denied")}
 
-	err := Run(src, src, []Sink{sink1, sink2}, PolicyAbort, nil)
+	err := Run(src, src, []Sink{sink1, sink2}, nil, PolicyAbort, nil)
 	if err == nil {
 		t.Fatal("Run succeeded, want the aggregated close errors")
 	}
@@ -254,7 +256,7 @@ func TestDriverRouteWritesEnvelopeToErrSink(t *testing.T) {
 	sink := &fakeSink{}
 	errSink := &fakeSink{}
 
-	if err := Run(src, src, []Sink{sink}, PolicyRoute, errSink); err != nil {
+	if err := Run(src, src, []Sink{sink}, nil, PolicyRoute, errSink); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 
@@ -285,5 +287,106 @@ func TestDriverRouteWritesEnvelopeToErrSink(t *testing.T) {
 	}
 	if !errSink.closed {
 		t.Error("error sink.Close was not called")
+	}
+}
+
+// TestDriverRouteFirstMatchWins is RT-A at the runtime layer: a row
+// satisfying two branches' predicates lands in the earlier one's sink
+// only, and evaluation stops there — the later branch (and its sink)
+// never sees the row at all.
+func TestDriverRouteFirstMatchWins(t *testing.T) {
+	src := &fakeStream{rows: []value.Row{
+		{Fields: map[string]any{"name": "Ada"}},
+	}}
+	first, second := &fakeSink{}, &fakeSink{}
+	route := []RouteBranch{
+		{Pred: &ast.BoolLit{Value: true}, SinkIndex: 0},
+		{Pred: &ast.BoolLit{Value: true}, SinkIndex: 1},
+		{IsElse: true, SinkIndex: 1},
+	}
+
+	if err := Run(src, src, []Sink{first, second}, route, PolicyAbort, nil); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if len(first.written) != 1 {
+		t.Errorf("first sink received %d rows, want 1", len(first.written))
+	}
+	if len(second.written) != 0 {
+		t.Errorf("second sink received %d rows, want 0 (first branch already matched)", len(second.written))
+	}
+}
+
+// TestDriverRouteDiscardDropsRow is RT-C at the runtime layer: `else =>
+// discard` drops an unmatched row with no write to any sink, and the run
+// still completes with no error.
+func TestDriverRouteDiscardDropsRow(t *testing.T) {
+	src := &fakeStream{rows: []value.Row{
+		{Fields: map[string]any{"name": "Ada"}},
+	}}
+	sink := &fakeSink{}
+	route := []RouteBranch{
+		{Pred: &ast.BoolLit{Value: false}, SinkIndex: 0},
+		{IsElse: true, Discard: true, SinkIndex: -1},
+	}
+
+	if err := Run(src, src, []Sink{sink}, route, PolicyAbort, nil); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if len(sink.written) != 0 {
+		t.Errorf("sink received %d rows, want 0 (discarded)", len(sink.written))
+	}
+	if !sink.closed {
+		t.Error("sink.Close was not called")
+	}
+}
+
+// TestDriverRouteNeverEvaluatesBranchOnFailedRow is RT-E: a failed row is
+// disposed of by the error policy before route ever sees it — proven by
+// giving every branch a predicate that panics if eval ever reaches it.
+func TestDriverRouteNeverEvaluatesBranchOnFailedRow(t *testing.T) {
+	src := &fakeStream{rows: []value.Row{
+		{Fail: &value.Failure{Reason: "missing email", Stage: "check"}},
+	}}
+	sink := &fakeSink{}
+	poison := &ast.Call{Fn: "not-a-real-function", Args: []ast.Expr{&ast.StringLit{Value: "x"}}}
+	route := []RouteBranch{
+		{Pred: poison, SinkIndex: 0},
+		{IsElse: true, SinkIndex: 0},
+	}
+
+	if err := Run(src, src, []Sink{sink}, route, PolicySkip, nil); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if len(sink.written) != 0 {
+		t.Errorf("sink received %d rows, want 0 (the only row failed, and skip drops it before any branch)", len(sink.written))
+	}
+}
+
+// TestDriverRouteDuplicateSinkWritesUnion is RT-F at the runtime layer:
+// two branches naming the same sink both write to it, across different
+// rows — the union of everything either branch matched.
+func TestDriverRouteDuplicateSinkWritesUnion(t *testing.T) {
+	src := &fakeStream{rows: []value.Row{
+		{Fields: map[string]any{"name": "Ada", "region": "EU"}},
+		{Fields: map[string]any{"name": "Tom", "region": "US"}},
+	}}
+	sink := &fakeSink{}
+	regionEquals := func(want string) ast.Expr {
+		return &ast.BinaryOp{Op: lexer.EQ, Left: &ast.FieldAccess{Field: "region"}, Right: &ast.StringLit{Value: want}}
+	}
+	route := []RouteBranch{
+		{Pred: regionEquals("EU"), SinkIndex: 0},
+		{Pred: regionEquals("US"), SinkIndex: 0},
+		{IsElse: true, Discard: true, SinkIndex: -1},
+	}
+
+	if err := Run(src, src, []Sink{sink}, route, PolicyAbort, nil); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if len(sink.written) != 2 {
+		t.Fatalf("sink received %d rows, want 2 (both EU and US routed to the same sink)", len(sink.written))
+	}
+	if sink.written[0].Fields["name"] != "Ada" || sink.written[1].Fields["name"] != "Tom" {
+		t.Errorf("sink.written = %+v, want Ada then Tom", sink.written)
 	}
 }

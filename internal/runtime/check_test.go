@@ -20,7 +20,7 @@ func TestCheckPassesRowsMeetingCondition(t *testing.T) {
 	}, "missing email")
 	sink := &fakeSink{}
 
-	if err := Run(c, src, []Sink{sink}, PolicyAbort, nil); err != nil {
+	if err := Run(c, src, []Sink{sink}, nil, PolicyAbort, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink.written) != 2 {
@@ -96,7 +96,7 @@ func TestCheckFailureAbortsRunAndClosesSink(t *testing.T) {
 	}, "missing email")
 	sink := &fakeSink{}
 
-	err := Run(c, src, []Sink{sink}, PolicyAbort, nil)
+	err := Run(c, src, []Sink{sink}, nil, PolicyAbort, nil)
 	if err == nil {
 		t.Fatal("Run succeeded, want a FailureError")
 	}
@@ -135,7 +135,7 @@ func TestCheckFailureSkippedUnderPolicySkip(t *testing.T) {
 	}, "missing email")
 	sink := &fakeSink{}
 
-	if err := Run(c, src, []Sink{sink}, PolicySkip, nil); err != nil {
+	if err := Run(c, src, []Sink{sink}, nil, PolicySkip, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if len(sink.written) != 2 {

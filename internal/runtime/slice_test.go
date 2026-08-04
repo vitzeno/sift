@@ -61,7 +61,7 @@ func TestLimitCountsFailedRowsPositionally(t *testing.T) {
 	// Run under PolicySkip so the failed row (the 2nd position) is
 	// dropped by the driver rather than aborting — proving limit
 	// counted it toward its total even though it never reaches sink.
-	if err := Run(lim, src, []Sink{sink}, PolicySkip, nil); err != nil {
+	if err := Run(lim, src, []Sink{sink}, nil, PolicySkip, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	// limit(2) sees Ada (healthy) and the failure (both positions 1-2),

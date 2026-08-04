@@ -29,7 +29,22 @@ func toBuildInput(cp *checker.CheckedProgram) runtime.BuildInput {
 		Sinks:        cp.Sinks,
 		SinkSchema:   cp.SinkSchema,
 		Stages:       cp.Stages,
+		Route:        toRouteInputs(cp.Route),
 	}
+}
+
+// toRouteInputs mirrors cmd/sift/run.go's own bridge from
+// checker.RouteBranch to runtime.RouteInput — nil for every non-routed
+// program.
+func toRouteInputs(route []checker.RouteBranch) []runtime.RouteInput {
+	if route == nil {
+		return nil
+	}
+	in := make([]runtime.RouteInput, len(route))
+	for i, b := range route {
+		in[i] = runtime.RouteInput{Pred: b.Pred, IsElse: b.IsElse, Target: b.Target, Discard: b.Discard}
+	}
+	return in
 }
 
 // TestBuildFullPipelineAdultsFilter is design.md §7 Case A, this time
@@ -60,11 +75,11 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	top, runSrc, sinks, err := runtime.Build(toBuildInput(cp))
+	top, runSrc, sinks, route, err := runtime.Build(toBuildInput(cp))
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if err := runtime.Run(top, runSrc, sinks, runtime.PolicyAbort, nil); err != nil {
+	if err := runtime.Run(top, runSrc, sinks, route, runtime.PolicyAbort, nil); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 
@@ -144,11 +159,11 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	top, runSrc, sinks, err := runtime.Build(toBuildInput(cp))
+	top, runSrc, sinks, route, err := runtime.Build(toBuildInput(cp))
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if err := runtime.Run(top, runSrc, sinks, runtime.PolicyAbort, nil); err != nil {
+	if err := runtime.Run(top, runSrc, sinks, route, runtime.PolicyAbort, nil); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 
@@ -197,11 +212,11 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	top, runSrc, sinks, err := runtime.Build(toBuildInput(cp))
+	top, runSrc, sinks, route, err := runtime.Build(toBuildInput(cp))
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if err := runtime.Run(top, runSrc, sinks, runtime.PolicyAbort, nil); err != nil {
+	if err := runtime.Run(top, runSrc, sinks, route, runtime.PolicyAbort, nil); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 
@@ -212,6 +227,68 @@ pipeline main {
 	want := `{"name":"Ada","age":42,"email":"ada@example.com"}` + "\n"
 	if string(got) != want {
 		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+// TestBuildFullPipelineRouteResolvesSinkNamesToIndexes is
+// design-routing.md end to end through the real compiler pipeline: Build
+// must resolve each branch's target sink *name* into the right index of
+// the sinks slice it itself constructs — the one piece of route wiring
+// unique to this layer (checker only ever deals in names; the driver
+// only ever deals in indexes).
+func TestBuildFullPipelineRouteResolvesSinkNamesToIndexes(t *testing.T) {
+	dir := t.TempDir()
+	inPath := filepath.Join(dir, "people.csv")
+	if err := os.WriteFile(inPath, []byte("name,region\nAda,EU\nTom,US\nGrace,APAC\n"), 0o644); err != nil {
+		t.Fatalf("writing fixture CSV: %v", err)
+	}
+	euPath := filepath.Join(dir, "eu.jsonl")
+	restPath := filepath.Join(dir, "rest.jsonl")
+
+	// Sinks declared in the opposite order routes reference them in --
+	// proof this isn't secretly relying on declaration order lining up
+	// with branch order.
+	src := `source in = csv("` + filepath.ToSlash(inPath) + `", schema: { name: string, region: string })
+sink rest_sink = jsonl("` + filepath.ToSlash(restPath) + `")
+sink eu_sink = jsonl("` + filepath.ToSlash(euPath) + `")
+
+pipeline main {
+  in |> route {
+    .region == "EU" => eu_sink,
+    else            => rest_sink,
+  }
+}`
+	prog, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	cp, err := checker.Check(prog)
+	if err != nil {
+		t.Fatalf("Check error: %v", err)
+	}
+	top, runSrc, sinks, route, err := runtime.Build(toBuildInput(cp))
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if err := runtime.Run(top, runSrc, sinks, route, runtime.PolicyAbort, nil); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	gotEU, err := os.ReadFile(euPath)
+	if err != nil {
+		t.Fatalf("reading eu output: %v", err)
+	}
+	if want := `{"name":"Ada","region":"EU"}` + "\n"; string(gotEU) != want {
+		t.Errorf("eu output = %q, want %q", gotEU, want)
+	}
+
+	gotRest, err := os.ReadFile(restPath)
+	if err != nil {
+		t.Fatalf("reading rest output: %v", err)
+	}
+	want := `{"name":"Tom","region":"US"}` + "\n" + `{"name":"Grace","region":"APAC"}` + "\n"
+	if string(gotRest) != want {
+		t.Errorf("rest output = %q, want %q", gotRest, want)
 	}
 }
 
@@ -242,11 +319,11 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
-	top, runSrc, sinks, err := runtime.Build(toBuildInput(cp))
+	top, runSrc, sinks, route, err := runtime.Build(toBuildInput(cp))
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if err := runtime.Run(top, runSrc, sinks, runtime.PolicyAbort, nil); err != nil {
+	if err := runtime.Run(top, runSrc, sinks, route, runtime.PolicyAbort, nil); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 

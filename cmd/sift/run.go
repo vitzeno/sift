@@ -48,12 +48,13 @@ func runFile(path string) error {
 		sinks[i] = &sink
 	}
 
-	top, runSrc, runSinks, err := runtime.Build(runtime.BuildInput{
+	top, runSrc, runSinks, runRoute, err := runtime.Build(runtime.BuildInput{
 		Source:       &source,
 		SourceSchema: cp.SourceSchema,
 		Sinks:        sinks,
 		SinkSchema:   cp.SinkSchema,
 		Stages:       cp.Stages,
+		Route:        toRouteInputs(cp.Route),
 	})
 	if err != nil {
 		return err
@@ -69,7 +70,23 @@ func runFile(path string) error {
 		}
 	}
 
-	return runtime.Run(top, runSrc, runSinks, toRuntimePolicy(cp.ErrorPolicy), errSink)
+	return runtime.Run(top, runSrc, runSinks, runRoute, toRuntimePolicy(cp.ErrorPolicy), errSink)
+}
+
+// toRouteInputs bridges checker.RouteBranch to runtime.RouteInput — the
+// same field-for-field mirror BuildInput's other fields already draw
+// between the two packages (build.go's decision comment), kept as one
+// small conversion here since Route is nil for every non-routed program
+// and this is the one place that needs to know both types.
+func toRouteInputs(route []checker.RouteBranch) []runtime.RouteInput {
+	if route == nil {
+		return nil
+	}
+	in := make([]runtime.RouteInput, len(route))
+	for i, b := range route {
+		in[i] = runtime.RouteInput{Pred: b.Pred, IsElse: b.IsElse, Target: b.Target, Discard: b.Discard}
+	}
+	return in
 }
 
 // toRuntimePolicy translates the checker's frontend-facing

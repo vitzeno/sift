@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/vitzeno/sift/internal/eval"
 	"github.com/vitzeno/sift/internal/value"
 )
 
@@ -37,16 +38,26 @@ func (e *FailureError) Error() string {
 }
 
 // Run is the driver loop (design.md §4, design-errors.md §3.2): pull one
-// row from top, and either broadcast a healthy row to every sink
-// (design-multisink.md §3) or dispose of a failed one per policy, until
+// row from top, and either dispatch a healthy row per route's a-branch-at-
+// a-time selection (design-routing.md §4), broadcast it to every sink
+// (design-multisink.md §3), or dispose of a failed one per policy, until
 // top is exhausted. Exactly one row is in flight at a time — nothing
 // here buffers the stream.
 //
-// sinks are written in declared order (design-multisink.md §6); a write
-// error is infra-fatal, matching the single-sink behavior this
-// generalizes. A partial multi-file write on that path is inherent to
-// writing N files with no cross-file transaction — declared order at
-// least keeps the partial state deterministic.
+// route is nil for a broadcast program (the pre-routing behavior,
+// unchanged) and non-nil for a routed one — build.go's Build resolves
+// each branch's target sink name into route's SinkIndex, so Run needs no
+// name lookup here, only the walk itself. Route dispatch cascades after
+// the Fail check, mirroring design-routing.md §3: a failed row's data is
+// suspect, so it never reaches a branch predicate regardless of which
+// terminal production the program uses.
+//
+// sinks are written in declared order (design-multisink.md §6) for
+// broadcast, or at most once for route; a write error is infra-fatal
+// either way, matching the single-sink behavior this generalizes. A
+// partial multi-file write on the broadcast path is inherent to writing
+// N files with no cross-file transaction — declared order at least keeps
+// the partial state deterministic.
 //
 // errSink is only used, and only need be non-nil, under PolicyRoute; it
 // is nil for every program that doesn't declare `on error |> <name>`
@@ -58,7 +69,7 @@ func (e *FailureError) Error() string {
 // to the general Stream interface. Only Source gained Err()
 // (design-errors.md §2.4) — Filter/Map/Check didn't need a matching
 // method just to forward it, and top's static type stays plain Stream.
-func Run(top Stream, src Source, sinks []Sink, policy Policy, errSink Sink) error {
+func Run(top Stream, src Source, sinks []Sink, route []RouteBranch, policy Policy, errSink Sink) error {
 	// closeAll closes every sink (and errSink, if present) even if an
 	// earlier Close errors, aggregating rather than bailing on the first
 	// (design-multisink.md §6's "close-all" rule) — a later sink's file
@@ -103,6 +114,21 @@ func Run(top Stream, src Source, sinks []Sink, policy Policy, errSink Sink) erro
 			default:
 				panic(fmt.Sprintf("runtime: unknown policy %v", policy))
 			}
+		}
+		if route != nil {
+			for _, b := range route {
+				if !b.IsElse && !eval.Eval(b.Pred, row).(bool) {
+					continue
+				}
+				if !b.Discard {
+					if err := sinks[b.SinkIndex].Write(row); err != nil {
+						closeAll()
+						return err
+					}
+				}
+				break
+			}
+			continue
 		}
 		for _, s := range sinks {
 			if err := s.Write(row); err != nil {

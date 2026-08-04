@@ -19,13 +19,40 @@ import (
 //
 // Sinks is a list, not a single decl — design-multisink.md's terminal
 // broadcast: every sink receives the identical SinkSchema, since
-// broadcast happens after the last stage and performs no transform.
+// broadcast happens after the last stage and performs no transform. When
+// Route is set (design-routing.md), Sinks instead holds every distinct
+// sink a branch can target, and Route's entries name one of them by
+// Target — Build resolves that name into a live index once it knows
+// which position each named sink landed at in the sinks slice it builds.
 type BuildInput struct {
 	Source       *ast.SourceDecl
 	SourceSchema value.Schema
 	Sinks        []*ast.SinkDecl
 	SinkSchema   value.Schema
 	Stages       []ast.Stage
+	Route        []RouteInput
+}
+
+// RouteInput is one route branch as BuildInput receives it — Build's own
+// mirror of checker.RouteBranch, across the same package boundary every
+// other BuildInput field already crosses. Target is a sink name, valid
+// only until Build resolves it into a RouteBranch's SinkIndex.
+type RouteInput struct {
+	Pred    ast.Expr
+	IsElse  bool
+	Target  string
+	Discard bool
+}
+
+// RouteBranch is one route branch after Build has resolved its target
+// sink name into an index into the sinks slice Build also returns —
+// design-routing.md §4's per-row branch walk reads this directly, no
+// further name lookup needed at run time. SinkIndex is -1 when Discard.
+type RouteBranch struct {
+	Pred      ast.Expr
+	IsElse    bool
+	SinkIndex int
+	Discard   bool
 }
 
 // Build turns a checked program into a runnable chain: a Source from the
@@ -37,8 +64,11 @@ type BuildInput struct {
 // Build returns the original Source alongside the wrapped chain: Run
 // needs both — top to pull rows, src to check Err() after top reports
 // EOF (design-errors.md §2.4) — since a Filter/Map/Check wrapping src
-// no longer looks like src to the type system.
-func Build(in BuildInput) (top Stream, src Source, sinks []Sink, err error) {
+// no longer looks like src to the type system. route is nil unless
+// in.Route was set, resolved from in.Route's sink names into indexes
+// into sinks — the one translation only Build can do, since it's the
+// one place that knows which position each sink landed at.
+func Build(in BuildInput) (top Stream, src Source, sinks []Sink, route []RouteBranch, err error) {
 	src, err = NewSource(in.Source.Format, SourceOptions{
 		Name:   in.Source.Name,
 		Path:   in.Source.Path,
@@ -46,17 +76,30 @@ func Build(in BuildInput) (top Stream, src Source, sinks []Sink, err error) {
 		Opts:   sourceOptValues(in.Source.Opts),
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	sinks = make([]Sink, len(in.Sinks))
+	sinkIndex := make(map[string]int, len(in.Sinks))
 	for i, sinkDecl := range in.Sinks {
 		sinks[i], err = NewSink(sinkDecl.Format, SinkOptions{
 			Path:   sinkDecl.Path,
 			Schema: in.SinkSchema,
 		})
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
+		}
+		sinkIndex[sinkDecl.Name] = i
+	}
+
+	if in.Route != nil {
+		route = make([]RouteBranch, len(in.Route))
+		for i, b := range in.Route {
+			idx := -1
+			if !b.Discard {
+				idx = sinkIndex[b.Target]
+			}
+			route[i] = RouteBranch{Pred: b.Pred, IsElse: b.IsElse, SinkIndex: idx, Discard: b.Discard}
 		}
 	}
 
@@ -90,7 +133,7 @@ func Build(in BuildInput) (top Stream, src Source, sinks []Sink, err error) {
 		}
 	}
 
-	return top, src, sinks, nil
+	return top, src, sinks, route, nil
 }
 
 // columnNames extracts the bare names from a column-ref list — Build
