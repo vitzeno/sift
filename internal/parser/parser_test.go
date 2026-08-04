@@ -208,6 +208,92 @@ pipeline main {
 	}
 }
 
+// TestParseRouteTerminal covers design/routing.md §7's grammar: a route
+// terminal with two predicate branches and a mandatory else, each
+// resolving a sink name or the discard sentinel.
+func TestParseRouteTerminal(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, region: string })
+sink eu_sink = jsonl("eu.jsonl")
+sink us_sink = jsonl("us.jsonl")
+sink rest_sink = jsonl("rest.jsonl")
+
+pipeline main {
+  in |> route {
+    .region == "EU" => eu_sink,
+    .region == "US" => us_sink,
+    else            => rest_sink,
+  }
+}`
+	prog, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	main := prog.Pipelines[0]
+	if len(main.Body) != 2 {
+		t.Fatalf("pipeline body has %d stages, want 2 (source + route terminal)", len(main.Body))
+	}
+	rt, ok := main.Body[1].(*ast.RouteTerminal)
+	if !ok {
+		t.Fatalf("body[1] = %#v, want *ast.RouteTerminal", main.Body[1])
+	}
+	if len(rt.Branches) != 3 {
+		t.Fatalf("Branches = %d, want 3", len(rt.Branches))
+	}
+
+	b0 := rt.Branches[0]
+	if b0.IsElse || b0.Discard || b0.Target == nil || b0.Target.Name != "eu_sink" {
+		t.Errorf("branch 0 = %+v, want a predicate branch targeting eu_sink", b0)
+	}
+	if want := `(.region EQ "EU")`; exprString(b0.Pred) != want {
+		t.Errorf("branch 0 pred = %s, want %s", exprString(b0.Pred), want)
+	}
+
+	b2 := rt.Branches[2]
+	if !b2.IsElse || b2.Pred != nil || b2.Discard || b2.Target == nil || b2.Target.Name != "rest_sink" {
+		t.Errorf("branch 2 = %+v, want else => rest_sink with a nil predicate", b2)
+	}
+}
+
+// TestParseRouteElseDischarge covers `else => discard` (design-routing.md
+// §2): the one way to opt out of totality explicitly, distinct from a
+// sink target.
+func TestParseRouteElseDischarge(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> route {
+    .name != "" => out,
+    else        => discard,
+  }
+}`
+	prog, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	rt := prog.Pipelines[0].Body[1].(*ast.RouteTerminal)
+	last := rt.Branches[len(rt.Branches)-1]
+	if !last.IsElse || !last.Discard || last.Target != nil {
+		t.Errorf("else branch = %+v, want IsElse=true Discard=true Target=nil", last)
+	}
+}
+
+// TestParseRouteRejectsTrailingPipe confirms a route terminal always
+// ends the pipeline (design-routing.md §1): nothing can follow its
+// closing "}".
+func TestParseRouteRejectsTrailingPipe(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> route { else => out } |> out
+}`
+	_, err := Parse(src)
+	if err == nil || !strings.Contains(err.Error(), "route terminates the pipeline") {
+		t.Errorf("Parse error = %v, want a diagnostic about route terminating the pipeline", err)
+	}
+}
+
 // TestParsePIIDeclassify covers design.md §7 Case B's shape: a @pii
 // schema field, and a map stage that clears it with mask().
 func TestParsePIIDeclassify(t *testing.T) {

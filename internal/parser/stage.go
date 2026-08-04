@@ -18,6 +18,12 @@ import (
 // since every built-in stage requires "(" -- and a top-level comma is
 // not otherwise valid in stage-chain position, so this is unambiguous
 // with no new lexer token.
+//
+// A route terminal (design-routing.md §7) needs no special handling
+// here at all: parseStageElem returns an *ast.RouteTerminal, not a
+// NameRef, so the broadcast-comma check above simply doesn't apply to
+// it, and parseRouteTerminal itself rejects a trailing "|>" -- the two
+// terminal productions stay mutually exclusive by construction.
 func (p *Parser) parseStageChain() []ast.Stage {
 	stages := []ast.Stage{p.parseStageElem()}
 	for p.cur.Kind == lexer.PIPE {
@@ -74,6 +80,9 @@ func (p *Parser) parseStageElem() ast.Stage {
 		p.fail(pos, "%q is reserved for the error policy; did you mean %q?", "skip", "offset")
 	}
 	name := p.expectIdent()
+	if name == "route" && p.cur.Kind == lexer.LBRACE {
+		return p.parseRouteTerminal(pos)
+	}
 	if p.cur.Kind != lexer.LPAREN {
 		return &ast.NameRef{Name: name, Pos: pos}
 	}
@@ -153,6 +162,72 @@ func (p *Parser) parseCallArg() ast.CallArg {
 		p.fail(pos, "expected a column name or literal argument, got %s", p.cur)
 		return ast.CallArg{}
 	}
+}
+
+// parseRouteTerminal := "route" "{" RouteBranch ("," RouteBranch)* "}"
+//
+// "route" is recognized contextually right here, at terminal position,
+// by its literal text plus a following "{" — not as a lexer keyword
+// (design-routing.md §7: the 10-keyword closed set does not grow). The
+// "{" lookahead is what disambiguates it from an ordinary NameRef to a
+// sink or segment that happens to be named "route" (unusual, but not
+// forbidden — only a named *segment* is reserved against the name,
+// design-routing.md §7/§11, enforced in the checker's namespace build).
+//
+// A route terminal always ends the pipeline (design-routing.md §1: still
+// terminal, still one write per row) — a stray "|>" after its closing
+// "}" is rejected here with a specific diagnostic rather than being
+// handed back to parseStageChain's loop, which would otherwise try to
+// parse another stage after it.
+func (p *Parser) parseRouteTerminal(pos lexer.Pos) *ast.RouteTerminal {
+	p.expect(lexer.LBRACE)
+	var branches []ast.RouteBranch
+	for p.cur.Kind != lexer.RBRACE {
+		branches = append(branches, p.parseRouteBranch())
+		if p.cur.Kind != lexer.COMMA {
+			break
+		}
+		p.next()
+	}
+	p.expect(lexer.RBRACE)
+	if p.cur.Kind == lexer.PIPE {
+		p.fail(p.cur.Pos, "route terminates the pipeline; nothing can follow it")
+	}
+	return &ast.RouteTerminal{Branches: branches, Pos: pos}
+}
+
+// parseRouteBranch := (Expr | "else") "=>" (IDENT | "discard")
+//
+// "else" is checked by literal text before falling back to parseExpr —
+// like "route" above, it's contextual, not a keyword, so it would
+// otherwise parse as an ordinary (and here always wrong) ast.ParamRef.
+func (p *Parser) parseRouteBranch() ast.RouteBranch {
+	pos := p.cur.Pos
+	if p.cur.Kind == lexer.IDENT && p.cur.Lit == "else" {
+		p.next()
+		p.expect(lexer.ARROW)
+		target, discard := p.parseRouteTarget()
+		return ast.RouteBranch{IsElse: true, Target: target, Discard: discard, Pos: pos}
+	}
+	pred := p.parseExpr()
+	p.expect(lexer.ARROW)
+	target, discard := p.parseRouteTarget()
+	return ast.RouteBranch{Pred: pred, Target: target, Discard: discard, Pos: pos}
+}
+
+// parseRouteTarget := IDENT | "discard"
+//
+// "discard" (design-routing.md §2) is likewise contextual, recognized by
+// literal text in exactly this one position — never a lexer keyword, and
+// never ambiguous with a real sink name since the checker resolves every
+// non-discard target against the declared sink namespace regardless.
+func (p *Parser) parseRouteTarget() (target *ast.NameRef, discard bool) {
+	pos := p.cur.Pos
+	name := p.expectIdent()
+	if name == "discard" {
+		return nil, true
+	}
+	return &ast.NameRef{Name: name, Pos: pos}, false
 }
 
 func (p *Parser) parseFilter(pos lexer.Pos) *ast.Filter {
