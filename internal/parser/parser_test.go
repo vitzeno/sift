@@ -10,8 +10,8 @@ import (
 	"github.com/vitzeno/sift/internal/lexer"
 )
 
-// exprString renders an expression as a fully-parenthesized s-expression
-// so precedence/associativity tests can compare against a short, exact
+// exprString renders an expression as a fully-parenthesized s-expression,
+// so precedence/associativity tests compare against a short, exact
 // string instead of hand-building and reflect.DeepEqual-ing a tree.
 func exprString(e ast.Expr) string {
 	switch e := e.(type) {
@@ -85,9 +85,9 @@ func TestExprCallsAndNesting(t *testing.T) {
 	}
 }
 
-// TestParseAdultsFilter parses design.md §7 Case A's adults.sift
-// end to end and checks the resulting tree against the shape module 4
-// hand-built -- this is the parser actually producing it now instead.
+// TestParseAdultsFilter parses design.md §7 Case A's adults.sift end to
+// end and checks the resulting tree against the shape module 4
+// hand-built; the parser now produces it instead.
 func TestParseAdultsFilter(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, age: int })
 sink out = jsonl("adults.jsonl")
@@ -330,9 +330,8 @@ pipeline main {
 }
 
 // TestParseOptionalSchemaField covers design/optional-fields.md's `T?`
-// schema syntax, alone and combined with @pii (§4: the two tags coexist
-// and either order after the type name is unambiguous since `?` always
-// comes first).
+// schema syntax, alone and combined with @pii (§4: the two tags coexist,
+// and `?` always comes first after the type name).
 func TestParseOptionalSchemaField(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, phone: string?, email: string? @pii })`
 
@@ -480,8 +479,8 @@ func TestParseExprErrors(t *testing.T) {
 	}
 }
 
-// TestParseErrorPositions spot-checks that a ParseError's Pos actually
-// points at the offending token, not just somewhere in the file.
+// TestParseErrorPositions spot-checks that a ParseError's Pos points at
+// the offending token, not just somewhere in the file.
 func TestParseErrorPositions(t *testing.T) {
 	// The stray '#' is on line 2.
 	src := "source in = csv(\"x.csv\", schema: {})\n#"

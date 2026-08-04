@@ -9,18 +9,17 @@ import (
 
 // Precedence levels for design.md §2's binary operators, low to high,
 // plus design/optional-fields.md §3's `??` discharge operator between
-// comparisons and arithmetic: tighter than comparisons/&&/||, so
-// `.age ?? 0 >= 18` reads as `(.age ?? 0) >= 18` -- the default resolves
-// before the comparison inspects it, not after. Looser than + - * /, so
-// `.amount ?? 0 + 5` reads as `.amount ?? (0 + 5)` -- the whole
-// arithmetic expression to its right is the default, matching a
-// mask/hash-style single-argument call's "one resolved value" shape. All
-// are left-associative and none share design.md's grammar with a unary
+// comparisons and arithmetic. It's tighter than comparisons/&&/||, so
+// `.age ?? 0 >= 18` reads as `(.age ?? 0) >= 18`: the default resolves
+// before the comparison inspects it. It's looser than + - * /, so
+// `.amount ?? 0 + 5` reads as `.amount ?? (0 + 5)`: the whole arithmetic
+// expression to its right is the default. All operators are
+// left-associative, and none share design.md's grammar with a unary
 // form, so there's no unary tier here at all.
 //
-// decision: no unary operators in v0 (no "-x", no "!x") -- design.md §2
+// decision: no unary operators in v0 (no "-x", no "!x"). design.md §2
 // lists only binary + - * /, comparisons, and && / ||. A negative
-// literal or a boolean negation would need one, but neither acceptance
+// literal or boolean negation would need one, but neither acceptance
 // case calls for it, so it's left out rather than guessed at.
 const (
 	lowest       = 0
@@ -60,9 +59,9 @@ func (p *Parser) parseExpr() ast.Expr {
 }
 
 // parseBinaryExpr implements precedence climbing: it keeps folding in
-// operators strictly tighter than minPrec, and hands back to its caller
-// as soon as it sees one that isn't. Recursing with the *current*
-// operator's own precedence (rather than one level looser) is what makes
+// operators strictly tighter than minPrec, and returns to its caller as
+// soon as it sees one that isn't. Recursing with the *current* operator's
+// own precedence, rather than one level looser, is what makes
 // same-precedence chains like "a - b - c" left-associative: the
 // recursive call for the right-hand side stops at the second "-" instead
 // of absorbing it, so the outer loop picks it up and combines
@@ -145,13 +144,14 @@ func (p *Parser) parsePrimary() ast.Expr {
 //
 // A bare identifier followed by "(" is a function call, same as always.
 // One with no parens used to be a flat parse error in v0 ("no variable
-// bindings to reference"). design-segments.md §2.2 adds exactly one:
-// a scalar parameter's bare name inside its own segment's body ("min" in
-// `filter(.age >= min)`). The parser can't tell that apart from a typo --
-// it needs the enclosing segment's parameter list, checker business --
-// so every bare identifier now parses as an ast.ParamRef, and the
-// checker's monomorphization pass either substitutes it with the call
-// site's literal argument or rejects it as an undefined name.
+// bindings to reference"). design-segments.md §2.2 adds exactly one
+// case: a scalar parameter's bare name inside its own segment's body
+// ("min" in `filter(.age >= min)`). The parser can't tell that apart
+// from a typo since it needs the enclosing segment's parameter list,
+// which is checker business, so every bare identifier now parses as an
+// ast.ParamRef. The checker's monomorphization pass then either
+// substitutes it with the call site's literal argument or rejects it as
+// an undefined name.
 func (p *Parser) parseCallOrParamRef(pos lexer.Pos) ast.Expr {
 	name := p.next().Lit
 	if p.cur.Kind != lexer.LPAREN {

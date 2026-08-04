@@ -41,7 +41,7 @@ func TestParseScalarParam(t *testing.T) {
 // TestParseColumnParam covers PS2: a bare-identifier parameter parses as
 // ast.ParamColumn; inside the body it's referenced with ordinary
 // field-access (`.col`) and column-name (bare `col`) syntax, exactly like
-// a literal column would be -- substitution is a checker concern, not a
+// a literal column would be. Substitution is a checker concern, not a
 // parser one.
 func TestParseColumnParam(t *testing.T) {
 	prog, err := Parse(`pipeline scrub(col) = map({ ...row, col: mask(lower(trim(.col))) })`)
@@ -133,7 +133,7 @@ func TestParseSegmentCallRejectsFieldAccessArgument(t *testing.T) {
 
 // TestParseBareIdentifierIsParamRef confirms the grammar relaxation
 // behind scalar parameters: a bare identifier in expression position is
-// no longer a flat parse error (v0's behavior) -- it now parses as an
+// no longer a flat parse error (v0's behavior). It now parses as an
 // ast.ParamRef, and whether it resolves to anything is left to the
 // checker.
 func TestParseBareIdentifierIsParamRef(t *testing.T) {

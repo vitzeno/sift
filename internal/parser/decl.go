@@ -18,11 +18,11 @@ func (p *Parser) parseProgram() *ast.Program {
 			prog.Pipelines = append(prog.Pipelines, p.parsePipelineDecl())
 		case lexer.ON:
 			// decision: "at most one on error declaration" is a purely
-			// structural constraint — no namespace/type resolution is
-			// needed to see a second one coming — so it's rejected
-			// here, in the parser, rather than deferred to the checker
-			// the way "more than one runnable pipeline" is (that check
-			// genuinely needs the namespace built first).
+			// structural check, no namespace or type resolution needed to
+			// spot a second one, so it's rejected here in the parser
+			// rather than deferred to the checker the way "more than one
+			// runnable pipeline" is (that check genuinely needs the
+			// namespace built first).
 			if prog.ErrorPolicy != nil {
 				p.fail(p.cur.Pos, "only one 'on error' declaration is allowed per program")
 			}
@@ -70,11 +70,11 @@ func (p *Parser) parseErrorPolicyDecl() *ast.ErrorPolicyDecl {
 // parseSourceDecl := "source" IDENT "=" IDENT "(" STRING ("," SourceKwArg)* ")"
 // SourceKwArg      := "schema" ":" SchemaLit | IDENT ":" Literal
 //
-// Exactly one "schema" kwarg is required (in any position among the
-// kwargs, not necessarily first); every other kwarg is a format-specific
-// option collected into ast.SourceDecl.Opts and left uninterpreted here
-// — design/xlsx.md §1's "widen the generic kwarg handling", not an
-// xlsx-specific grammar change (CLAUDE.md non-negotiable #2).
+// Exactly one "schema" kwarg is required, in any position among the
+// kwargs. Every other kwarg is a format-specific option collected into
+// ast.SourceDecl.Opts and left uninterpreted here (design/xlsx.md §1's
+// "widen the generic kwarg handling", not an xlsx-specific grammar
+// change per CLAUDE.md non-negotiable #2).
 func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 	pos := p.cur.Pos
 	p.expect(lexer.SOURCE)
@@ -111,10 +111,10 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 
 // parseSourceOptValue := INT | DOUBLE | STRING | "true" | "false"
 //
-// A source option's value is always a compile-time scalar literal, the
-// same restriction a segment call's scalar argument follows
-// (parseCallArg) — there is no row in scope at a source declaration, so
-// a general expression would have nothing to evaluate against.
+// A source option's value is always a compile-time scalar literal, same
+// as a segment call's scalar argument (parseCallArg): there's no row in
+// scope at a source declaration, so a general expression would have
+// nothing to evaluate against.
 func (p *Parser) parseSourceOptValue() ast.Expr {
 	pos := p.cur.Pos
 	switch p.cur.Kind {
@@ -129,7 +129,7 @@ func (p *Parser) parseSourceOptValue() ast.Expr {
 // parseSinkDecl := "sink" IDENT "=" IDENT "(" STRING ")"
 //
 // No schema keyword arg here: design.md §3 declares schema only on
-// sources; a sink's expected schema is whatever the checker computes for
+// sources. A sink's expected schema is whatever the checker computes for
 // the stream feeding it.
 func (p *Parser) parseSinkDecl() *ast.SinkDecl {
 	pos := p.cur.Pos
@@ -161,10 +161,10 @@ func (p *Parser) parseSchemaLit() ast.SchemaLit {
 
 // parseSchemaField := IDENT ":" IDENT "?"? ("@" IDENT)?
 //
-// decision: @pii is the only tag v0 recognizes. Rather than building a
-// general attribute grammar for a single case, the parser accepts `@`
-// followed by any identifier and rejects anything but "pii" outright --
-// simpler, and the error message is exactly as useful either way.
+// decision: @pii is the only tag v0 recognizes. Rather than build a
+// general attribute grammar for one case, the parser accepts `@`
+// followed by any identifier and rejects anything but "pii". Simpler,
+// and the error message is just as useful either way.
 func (p *Parser) parseSchemaField() ast.SchemaField {
 	pos := p.cur.Pos
 	name := p.expectIdent()
@@ -232,13 +232,13 @@ func (p *Parser) parseParamList() []ast.Param {
 
 // parseParam := IDENT (":" IDENT)?
 //
-// No colon: a column parameter (design-segments.md §2.1) -- referenced
-// `.name` inside the body, bound to a bare column name at the call site.
-// With a colon: a scalar parameter (§2.2) of the named type -- referenced
-// as a bare value inside the body, bound to a literal at the call site.
-// Like SchemaField.TypeName, the type name is left as raw identifier
-// text; resolving it against int/double/string/bool is the checker's
-// job, not the parser's.
+// No colon: a column parameter (design-segments.md §2.1), referenced as
+// `.name` inside the body and bound to a bare column name at the call
+// site. With a colon: a scalar parameter (§2.2) of the named type,
+// referenced as a bare value inside the body and bound to a literal at
+// the call site. Like SchemaField.TypeName, the type name is left as raw
+// identifier text; resolving it against int/double/string/bool is the
+// checker's job, not the parser's.
 func (p *Parser) parseParam() ast.Param {
 	pos := p.cur.Pos
 	name := p.expectIdent()

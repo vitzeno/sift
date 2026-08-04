@@ -12,18 +12,18 @@ import (
 // The trailing comma-list is design-multisink.md §2's terminal
 // broadcast: after the final "|>", the terminal production may be a
 // comma-separated list of sink NameRefs (`|> out, out_2`), not just one.
-// A single sink is the one-element case, so no grammar changes for
-// existing programs. It's checked here only if the chain's last element
-// parsed as a bare NameRef -- the only shape a trailing name can take,
-// since every built-in stage requires "(" -- and a top-level comma is
-// not otherwise valid in stage-chain position, so this is unambiguous
-// with no new lexer token.
+// A single sink is the one-element case, so existing programs parse
+// unchanged. It's checked here only if the chain's last element parsed
+// as a bare NameRef, the only shape a trailing name can take since every
+// built-in stage requires "(". A top-level comma is not otherwise valid
+// in stage-chain position, so this is unambiguous with no new lexer
+// token.
 //
 // A route terminal (design-routing.md §7) needs no special handling
-// here at all: parseStageElem returns an *ast.RouteTerminal, not a
-// NameRef, so the broadcast-comma check above simply doesn't apply to
-// it, and parseRouteTerminal itself rejects a trailing "|>" -- the two
-// terminal productions stay mutually exclusive by construction.
+// here: parseStageElem returns an *ast.RouteTerminal, not a NameRef, so
+// the broadcast-comma check above just doesn't apply to it, and
+// parseRouteTerminal itself rejects a trailing "|>". The two terminal
+// productions stay mutually exclusive by construction.
 func (p *Parser) parseStageChain() []ast.Stage {
 	stages := []ast.Stage{p.parseStageElem()}
 	for p.cur.Kind == lexer.PIPE {
@@ -31,10 +31,10 @@ func (p *Parser) parseStageChain() []ast.Stage {
 		stages = append(stages, p.parseStageElem())
 	}
 	// len(stages) > 1 guards against treating the leading source ref
-	// itself as the start of a sink list if it happens to be followed by
-	// a stray comma with no "|>" ever consumed (e.g. a malformed `in,
-	// out`) -- the comma-list only ever continues a chain that has
-	// already reached its terminal "|>".
+	// itself as the start of a sink list if it's followed by a stray
+	// comma with no "|>" ever consumed (e.g. a malformed `in, out`). The
+	// comma-list only continues a chain that already reached its
+	// terminal "|>".
 	if _, ok := stages[len(stages)-1].(*ast.NameRef); ok && len(stages) > 1 {
 		for p.cur.Kind == lexer.COMMA {
 			p.next()
@@ -57,13 +57,13 @@ func (p *Parser) parseStageChain() []ast.Stage {
 //
 // decision: built-in stage names are recognized by their literal text
 // here in the parser, not as lexer keywords (module 3's decision).
-// They're not a pluggable set like formats -- v0's stage grammar is
-// closed to a fixed list (ast.BuiltinStageNames), each with its own
-// argument shape, so the parser has to know their names to know how to
-// parse what follows the '('. A bare identifier with no following '(' is
-// a NameRef to a declared source, sink, or named pipeline segment; one
+// They're not a pluggable set like formats: v0's stage grammar is closed
+// to a fixed list (ast.BuiltinStageNames), each with its own argument
+// shape, so the parser has to know their names to know how to parse
+// what follows the '('. A bare identifier with no following '(' is a
+// NameRef to a declared source, sink, or named pipeline segment; one
 // followed by '(' but not in the closed list is a parameterized segment
-// call (design-segments.md §2) -- resolving either is the checker's job.
+// call (design-segments.md §2). Resolving either is the checker's job.
 func (p *Parser) parseStageElem() ast.Stage {
 	pos := p.cur.Pos
 	if p.cur.Kind == lexer.ILLEGAL {
@@ -72,11 +72,11 @@ func (p *Parser) parseStageElem() ast.Stage {
 	if p.cur.Kind == lexer.SKIP {
 		// "skip" is already a lexer keyword (the error-policy grammar's
 		// `on error skip`, design-errors.md §3.1), so it can never reach
-		// expectIdent() below as a plain identifier at all — intercept
-		// it here with a specific, helpful redirect instead of the
-		// generic "expected IDENT, got SKIP". This is exactly the
-		// collision design-improvements.md §3 cites for locking the
-		// slicing stage's name as "offset", not "skip".
+		// expectIdent() below as a plain identifier. Intercept it here
+		// with a specific, helpful redirect instead of the generic
+		// "expected IDENT, got SKIP". This is the collision
+		// design-improvements.md §3 cites for locking the slicing
+		// stage's name as "offset", not "skip".
 		p.fail(pos, "%q is reserved for the error policy; did you mean %q?", "skip", "offset")
 	}
 	name := p.expectIdent()
@@ -108,7 +108,7 @@ func (p *Parser) parseStageElem() ast.Stage {
 	case "take":
 		// decision: a specific, helpful rejection rather than falling
 		// through to parsing it as a segment call (design-improvements.md
-		// §3 locks the name as "limit", not "take" — a likely guess from
+		// §3 locks the name as "limit", not "take", a likely guess from
 		// other languages/tools).
 		p.fail(pos, "unknown stage %q (did you mean %q?)", "take", "limit")
 		return nil
@@ -120,11 +120,11 @@ func (p *Parser) parseStageElem() ast.Stage {
 // parseSegmentCall := IDENT "(" (CallArg ("," CallArg)*)? ")"
 //
 // Any identifier not in ast.BuiltinStageNames, followed by "(", parses as
-// a call to a parameterized named segment (design-segments.md §2) --
+// a call to a parameterized named segment (design-segments.md §2):
 // `scrub(email)`, `adults(18)`. Whether name actually names a declared
 // pipeline segment, and whether its parameter count and kinds match, is
-// the checker's job (expandSegmentCall) -- the parser only knows the call
-// shape, the same division of labor as a bare NameRef.
+// the checker's job (expandSegmentCall). The parser only knows the call
+// shape, same division of labor as a bare NameRef.
 func (p *Parser) parseSegmentCall(name string, pos lexer.Pos) *ast.SegmentCall {
 	p.expect(lexer.LPAREN)
 	var args []ast.CallArg
@@ -141,9 +141,9 @@ func (p *Parser) parseSegmentCall(name string, pos lexer.Pos) *ast.SegmentCall {
 
 // parseCallArg := IDENT | INT | DOUBLE | STRING | "true" | "false"
 //
-// A segment call argument is a bare column name or a scalar literal --
-// design-segments.md §2's two forms -- never a general expression: a
-// call argument is never stream-dependent (§6's scope fence). A bare
+// A segment call argument is a bare column name or a scalar literal,
+// design-segments.md §2's two forms, never a general expression: a call
+// argument is never stream-dependent (§6's scope fence). A bare
 // identifier is always taken as a column-name argument; v0 has no syntax
 // for forwarding a scalar parameter by name at a call site.
 func (p *Parser) parseCallArg() ast.CallArg {
@@ -167,18 +167,18 @@ func (p *Parser) parseCallArg() ast.CallArg {
 // parseRouteTerminal := "route" "{" RouteBranch ("," RouteBranch)* "}"
 //
 // "route" is recognized contextually right here, at terminal position,
-// by its literal text plus a following "{" — not as a lexer keyword
+// by its literal text plus a following "{", not as a lexer keyword
 // (design-routing.md §7: the 10-keyword closed set does not grow). The
-// "{" lookahead is what disambiguates it from an ordinary NameRef to a
-// sink or segment that happens to be named "route" (unusual, but not
-// forbidden — only a named *segment* is reserved against the name,
-// design-routing.md §7/§11, enforced in the checker's namespace build).
+// "{" lookahead disambiguates it from an ordinary NameRef to a sink or
+// segment that happens to be named "route" (unusual, but not forbidden;
+// only a named *segment* is reserved against the name, design-routing.md
+// §7/§11, enforced in the checker's namespace build).
 //
 // A route terminal always ends the pipeline (design-routing.md §1: still
-// terminal, still one write per row) — a stray "|>" after its closing
-// "}" is rejected here with a specific diagnostic rather than being
-// handed back to parseStageChain's loop, which would otherwise try to
-// parse another stage after it.
+// terminal, still one write per row). A stray "|>" after its closing "}"
+// is rejected here with a specific diagnostic rather than being handed
+// back to parseStageChain's loop, which would otherwise try to parse
+// another stage after it.
 func (p *Parser) parseRouteTerminal(pos lexer.Pos) *ast.RouteTerminal {
 	p.expect(lexer.LBRACE)
 	var branches []ast.RouteBranch
@@ -198,8 +198,8 @@ func (p *Parser) parseRouteTerminal(pos lexer.Pos) *ast.RouteTerminal {
 
 // parseRouteBranch := (Expr | "else") "=>" (IDENT | "discard")
 //
-// "else" is checked by literal text before falling back to parseExpr —
-// like "route" above, it's contextual, not a keyword, so it would
+// "else" is checked by literal text before falling back to parseExpr.
+// Like "route" above, it's contextual, not a keyword, so it would
 // otherwise parse as an ordinary (and here always wrong) ast.ParamRef.
 func (p *Parser) parseRouteBranch() ast.RouteBranch {
 	pos := p.cur.Pos
@@ -218,7 +218,7 @@ func (p *Parser) parseRouteBranch() ast.RouteBranch {
 // parseRouteTarget := IDENT | "discard"
 //
 // "discard" (design-routing.md §2) is likewise contextual, recognized by
-// literal text in exactly this one position — never a lexer keyword, and
+// literal text in exactly this one position, never a lexer keyword. It's
 // never ambiguous with a real sink name since the checker resolves every
 // non-discard target against the declared sink namespace regardless.
 func (p *Parser) parseRouteTarget() (target *ast.NameRef, discard bool) {
@@ -304,7 +304,7 @@ func (p *Parser) parseOffset(pos lexer.Pos) *ast.Offset {
 // parseIntLiteralArg consumes a bare int literal. limit/offset take a
 // compile-time constant, not a general expression
 // (design-improvements.md §3), so this reads one INT token directly
-// rather than calling parseExpr — the same conversion parsePrimary
+// rather than calling parseExpr, the same conversion parsePrimary
 // already does for an INT literal in expression position.
 func (p *Parser) parseIntLiteralArg() int64 {
 	tok := p.expect(lexer.INT)
@@ -315,7 +315,7 @@ func (p *Parser) parseIntLiteralArg() int64 {
 	return n
 }
 
-// parseDeclassifyStage parses mask/hash/redact in stage position — the
+// parseDeclassifyStage parses mask/hash/redact in stage position, the
 // same column-list grammar select/drop already use
 // (design-improvements.md §4). fn is the already-consumed stage name,
 // carried through unchanged so the checker/runtime know which
@@ -329,9 +329,9 @@ func (p *Parser) parseDeclassifyStage(fn string, pos lexer.Pos) *ast.Declassify 
 
 // parseColumnRefList := ColumnRef ("," ColumnRef)*
 //
-// Always at least one: the grammar has no way to write an empty list,
-// so `select()` fails here with a plain "expected IDENT" parse error
-// rather than needing a dedicated "zero names" check later.
+// Always at least one: the grammar has no way to write an empty list, so
+// `select()` fails here with a plain "expected IDENT" parse error and
+// needs no dedicated "zero names" check later.
 func (p *Parser) parseColumnRefList() []ast.ColumnRef {
 	cols := []ast.ColumnRef{p.parseColumnRef()}
 	for p.cur.Kind == lexer.COMMA {
@@ -341,7 +341,7 @@ func (p *Parser) parseColumnRefList() []ast.ColumnRef {
 	return cols
 }
 
-// parseColumnRef consumes a bare column-name identifier — the argument
+// parseColumnRef consumes a bare column-name identifier, the argument
 // form select/drop/rename/mask/hash/redact all share
 // (design-improvements.md §5). Writing `.field` here is a specific,
 // anticipated mistake (the expression form, valid inside

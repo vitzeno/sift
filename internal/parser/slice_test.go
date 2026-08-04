@@ -46,7 +46,7 @@ func TestParseLimitRejectsNonLiteralArg(t *testing.T) {
 }
 
 // TestParseTakeRejectedWithHint and TestParseStageSkipRejectedWithHint
-// lock design-improvements.md §3: "take"/"skip" are rejected by name,
+// lock design-improvements.md §3: "take"/"skip" are rejected by name
 // with a specific hint toward the real names, not just a generic
 // unknown-stage error.
 func TestParseTakeRejectedWithHint(t *testing.T) {

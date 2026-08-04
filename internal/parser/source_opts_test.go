@@ -35,7 +35,7 @@ func TestParseSourceOpts(t *testing.T) {
 }
 
 // TestParseSourceOptsBeforeSchema confirms opts and schema can appear in
-// either order — the grammar doesn't privilege schema's position, only
+// either order. The grammar doesn't privilege schema's position, only
 // its presence.
 func TestParseSourceOptsBeforeSchema(t *testing.T) {
 	const src = `source in = xlsx("people.xlsx", header_row: 3, schema: { name: string })`
