@@ -38,10 +38,13 @@ type csvSource struct {
 }
 
 // NewCSVSource is the SourceCtor registered under "csv". It opens the file,
-// reads the header row, and checks every schema field has a matching
-// column — a missing column is a construction-time error, not a panic,
-// since it's a real misconfiguration a caller can hit legitimately (a
-// typo'd schema, a header-less export, etc).
+// reads the header row, and checks every required schema field has a
+// matching column — a missing required column is a construction-time
+// error, not a panic, since it's a real misconfiguration a caller can hit
+// legitimately (a typo'd schema, a header-less export, etc). An Optional
+// field's column may be absent from the header entirely: every row simply
+// reads it as Absent (design/optional-fields.md §2.1) — only a required
+// field's absence is structural.
 func NewCSVSource(opts runtime.SourceOptions) (runtime.Source, error) {
 	f, err := os.Open(opts.Path)
 	if err != nil {
@@ -60,9 +63,9 @@ func NewCSVSource(opts runtime.SourceOptions) (runtime.Source, error) {
 		col[h] = i
 	}
 	for _, field := range opts.Schema.Fields {
-		if _, ok := col[field.Name]; !ok {
+		if _, ok := col[field.Name]; !ok && !field.Type.Optional {
 			f.Close()
-			return nil, fmt.Errorf("csv source %q: schema field %q not in header %v", opts.Name, field.Name, header)
+			return nil, fmt.Errorf("csv source %q: required column %q not found in header %v", opts.Name, field.Name, header)
 		}
 	}
 
@@ -108,7 +111,14 @@ func (s *csvSource) Next() (value.Row, bool) {
 
 	fields := make(map[string]any, len(s.schema.Fields))
 	for _, field := range s.schema.Fields {
-		raw := record[s.col[field.Name]]
+		// idx is absent only for an Optional field whose column isn't in
+		// the header at all — the header check above already rejected
+		// that for a required field — in which case raw stays "" and
+		// Coerce reads it as absent (design/optional-fields.md §2.2).
+		var raw string
+		if idx, ok := s.col[field.Name]; ok {
+			raw = record[idx]
+		}
 		v, fail := value.Coerce(field.Type, raw)
 		if fail != nil {
 			// One failure per row (design-errors.md §9): the first bad

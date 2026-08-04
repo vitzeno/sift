@@ -120,9 +120,9 @@ func NewXLSXSource(opts runtime.SourceOptions) (runtime.Source, error) {
 		col[h] = i
 	}
 	for _, field := range opts.Schema.Fields {
-		if _, ok := col[field.Name]; !ok {
+		if _, ok := col[field.Name]; !ok && !field.Type.Optional {
 			f.Close()
-			return nil, fmt.Errorf("source %q: column %q not found in header row %d of sheet %q\n       header columns: %s",
+			return nil, fmt.Errorf("source %q: required column %q not found in header row %d of sheet %q\n       header columns: %s",
 				opts.Name, field.Name, headerRow, sheet, strings.Join(header, ", "))
 		}
 	}
@@ -179,7 +179,15 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 
 		fields := make(map[string]any, len(s.schema.Fields))
 		for _, field := range s.schema.Fields {
-			raw := cellAt(cells, s.col[field.Name])
+			// A missing key here means an Optional field's column isn't
+			// in the header at all; idx -1 makes cellAt read it as an
+			// empty cell, which Coerce turns into Absent (mirrors
+			// csvSource's equivalent guard).
+			idx, ok := s.col[field.Name]
+			if !ok {
+				idx = -1
+			}
+			raw := cellAt(cells, idx)
 			v, fail := value.Coerce(field.Type, raw)
 			if fail != nil {
 				fail.Stage = fmt.Sprintf("xlsx:%s", field.Name)

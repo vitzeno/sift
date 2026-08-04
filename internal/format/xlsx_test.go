@@ -244,8 +244,60 @@ func TestXLSXSourceMissingColumn(t *testing.T) {
 	if err == nil {
 		t.Fatal("NewXLSXSource error = nil, want a missing-column error")
 	}
-	if got := err.Error(); !strings.Contains(got, `column "age" not found`) || !strings.Contains(got, "name, years") {
-		t.Errorf("error = %q, want it to name the missing column and list the real header", got)
+	if got := err.Error(); !strings.Contains(got, `required column "age" not found`) || !strings.Contains(got, "name, years") {
+		t.Errorf("error = %q, want it to name the missing required column and list the real header", got)
+	}
+}
+
+// TestXLSXSourceOptionalAbsentFromEmptyCell is OF-A's xlsx half: a blank
+// cell against an Optional field reads as value.Absent, not a Failure.
+func TestXLSXSourceOptionalAbsentFromEmptyCell(t *testing.T) {
+	path := writeXLSXFixture(t, "Sheet1", [][]string{
+		{"name", "phone"},
+		{"Ada", "555-1234"},
+		{"Tom", ""},
+	})
+	src, err := NewXLSXSource(runtime.SourceOptions{Name: "in", Path: path, Schema: optionalPhoneSchema()})
+	if err != nil {
+		t.Fatalf("NewXLSXSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("first row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	if row.Fields["phone"] != "555-1234" {
+		t.Errorf("Fields[phone] = %#v, want \"555-1234\"", row.Fields["phone"])
+	}
+
+	row2, ok := src.Next()
+	if !ok || row2.Fail != nil {
+		t.Fatalf("second row = %+v, ok=%v, want a healthy row (absence isn't a failure)", row2, ok)
+	}
+	if _, absent := row2.Fields["phone"].(value.Absent); !absent {
+		t.Errorf("Fields[phone] = %#v, want value.Absent", row2.Fields["phone"])
+	}
+}
+
+// TestXLSXSourceOptionalAbsentFromMissingColumn is OF-C's xlsx half: an
+// Optional column missing from the header entirely is not a construction
+// error, and every row reads that field as Absent.
+func TestXLSXSourceOptionalAbsentFromMissingColumn(t *testing.T) {
+	path := writeXLSXFixture(t, "Sheet1", [][]string{
+		{"name"},
+		{"Ada"},
+	})
+	src, err := NewXLSXSource(runtime.SourceOptions{Name: "in", Path: path, Schema: optionalPhoneSchema()})
+	if err != nil {
+		t.Fatalf("NewXLSXSource: %v, want no error for a missing Optional column", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	if _, absent := row.Fields["phone"].(value.Absent); !absent {
+		t.Errorf("Fields[phone] = %#v, want value.Absent", row.Fields["phone"])
 	}
 }
 

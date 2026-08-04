@@ -3,6 +3,7 @@ package format
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vitzeno/sift/internal/runtime"
@@ -149,6 +150,113 @@ func TestCSVSourceBadCellIsRowFailure(t *testing.T) {
 	}
 	if row2.Prov.Ordinal != 1 || row2.Prov.Offset != 3 {
 		t.Errorf("second row Prov = %+v, want Ordinal=1 Offset=3", row2.Prov)
+	}
+}
+
+// optionalPhoneSchema is name/phone where phone is Optional — the
+// fixture schema for design/optional-fields.md's OF-A/OF-C/OF-D cases.
+func optionalPhoneSchema() value.Schema {
+	return value.Schema{Fields: []value.Field{
+		{Name: "name", Type: value.Type{Kind: value.String}},
+		{Name: "phone", Type: value.Type{Kind: value.String, Optional: true}},
+	}}
+}
+
+// TestCSVSourceOptionalAbsentFromEmptyCell is OF-A: a blank cell against
+// an Optional field reads as value.Absent, not a row Failure.
+func TestCSVSourceOptionalAbsentFromEmptyCell(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "people.csv")
+	writeFile(t, path, "name,phone\nAda,555-1234\nTom,\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{Name: "in", Path: path, Schema: optionalPhoneSchema()})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("first row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	if row.Fields["phone"] != "555-1234" {
+		t.Errorf("Fields[phone] = %#v, want \"555-1234\"", row.Fields["phone"])
+	}
+
+	row2, ok := src.Next()
+	if !ok || row2.Fail != nil {
+		t.Fatalf("second row = %+v, ok=%v, want a healthy row (absence isn't a failure)", row2, ok)
+	}
+	if _, absent := row2.Fields["phone"].(value.Absent); !absent {
+		t.Errorf("Fields[phone] = %#v, want value.Absent", row2.Fields["phone"])
+	}
+}
+
+// TestCSVSourceOptionalAbsentFromMissingColumn is OF-C's mirror image: an
+// Optional column missing from the header entirely is not a construction
+// error, and every row reads that field as Absent.
+func TestCSVSourceOptionalAbsentFromMissingColumn(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "people.csv")
+	writeFile(t, path, "name\nAda\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{Name: "in", Path: path, Schema: optionalPhoneSchema()})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v, want no error for a missing Optional column", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	if _, absent := row.Fields["phone"].(value.Absent); !absent {
+		t.Errorf("Fields[phone] = %#v, want value.Absent", row.Fields["phone"])
+	}
+}
+
+// TestCSVSourceRequiredColumnMissingIsStructuralError is OF-C: a required
+// column absent from the header names the column and the real header.
+func TestCSVSourceRequiredColumnMissingIsStructuralError(t *testing.T) {
+	_, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: "../../examples/people.csv",
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "emial", Type: value.Type{Kind: value.String}},
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected an error for a required schema field not present in the CSV header")
+	}
+	if got := err.Error(); !strings.Contains(got, `required column "emial" not found`) {
+		t.Errorf("error = %q, want it to name the missing required column", got)
+	}
+}
+
+// TestCSVSourceOptionalUnparseableIsRowFailure is OF-D: optionality
+// excuses absence, never malformed presence — a present-but-garbage cell
+// in an optional numeric field is still a row Failure.
+func TestCSVSourceOptionalUnparseableIsRowFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "people.csv")
+	writeFile(t, path, "name,age\nAda,not-a-number\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "name", Type: value.Type{Kind: value.String}},
+			{Name: "age", Type: value.Type{Kind: value.Int, Optional: true}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok {
+		t.Fatal("Next() returned ok=false, want the failed row returned normally")
+	}
+	if row.Fail == nil {
+		t.Fatal("Fail is nil, want a coercion failure for garbage in an optional field")
 	}
 }
 
