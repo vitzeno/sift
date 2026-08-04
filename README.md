@@ -30,14 +30,15 @@ organized, see [`CLAUDE.md`](CLAUDE.md).
 9. [Putting it together](#putting-it-together)
 10. [When a row fails: error policies](#when-a-row-fails-error-policies)
 11. [Writing to more than one sink](#writing-to-more-than-one-sink)
-12. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
-13. [Parameterized segments](#parameterized-segments)
-14. [A complete ETL, with error routing](#a-complete-etl-with-error-routing)
-15. [Reading xlsx workbooks](#reading-xlsx-workbooks)
-16. [Optional fields](#optional-fields)
-17. [Quick reference](#quick-reference)
-18. [Project layout](#project-layout)
-19. [Status](#status)
+12. [Conditional routing](#conditional-routing)
+13. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
+14. [Parameterized segments](#parameterized-segments)
+15. [A complete ETL, with error routing](#a-complete-etl-with-error-routing)
+16. [Reading xlsx workbooks](#reading-xlsx-workbooks)
+17. [Optional fields](#optional-fields)
+18. [Quick reference](#quick-reference)
+19. [Project layout](#project-layout)
+20. [Status](#status)
 
 ## Building the CLI
 
@@ -505,6 +506,55 @@ repeating the error per sink. The same sink listed twice (`|> out, out`)
 is a compile error — it's always a literal double-write. `examples/broadcast.sift`
 demonstrates the same broadcast pattern.
 
+## Conditional routing
+
+Broadcast's sibling: instead of every row reaching every sink, `route`
+sends each row to exactly **one** — chosen by the first branch whose
+predicate is true, top to bottom:
+
+```sift
+source in       = csv("routing.csv", schema: { name: string, email: string @pii, region: string })
+sink   eu_sink  = jsonl("eu.jsonl")
+sink   us_sink  = jsonl("us.jsonl")
+sink   rest_sink = jsonl("rest.jsonl")
+
+pipeline main {
+  in
+    |> mask(email)
+    |> route {
+         .region == "EU" => eu_sink,
+         .region == "US" => us_sink,
+         else            => rest_sink,
+       }
+}
+```
+
+`else` is not optional — a `route` with no `else` branch is a compile
+error, since Sift refuses to let rows vanish silently:
+
+```console
+$ ./sift run leaky-route.sift
+leaky-route.sift:4:1: error: route is not total; add an 'else' branch (use 'else => discard' to drop unmatched rows explicitly)
+```
+
+If dropping unmatched rows really is what you want, say so explicitly
+with `else => discard` — `discard` (not `drop`, which is the
+column-projection stage) is the sentinel that means "no sink, and that's
+fine." A branch target is always a sink name or `discard`, never a
+transform: do any masking or reshaping *before* `route`, since branches
+carry no stages of their own.
+
+Every branch shares the one terminal schema — routing performs no
+transform — so the unmasked-`@pii` check (and the optional-field
+discharge check) runs exactly once, the same way broadcast's does,
+covering every branch's sink with a single error if it fires. The same
+sink can appear in more than one branch (unlike broadcast, where a
+repeat is a compile error): different rows, never a double-write of the
+same one. Routing composes with error routing exactly like broadcast
+does — a failed row is disposed of by `on error` before any branch ever
+sees it, since its fields are suspect. `examples/routing.sift`
+demonstrates the same pattern.
+
 ## Reusable pipelines: named segments
 
 A `pipeline` declaration with no source or sink of its own is a reusable
@@ -814,9 +864,11 @@ shapes.
   CSV nor xlsx carries reliable types of its own; `xlsx` additionally
   takes `sheet:` and `header_row:`.
 - **Pipelines** are a linear `in |> stage |> ... |> out` chain; the
-  terminal production can be a comma-separated sink list to broadcast. A
-  pipeline with no source/sink is a reusable named segment, optionally
-  parameterized over columns and/or scalars.
+  terminal production can be a comma-separated sink list to broadcast, or
+  `route { <bool> => sink, ..., else => sink|discard }` to send each row
+  to exactly one sink (`else` mandatory). A pipeline with no source/sink
+  is a reusable named segment, optionally parameterized over columns
+  and/or scalars.
 - **Stages:** `filter(<bool>)`, `map({ ...row, field: expr })`,
   `check(<bool>, "reason")`, `select(col, ...)`, `drop(col, ...)`,
   `rename(old: new, ...)`, `limit(n)`, `offset(n)`,
@@ -875,8 +927,8 @@ deliberately closed — see `design/language.md` §5 for what's built and
 what's explicitly deferred (joins, dedupe, fan-out, an optimizer, schema
 inference, and more formats beyond csv/jsonl).
 
-Six phases have shipped on top of it, each with its own acceptance tests
-and a runnable `examples/` fixture:
+Seven phases have shipped on top of it, each with its own acceptance
+tests and a runnable `examples/` fixture:
 
 - `design/errors.md` — failures are data, not exceptions; `on error
   abort/skip/route` is a real language feature (§7, ERR-A through ERR-E).
@@ -894,9 +946,13 @@ and a runnable `examples/` fixture:
   `Optional` propagates through every expression exactly like `@pii` and
   a sink rejects it undischarged; `??` discharges it. The two tags are
   orthogonal and independently enforced (§8, OF-A through OF-G).
+- `design/routing.md` — `route { pred => sink, ..., else => target }` is
+  broadcast's sibling: exactly one write per row, chosen by the first
+  matching branch. `else` is mandatory (a route that isn't provably
+  total is a compile error); the same sink may appear in more than one
+  branch; PII and optional-discharge are each checked once against the
+  shared terminal schema (§10, RT-A through RT-H).
 
-One more is designed but not built: `design/routing.md` (per-row
-conditional dispatch, depends on the multi-sink driver spine).
 `design/parquet.md` (a sink connector), `design/type-conversions.md`
 (`T(x)`/`try_T(x)` mid-pipeline conversion), and `design/cloud-storage.md`
-(s3/gs/az backends) are drafted but not yet built either.
+(s3/gs/az backends) are drafted but not yet built.
