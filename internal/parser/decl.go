@@ -68,10 +68,11 @@ func (p *Parser) parseErrorPolicyDecl() *ast.ErrorPolicyDecl {
 }
 
 // parseSourceDecl := "source" IDENT "=" IDENT "(" STRING ("," SourceKwArg)* ")"
-// SourceKwArg      := "schema" ":" SchemaLit | IDENT ":" Literal
+// SourceKwArg      := "schema" ":" SchemaLit | "columns" ":" ColumnsLit | IDENT ":" Literal
 //
 // Exactly one "schema" kwarg is required, in any position among the
-// kwargs. Every other kwarg is a format-specific option collected into
+// kwargs. "columns" is optional (design/column-aliases.md §3). Every
+// other kwarg is a format-specific option collected into
 // ast.SourceDecl.Opts and left uninterpreted here (design/xlsx.md §1's
 // "widen the generic kwarg handling", not an xlsx-specific grammar
 // change per CLAUDE.md non-negotiable #2).
@@ -86,18 +87,28 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 
 	var schema ast.SchemaLit
 	haveSchema := false
+	var columns []ast.ColumnAlias
+	haveColumns := false
 	var opts []ast.SourceOpt
 	for p.cur.Kind == lexer.COMMA {
 		p.next()
 		kwPos := p.cur.Pos
 		kw := p.expectIdent()
 		p.expect(lexer.COLON)
-		if kw == "schema" {
+		switch kw {
+		case "schema":
 			if haveSchema {
 				p.fail(kwPos, "duplicate %q keyword argument", "schema")
 			}
 			schema = p.parseSchemaLit()
 			haveSchema = true
+			continue
+		case "columns":
+			if haveColumns {
+				p.fail(kwPos, "duplicate %q keyword argument", "columns")
+			}
+			columns = p.parseColumnsLit()
+			haveColumns = true
 			continue
 		}
 		opts = append(opts, ast.SourceOpt{Name: kw, Value: p.parseSourceOptValue(), Pos: kwPos})
@@ -106,7 +117,36 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 	if !haveSchema {
 		p.fail(pos, "source %q: missing required %q keyword argument", name, "schema")
 	}
-	return &ast.SourceDecl{Name: name, Format: format, Path: path, Schema: schema, Opts: opts, Pos: pos}
+	return &ast.SourceDecl{Name: name, Format: format, Path: path, Schema: schema, Columns: columns, Opts: opts, Pos: pos}
+}
+
+// parseColumnsLit := "{" (ColumnAlias ("," ColumnAlias)*)? "}"
+func (p *Parser) parseColumnsLit() []ast.ColumnAlias {
+	p.expect(lexer.LBRACE)
+	var aliases []ast.ColumnAlias
+	for p.cur.Kind != lexer.RBRACE {
+		aliases = append(aliases, p.parseColumnAlias())
+		if p.cur.Kind != lexer.COMMA {
+			break
+		}
+		p.next()
+	}
+	p.expect(lexer.RBRACE)
+	return aliases
+}
+
+// parseColumnAlias := IDENT ":" STRING
+//
+// Unlike a schema field, the value here is always a raw header string,
+// never a type name — design/column-aliases.md §3 keeps this grammar
+// deliberately narrower than schema's, since a columns entry only ever
+// names a literal header to match, nothing else.
+func (p *Parser) parseColumnAlias() ast.ColumnAlias {
+	pos := p.cur.Pos
+	field := p.expectIdent()
+	p.expect(lexer.COLON)
+	header := p.expectString()
+	return ast.ColumnAlias{Field: field, Header: header, Pos: pos}
 }
 
 // parseSourceOptValue := INT | DOUBLE | STRING | "true" | "false"

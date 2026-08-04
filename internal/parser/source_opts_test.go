@@ -74,3 +74,56 @@ func TestParseSourceDuplicateSchema(t *testing.T) {
 		t.Errorf("error = %q, want it to mention the duplicate schema kwarg", got)
 	}
 }
+
+// TestParseSourceColumns covers design/column-aliases.md §3's columns
+// kwarg: a schema identifier mapped to the raw header string to match
+// instead of its own name, collected into ast.SourceDecl.Columns.
+func TestParseSourceColumns(t *testing.T) {
+	const src = `source in = csv("transactions.csv",
+  schema:  { txn_id: int, txn_date: string, amount: double },
+  columns: { txn_id: "Transaction ID", txn_date: "Date" }
+)`
+	prog, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	s := prog.Sources[0]
+	if len(s.Columns) != 2 {
+		t.Fatalf("Columns = %d, want 2", len(s.Columns))
+	}
+	if s.Columns[0].Field != "txn_id" || s.Columns[0].Header != "Transaction ID" {
+		t.Errorf("Columns[0] = %+v, want {Field: txn_id, Header: \"Transaction ID\"}", s.Columns[0])
+	}
+	if s.Columns[1].Field != "txn_date" || s.Columns[1].Header != "Date" {
+		t.Errorf("Columns[1] = %+v, want {Field: txn_date, Header: \"Date\"}", s.Columns[1])
+	}
+	// amount has no alias entry at all -- columns is fully optional per
+	// field, not just per source.
+	if len(s.Schema.Fields) != 3 {
+		t.Errorf("Schema.Fields = %d, want 3", len(s.Schema.Fields))
+	}
+}
+
+// TestParseSourceColumnsIsOptional confirms a source with no columns
+// kwarg at all still parses fine, unaffected by this feature existing.
+func TestParseSourceColumnsIsOptional(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string })`
+	prog, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if prog.Sources[0].Columns != nil {
+		t.Errorf("Columns = %+v, want nil", prog.Sources[0].Columns)
+	}
+}
+
+func TestParseSourceDuplicateColumns(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string }, columns: { name: "Name" }, columns: { name: "Full Name" })`
+	_, err := Parse(src)
+	if err == nil {
+		t.Fatal("Parse error = nil, want a duplicate-columns error")
+	}
+	if got := err.Error(); !strings.Contains(got, `duplicate "columns"`) {
+		t.Errorf("error = %q, want it to mention the duplicate columns kwarg", got)
+	}
+}
