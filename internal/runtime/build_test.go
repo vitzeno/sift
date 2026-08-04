@@ -1,5 +1,5 @@
 // This file is package runtime_test, not runtime: internal/format
-// imports internal/runtime (to register with it), so a build_test.go
+// imports internal/runtime to register with it, so a build_test.go
 // inside package runtime importing internal/format for its init() side
 // effect would be a real import cycle. An external test package is a
 // separate compilation unit that can import both sides.
@@ -18,10 +18,10 @@ import (
 	"github.com/vitzeno/sift/internal/runtime"
 )
 
-// toBuildInput adapts a *checker.CheckedProgram to runtime.BuildInput —
-// the one place, in tests, that bridges the two packages Build is
-// deliberately decoupled from at the type level (see build.go's decision
-// comment). Module 8's CLI will do the same thing in production code.
+// toBuildInput adapts a *checker.CheckedProgram to runtime.BuildInput,
+// the one place in tests that bridges the two packages Build keeps
+// decoupled at the type level (see build.go's decision comment). Module
+// 8's CLI will do the same thing in production code.
 func toBuildInput(cp *checker.CheckedProgram) runtime.BuildInput {
 	return runtime.BuildInput{
 		Source:       cp.Source,
@@ -34,7 +34,7 @@ func toBuildInput(cp *checker.CheckedProgram) runtime.BuildInput {
 }
 
 // toRouteInputs mirrors cmd/sift/run.go's own bridge from
-// checker.RouteBranch to runtime.RouteInput — nil for every non-routed
+// checker.RouteBranch to runtime.RouteInput. nil for every non-routed
 // program.
 func toRouteInputs(route []checker.RouteBranch) []runtime.RouteInput {
 	if route == nil {
@@ -48,9 +48,9 @@ func toRouteInputs(route []checker.RouteBranch) []runtime.RouteInput {
 }
 
 // TestBuildFullPipelineAdultsFilter is design.md §7 Case A, this time
-// proven through the complete compiler pipeline -- lex, parse, check,
-// build, execute -- rather than module 2's hand-wired Go chain or module
-// 6's checker-only assertions. Every module from 1 through 7 participates
+// proven through the complete compiler pipeline (lex, parse, check,
+// build, execute) rather than module 2's hand-wired Go chain or module
+// 6's checker-only assertions. Every module from 1 through 7 takes part
 // in producing this one output file.
 //
 // decision: the source path here is "../../examples/people.csv",
@@ -114,8 +114,8 @@ pipeline main {
 
 // TestBuildFullPipelineRenamePreservesPII is S2's own demo
 // (design-improvements.md §8): renaming a @pii column and writing it
-// unmasked is still rejected — proof the tag survived the rename,
-// through the real parser and checker rather than a hand-built AST.
+// unmasked is still rejected, proof the tag survived the rename, through
+// the real parser and checker rather than a hand-built AST.
 func TestBuildFullPipelineRenamePreservesPII(t *testing.T) {
 	src := `source in = csv("../../examples/people.csv", schema: { name: string, age: int, email: string @pii })
 sink out = jsonl("out.jsonl")
@@ -233,9 +233,9 @@ pipeline main {
 // TestBuildFullPipelineRouteResolvesSinkNamesToIndexes is
 // design-routing.md end to end through the real compiler pipeline: Build
 // must resolve each branch's target sink *name* into the right index of
-// the sinks slice it itself constructs — the one piece of route wiring
-// unique to this layer (checker only ever deals in names; the driver
-// only ever deals in indexes).
+// the sinks slice it constructs itself. That's the one piece of route
+// wiring unique to this layer: checker only deals in names, and the
+// driver only deals in indexes.
 func TestBuildFullPipelineRouteResolvesSinkNamesToIndexes(t *testing.T) {
 	dir := t.TempDir()
 	inPath := filepath.Join(dir, "people.csv")
@@ -245,7 +245,7 @@ func TestBuildFullPipelineRouteResolvesSinkNamesToIndexes(t *testing.T) {
 	euPath := filepath.Join(dir, "eu.jsonl")
 	restPath := filepath.Join(dir, "rest.jsonl")
 
-	// Sinks declared in the opposite order routes reference them in --
+	// Sinks declared in the opposite order routes reference them in,
 	// proof this isn't secretly relying on declaration order lining up
 	// with branch order.
 	src := `source in = csv("` + filepath.ToSlash(inPath) + `", schema: { name: string, region: string })
@@ -294,7 +294,7 @@ pipeline main {
 
 // TestBuildFullPipelineDropSatisfiesPIIRule is S1's own demo
 // (design-improvements.md §8): dropping a @pii column reaches the sink
-// legally with no mask/hash/redact at all — through the real compiler
+// legally with no mask/hash/redact at all, through the real compiler
 // pipeline, not just the checker in isolation.
 func TestBuildFullPipelineDropSatisfiesPIIRule(t *testing.T) {
 	dir := t.TempDir()

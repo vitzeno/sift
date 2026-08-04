@@ -1,6 +1,6 @@
 // Package runtime holds the pull-based execution machinery: the
 // Stream/Source/Sink interfaces, the format registry, built-in stages, and
-// the driver loop. It knows nothing about Sift syntax — that's the frontend's
+// the driver loop. It knows nothing about Sift syntax; that's the frontend's
 // job (lexer/parser/checker, modules 3-6) which doesn't exist yet.
 package runtime
 
@@ -15,11 +15,11 @@ type Stream interface {
 
 // Source is a Stream that can also report the schema of the rows it
 // produces. Every source must be able to answer Schema() before rows flow
-// (design.md §4) — for v0 the schema is always declared up front, so this
+// (design.md §4); for v0 the schema is always declared up front, so this
 // is available immediately after construction.
 //
-// Err reports an infrastructure failure — one that leaves no row to mark,
-// e.g. a dead file handle mid-read (design-errors.md §2.4) — as opposed
+// Err reports an infrastructure failure, one that leaves no row to mark
+// (e.g. a dead file handle mid-read, design-errors.md §2.4), as opposed
 // to a data failure on one row, which rides on that Row's Fail field
 // instead. The driver calls Err() only after Next returns ok == false;
 // nil means a clean EOF, non-nil means abort regardless of the active

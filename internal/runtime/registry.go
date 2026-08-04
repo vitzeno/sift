@@ -7,16 +7,15 @@ import (
 )
 
 // SourceOptions and SinkOptions are the construction-time parameters a
-// format needs. This is deliberately a plain struct rather than
-// map[string]any: v0 has exactly two formats and both need a path plus a
-// declared schema, so a typed struct is simpler and catches typos at
-// compile time.
+// format needs. This is a plain struct rather than map[string]any: v0
+// has exactly two formats and both need a path plus a declared schema,
+// so a typed struct is simpler and catches typos at compile time.
 //
 // decision: once the parser/checker exist (modules 5-6), a source/sink
-// declaration's keyword args (`csv("people.csv", schema: {...})`) will be
-// translated into one of these structs. The struct may grow fields for
-// format-specific options (e.g. a CSV delimiter) — it will not need a
-// different shape, since the registry itself never special-cases a format.
+// declaration's keyword args (`csv("people.csv", schema: {...})`) will
+// translate into one of these structs. The struct may grow fields for
+// format-specific options (e.g. a CSV delimiter) but won't need a
+// different shape, since the registry never special-cases a format.
 type SourceOptions struct {
 	// Name is the source's declared name (e.g. "in"), recorded in each
 	// row's Provenance.Source.
@@ -25,11 +24,11 @@ type SourceOptions struct {
 	Schema value.Schema
 	// Opts holds every source keyword argument beyond schema (e.g.
 	// xlsx's "sheet"/"header_row", design/xlsx.md §1), decoded from
-	// their ast.SourceOpt literals into plain Go values — string,
-	// int64, float64, or bool. A format that needs no extra options
-	// (csv, jsonl) simply never looks here. Only the registered
-	// constructor for a given format interprets a key's meaning or
-	// validates its type; the registry itself stays format-agnostic.
+	// their ast.SourceOpt literals into plain Go values: string, int64,
+	// float64, or bool. A format that needs no extra options (csv,
+	// jsonl) never looks here. Only the registered constructor for a
+	// given format interprets a key's meaning or validates its type;
+	// the registry itself stays format-agnostic.
 	Opts map[string]any
 }
 
@@ -40,7 +39,7 @@ type SinkOptions struct {
 
 // SourceCtor and SinkCtor are what a format registers under its name
 // (design.md §4). Adding a format never touches the lexer, parser,
-// checker, or executor — only a registry entry.
+// checker, or executor, only a registry entry.
 type SourceCtor func(SourceOptions) (Source, error)
 type SinkCtor func(SinkOptions) (Sink, error)
 

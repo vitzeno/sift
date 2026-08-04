@@ -6,9 +6,9 @@ import "github.com/vitzeno/sift/internal/value"
 // every other field, and every value, passes through untouched
 // (design-improvements.md §2). The checker has already validated every
 // Old exists and every New is collision-free, so Next just applies the
-// mapping — there's no PII bookkeeping to do here either: since the
-// value itself is never touched, whatever schema decision the checker
-// made about the @pii tag is already correct by construction.
+// mapping. There's no PII bookkeeping to do here either: the value
+// itself is never touched, so whatever the checker decided about the
+// @pii tag stays correct.
 type Rename struct {
 	in   Stream
 	from map[string]string // old -> new

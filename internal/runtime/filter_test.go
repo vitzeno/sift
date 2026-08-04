@@ -10,7 +10,7 @@ import (
 
 // TestNewFilterExprUsesEval reproduces design.md §7's Case A trace again,
 // but through NewFilterExpr (an ast.Expr evaluated by eval) instead of
-// module 2's hand-wired Go predicate — fulfilling the decision comment
+// module 2's hand-wired Go predicate, fulfilling the decision comment
 // left on Filter until eval existed.
 func TestNewFilterExprUsesEval(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{

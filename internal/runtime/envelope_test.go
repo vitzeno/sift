@@ -33,8 +33,8 @@ func TestEnvelopeRowFields(t *testing.T) {
 
 // TestEnvelopeSchemaHasNoPII confirms design-errors.md §4's core payoff:
 // every envelope field is a plain, unmasked-clean scalar, so nothing
-// about a routed failure can trip the checker's unmasked-@pii sink rule
-// — not even if the pipeline's own schema had a @pii field, since the
+// about a routed failure can trip the checker's unmasked-@pii sink rule,
+// not even if the pipeline's own schema had a @pii field, since the
 // envelope never carries pipeline fields at all.
 func TestEnvelopeSchemaHasNoPII(t *testing.T) {
 	if _, ok := envelopeSchema.FirstPII(); ok {

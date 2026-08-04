@@ -30,7 +30,7 @@ func TestCheckPassesRowsMeetingCondition(t *testing.T) {
 
 // TestCheckSetsFailOnFalseCondition confirms design-errors.md §2.3: a
 // false condition marks the row with Fail (Stage "check") and returns it
-// normally — Check itself never aborts the run; that's the driver's job.
+// normally. Check itself never aborts the run; that's the driver's job.
 func TestCheckSetsFailOnFalseCondition(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
 		{Fields: map[string]any{"email": ""}, Prov: value.Provenance{Source: "in", Ordinal: 0}},
@@ -57,8 +57,8 @@ func TestCheckSetsFailOnFalseCondition(t *testing.T) {
 }
 
 // TestCheckPassesThroughAlreadyFailedRow confirms Check doesn't
-// re-evaluate its condition against a row that already failed upstream
-// — design-errors.md §2.2's opaque-failed-row rule applies to check
+// re-evaluate its condition against a row that already failed upstream.
+// design-errors.md §2.2's opaque-failed-row rule applies to check
 // itself, not just to Filter/Map.
 func TestCheckPassesThroughAlreadyFailedRow(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{

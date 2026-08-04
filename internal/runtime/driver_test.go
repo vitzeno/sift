@@ -168,7 +168,7 @@ func TestDriverSkipOnFailedRow(t *testing.T) {
 }
 
 // TestDriverInfraFatalAbortsRegardlessOfPolicy is ERR-E: a source-level
-// Err() aborts the run even under PolicySkip — infra-fatal is not
+// Err() aborts the run even under PolicySkip. Infra-fatal isn't
 // governed by the error policy at all (design-errors.md §2.4).
 func TestDriverInfraFatalAbortsRegardlessOfPolicy(t *testing.T) {
 	infraErr := fmt.Errorf("disk read error")
@@ -241,8 +241,8 @@ func TestDriverCloseAllAggregatesErrors(t *testing.T) {
 }
 
 // TestDriverRouteWritesEnvelopeToErrSink is ERR-C at the runtime layer:
-// under PolicyRoute, a healthy row still reaches the main sink and a
-// failed row's envelope (design-errors.md §4) — not its raw fields —
+// under PolicyRoute, a healthy row still reaches the main sink, and a
+// failed row's envelope (design-errors.md §4), not its raw fields,
 // reaches errSink instead. The run completes with no error either way.
 func TestDriverRouteWritesEnvelopeToErrSink(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
@@ -292,7 +292,7 @@ func TestDriverRouteWritesEnvelopeToErrSink(t *testing.T) {
 
 // TestDriverRouteFirstMatchWins is RT-A at the runtime layer: a row
 // satisfying two branches' predicates lands in the earlier one's sink
-// only, and evaluation stops there — the later branch (and its sink)
+// only, and evaluation stops there. The later branch (and its sink)
 // never sees the row at all.
 func TestDriverRouteFirstMatchWins(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
@@ -341,7 +341,7 @@ func TestDriverRouteDiscardDropsRow(t *testing.T) {
 }
 
 // TestDriverRouteNeverEvaluatesBranchOnFailedRow is RT-E: a failed row is
-// disposed of by the error policy before route ever sees it — proven by
+// disposed of by the error policy before route ever sees it, proven by
 // giving every branch a predicate that panics if eval ever reaches it.
 func TestDriverRouteNeverEvaluatesBranchOnFailedRow(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
@@ -364,7 +364,7 @@ func TestDriverRouteNeverEvaluatesBranchOnFailedRow(t *testing.T) {
 
 // TestDriverRouteDuplicateSinkWritesUnion is RT-F at the runtime layer:
 // two branches naming the same sink both write to it, across different
-// rows — the union of everything either branch matched.
+// rows: the union of everything either branch matched.
 func TestDriverRouteDuplicateSinkWritesUnion(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
 		{Fields: map[string]any{"name": "Ada", "region": "EU"}},

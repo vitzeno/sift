@@ -46,8 +46,8 @@ func TestLimitStopsPullingUpstreamOnceSatisfied(t *testing.T) {
 }
 
 // TestLimitCountsFailedRowsPositionally is S3-B: with a failing row
-// upstream, limit(n) counts it toward n same as a healthy row — a
-// failed row occupies a position in the stream just like a healthy one
+// upstream, limit(n) counts it toward n same as a healthy row. A failed
+// row occupies a position in the stream just like a healthy one
 // (design-improvements.md §3, §9).
 func TestLimitCountsFailedRowsPositionally(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
@@ -59,13 +59,13 @@ func TestLimitCountsFailedRowsPositionally(t *testing.T) {
 	sink := &fakeSink{}
 
 	// Run under PolicySkip so the failed row (the 2nd position) is
-	// dropped by the driver rather than aborting — proving limit
-	// counted it toward its total even though it never reaches sink.
+	// dropped by the driver rather than aborting, proving limit counted
+	// it toward its total even though it never reaches sink.
 	if err := Run(lim, src, []Sink{sink}, nil, PolicySkip, nil); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	// limit(2) sees Ada (healthy) and the failure (both positions 1-2),
-	// then stops -- Tom (position 3) is never pulled. Only Ada's row
+	// then stops: Tom (position 3) is never pulled. Only Ada's row
 	// reaches the sink; the failed row is skipped.
 	if len(sink.written) != 1 || sink.written[0].Fields["name"] != "Ada" {
 		t.Errorf("sink.written = %+v, want exactly Ada's row", sink.written)

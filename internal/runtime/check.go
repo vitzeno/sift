@@ -8,7 +8,7 @@ import (
 
 // Check marks a row failed (design-errors.md §2.3) when Cond is false;
 // schema/fields pass through unchanged otherwise. It never aborts the
-// run itself — that decision belongs to the driver, which disposes of a
+// run itself; that decision belongs to the driver, which disposes of a
 // failed row per the program's error policy (design-errors.md §3).
 type Check struct {
 	in     Stream

@@ -46,7 +46,7 @@ func TestMapAppliesRecordAndKeepsProvenance(t *testing.T) {
 // §2.2's pass-through rule: map must not evaluate its record literal
 // against a failed row's (potentially suspect) fields. A record
 // expression that would panic on this row's actual Fields proves the
-// point — if map evaluated it, the test itself would panic.
+// point: if map evaluated it, the test itself would panic.
 func TestMapPassesThroughFailedRowUnevaluated(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
 		{

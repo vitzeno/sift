@@ -5,10 +5,9 @@ import "github.com/vitzeno/sift/internal/value"
 // Select keeps only the named columns, in the order named
 // (design-improvements.md §1). The checker has already validated every
 // name exists in the input schema, so Next never needs to guard against
-// a missing key — a lookup miss just means the column happens to be
-// absent on this particular row's Fields map (can't happen for a
-// healthy row, since the checker's schema and the row's actual fields
-// always agree by construction).
+// a missing key: a lookup miss just means the column happens to be
+// absent on this row's Fields map, which can't happen for a healthy row
+// since the checker's schema and the row's actual fields always agree.
 type Select struct {
 	in      Stream
 	columns []string

@@ -4,11 +4,11 @@ import "github.com/vitzeno/sift/internal/value"
 
 // Limit emits at most N rows then stops (design-improvements.md §3).
 //
-// emitted counts every row Limit itself returns, healthy or failed —
-// design-improvements.md §3's positional-over-all-rows rule falls out
-// for free here: Limit has no idea what the active error policy is (a
-// failed row might later be skipped, routed, or abort the run), so it
-// only ever tracks what it has pulled and handed upstream, uniformly.
+// emitted counts every row Limit itself returns, healthy or failed. That
+// gives design-improvements.md §3's positional-over-all-rows rule for
+// free: Limit has no idea what the active error policy is (a failed row
+// might later be skipped, routed, or abort the run), so it just tracks
+// what it has pulled and handed upstream, uniformly.
 type Limit struct {
 	in      Stream
 	n       int64
@@ -31,8 +31,8 @@ func (l *Limit) Next() (value.Row, bool) {
 	return row, true
 }
 
-// Offset discards the first N rows pulled from upstream — healthy or
-// failed, the same positional-over-all-rows rule as Limit — then passes
+// Offset discards the first N rows pulled from upstream, healthy or
+// failed (the same positional-over-all-rows rule as Limit), then passes
 // everything else through unchanged.
 type Offset struct {
 	in      Stream
