@@ -43,6 +43,64 @@ func TestEvalFieldAccess(t *testing.T) {
 	}
 }
 
+// TestEvalCoalesceResolvesAbsent is OF-E's runtime half: ?? evaluates
+// the right side only when the left side is Absent.
+func TestEvalCoalesceResolvesAbsent(t *testing.T) {
+	r := row(map[string]any{"phone": value.Absent{}})
+	expr := &ast.BinaryOp{Op: lexer.COALESCE, Left: &ast.FieldAccess{Field: "phone"}, Right: &ast.StringLit{Value: "n/a"}}
+	if got := Eval(expr, r); got != "n/a" {
+		t.Errorf("Eval(.phone ?? \"n/a\") = %#v, want \"n/a\" for an absent phone", got)
+	}
+}
+
+// TestEvalCoalescePassesThroughPresent is ??'s other half: a present
+// left value is returned as-is, and the right side is never evaluated —
+// proven by making the right side a call to an unknown function, which
+// evalCall panics on if it's ever reached.
+func TestEvalCoalescePassesThroughPresent(t *testing.T) {
+	r := row(map[string]any{"phone": "555-1234"})
+	poison := &ast.Call{Fn: "not-a-real-function", Args: []ast.Expr{&ast.StringLit{Value: "n/a"}}}
+	expr := &ast.BinaryOp{Op: lexer.COALESCE, Left: &ast.FieldAccess{Field: "phone"}, Right: poison}
+	if got := Eval(expr, r); got != "555-1234" {
+		t.Errorf("Eval(.phone ?? panic) = %#v, want \"555-1234\"", got)
+	}
+}
+
+// TestEvalBinaryOpPropagatesAbsent is OF-F's runtime half: every operator
+// other than ?? returns Absent when either operand is Absent, instead of
+// panicking on the type assertion its normal case would otherwise do.
+func TestEvalBinaryOpPropagatesAbsent(t *testing.T) {
+	absentRow := row(map[string]any{"age": value.Absent{}})
+	tests := []struct {
+		name string
+		expr ast.Expr
+	}{
+		{"+", &ast.BinaryOp{Op: lexer.PLUS, Left: &ast.FieldAccess{Field: "age"}, Right: &ast.IntLit{Value: 1}}},
+		{"==", &ast.BinaryOp{Op: lexer.EQ, Left: &ast.FieldAccess{Field: "age"}, Right: &ast.IntLit{Value: 1}}},
+		{">=", &ast.BinaryOp{Op: lexer.GE, Left: &ast.FieldAccess{Field: "age"}, Right: &ast.IntLit{Value: 1}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Eval(tt.expr, absentRow)
+			if _, absent := got.(value.Absent); !absent {
+				t.Errorf("Eval = %#v, want value.Absent", got)
+			}
+		})
+	}
+}
+
+// TestEvalCallPropagatesAbsent is OF-F's runtime half for function calls:
+// upper(.phone) on an absent phone yields Absent, not a type-assertion
+// panic on the missing string.
+func TestEvalCallPropagatesAbsent(t *testing.T) {
+	r := row(map[string]any{"phone": value.Absent{}})
+	call := &ast.Call{Fn: "upper", Args: []ast.Expr{&ast.FieldAccess{Field: "phone"}}}
+	got := Eval(call, r)
+	if _, absent := got.(value.Absent); !absent {
+		t.Errorf("Eval(upper(.phone)) = %#v, want value.Absent", got)
+	}
+}
+
 func TestEvalBinaryOpArithmeticAndComparison(t *testing.T) {
 	tests := []struct {
 		name string

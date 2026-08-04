@@ -88,6 +88,137 @@ pipeline main {
 	}
 }
 
+// TestCheckOptionalRejectsUndischargedSink is OF-E's failure mode: an
+// Optional field reaching the sink unresolved is a compile error mirroring
+// the PII sink rule.
+func TestCheckOptionalRejectsUndischargedSink(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, phone: string? })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	err := checkErr(t, src)
+	want := `field "phone" is optional and reaches sink "out" undischarged; resolve with ??`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
+// TestCheckOptionalAllowsDischargedSink is OF-E's success mode: ??
+// resolves the field to a plain string before the sink.
+func TestCheckOptionalAllowsDischargedSink(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, phone: string? })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> map({ ...row, phone: .phone ?? "n/a" }) |> out
+}`
+	cp := mustCheck(t, src)
+	wantSchema := "{ name: string, phone: string }"
+	if got := cp.SinkSchema.String(); got != wantSchema {
+		t.Errorf("SinkSchema = %s, want %s", got, wantSchema)
+	}
+}
+
+// TestCheckOptionalPropagatesThroughFunctionCall is OF-F: a function
+// called on an Optional argument still yields an Optional result and
+// still can't reach a sink -- optionality propagates through a call the
+// same way @pii does, with no per-function declassifier.
+func TestCheckOptionalPropagatesThroughFunctionCall(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "phone", Type: value.Type{Kind: value.String, Optional: true}},
+	}}
+	expr, err := parser.ParseExpr("upper(.phone)")
+	if err != nil {
+		t.Fatalf("ParseExpr error: %v", err)
+	}
+	c := &checker{}
+	got, err := c.checkExpr(expr, schema)
+	if err != nil {
+		t.Fatalf("checkExpr error: %v", err)
+	}
+	if !got.Optional {
+		t.Errorf("upper(.phone) = %s, want it to still be Optional", got)
+	}
+}
+
+// TestCheckCoalesceDischargesOptional is OF-E/OF-F's type rule: ?? always
+// yields a non-Optional result, whether or not the left side actually was
+// Optional.
+func TestCheckCoalesceDischargesOptional(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "phone", Type: value.Type{Kind: value.String, Optional: true}},
+	}}
+	expr, err := parser.ParseExpr(`upper(.phone ?? "n/a")`)
+	if err != nil {
+		t.Fatalf("ParseExpr error: %v", err)
+	}
+	c := &checker{}
+	got, err := c.checkExpr(expr, schema)
+	if err != nil {
+		t.Fatalf("checkExpr error: %v", err)
+	}
+	if got.Optional || got.Kind != value.String {
+		t.Errorf("upper(.phone ?? \"n/a\") = %s, want plain string", got)
+	}
+}
+
+// TestCheckCoalesceTypeErrors covers ?? 's own type rule (checkCoalesce):
+// both sides must share a Kind, and the default (right side) must not
+// itself be Optional.
+func TestCheckCoalesceTypeErrors(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "phone", Type: value.Type{Kind: value.String, Optional: true}},
+		{Name: "backup", Type: value.Type{Kind: value.String, Optional: true}},
+	}}
+	tests := []struct {
+		src     string
+		wantSub string
+	}{
+		{".phone ?? 0", "?? requires both sides to share a type, got string? and int"},
+		{".phone ?? .backup", "?? default must not itself be optional, got string?"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			err := checkExprErr(t, tt.src, schema)
+			if err == nil || !strings.Contains(err.Error(), tt.wantSub) {
+				t.Errorf("error = %v, want it to contain %q", err, tt.wantSub)
+			}
+		})
+	}
+}
+
+// TestCheckFilterRejectsOptionalBoolPredicate and its check-stage
+// sibling below are design/optional-fields.md §3's third discharge
+// rule: an Optional bool can't be used as a predicate directly, even
+// though its Kind is already Bool.
+func TestCheckFilterRejectsOptionalBoolPredicate(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, active: bool? })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> filter(.active) |> drop(active) |> out
+}`
+	err := checkErr(t, src)
+	if !strings.Contains(err.Error(), "filter predicate must be bool, got bool?") {
+		t.Errorf("error = %v, want a bool? predicate error", err)
+	}
+}
+
+func TestCheckCheckStageRejectsOptionalBoolPredicate(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, active: bool? })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> check(.active, "missing active") |> drop(active) |> out
+}`
+	err := checkErr(t, src)
+	if !strings.Contains(err.Error(), "check condition must be bool, got bool?") {
+		t.Errorf("error = %v, want a bool? condition error", err)
+	}
+}
+
 // TestCheckMultiSinkBroadcast is design-multisink.md MS-A/§5: a terminal
 // list resolves to every named sink, in declared order, all sharing the
 // one computed schema.
