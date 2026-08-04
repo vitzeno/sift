@@ -249,6 +249,39 @@ func TestXLSXSourceMissingColumn(t *testing.T) {
 	}
 }
 
+// TestXLSXSourceColumnAliasWithOffsetHeaderRow is design/column-aliases.md's
+// acceptance case B: a spaced header resolves via an alias, proving
+// aliasing composes with an offset header_row and is format-agnostic
+// (it resolves identically to the csv case).
+func TestXLSXSourceColumnAliasWithOffsetHeaderRow(t *testing.T) {
+	path := writeXLSXFixture(t, "Sheet1", [][]string{
+		{"Q1 Export"},
+		{},
+		{"Transaction ID", "Date"},
+		{"1001", "2026-01-05"},
+	})
+	src, err := NewXLSXSource(runtime.SourceOptions{
+		Name: "in", Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "txn_id", Type: value.Type{Kind: value.Int}},
+			{Name: "txn_date", Type: value.Type{Kind: value.String}},
+		}},
+		Columns: map[string]string{"txn_id": "Transaction ID", "txn_date": "Date"},
+		Opts:    map[string]any{"header_row": int64(3)},
+	})
+	if err != nil {
+		t.Fatalf("NewXLSXSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	if row.Fields["txn_id"] != 1001 || row.Fields["txn_date"] != "2026-01-05" {
+		t.Errorf("Fields = %#v, want txn_id=1001 txn_date=2026-01-05", row.Fields)
+	}
+}
+
 // TestXLSXSourceOptionalAbsentFromEmptyCell is OF-A's xlsx half: a blank
 // cell against an Optional field reads as value.Absent, not a Failure.
 func TestXLSXSourceOptionalAbsentFromEmptyCell(t *testing.T) {

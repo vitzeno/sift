@@ -102,29 +102,31 @@ func NewXLSXSource(opts runtime.SourceOptions) (runtime.Source, error) {
 		return nil, fmt.Errorf("source %q: reading header row %d of sheet %q: %w", opts.Name, headerRow, sheet, err)
 	}
 
-	col := make(map[string]int, len(header))
-	for i, h := range header {
-		// Empty header cells are ignored along with their columns:
-		// they're unnameable, so nothing can reference them
-		// (design/xlsx.md §2.1). This also quietly handles a merged
-		// header cell: excelize returns its value only in the
-		// top-left cell of the range, leaving the rest empty.
+	// Empty header cells are ignored along with their columns: they're
+	// unnameable, so nothing can reference them (design/xlsx.md §2.1).
+	// This also quietly handles a merged header cell: excelize returns
+	// its value only in the top-left cell of the range, leaving the
+	// rest empty. Duplicate-header detection is a structural check on
+	// the file itself, independent of column aliasing, so it stays its
+	// own pass rather than folding into resolveColumns.
+	seenHeader := make(map[string]bool, len(header))
+	for _, h := range header {
 		if h == "" {
 			continue
 		}
-		if _, dup := col[h]; dup {
+		if seenHeader[h] {
 			f.Close()
 			return nil, fmt.Errorf("source %q: duplicate column %q in header row %d of sheet %q",
 				opts.Name, h, headerRow, sheet)
 		}
-		col[h] = i
+		seenHeader[h] = true
 	}
-	for _, field := range opts.Schema.Fields {
-		if _, ok := col[field.Name]; !ok && !field.Type.Optional {
-			f.Close()
-			return nil, fmt.Errorf("source %q: required column %q not found in header row %d of sheet %q\n       header columns: %s",
-				opts.Name, field.Name, headerRow, sheet, strings.Join(header, ", "))
-		}
+
+	col, missing, ok := resolveColumns(opts.Schema, header, opts.Columns)
+	if !ok {
+		f.Close()
+		return nil, fmt.Errorf("source %q: required column %q not found in header row %d of sheet %q\n       header columns: %s",
+			opts.Name, missing, headerRow, sheet, strings.Join(header, ", "))
 	}
 
 	return &xlsxSource{
