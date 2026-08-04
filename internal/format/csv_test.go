@@ -231,6 +231,95 @@ func TestCSVSourceRequiredColumnMissingIsStructuralError(t *testing.T) {
 	}
 }
 
+// TestCSVSourceColumnAlias is design/column-aliases.md's A-1: a header
+// with a space (never a valid identifier) is named via the columns
+// kwarg instead of the field's own identifier text.
+func TestCSVSourceColumnAlias(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "transactions.csv")
+	// amount has no columns entry: it resolves by the bare-identifier
+	// fallback, which is exact and case-sensitive, so the header must
+	// already read "amount", not "Amount" (design/column-aliases.md §8).
+	writeFile(t, path, "Transaction ID,Date,amount\n1001,2026-01-05,42.50\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "txn_id", Type: value.Type{Kind: value.Int}},
+			{Name: "txn_date", Type: value.Type{Kind: value.String}},
+			{Name: "amount", Type: value.Type{Kind: value.Double}},
+		}},
+		Columns: map[string]string{"txn_id": "Transaction ID", "txn_date": "Date"},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	if row.Fields["txn_id"] != 1001 || row.Fields["txn_date"] != "2026-01-05" || row.Fields["amount"] != 42.5 {
+		t.Errorf("Fields = %#v, want txn_id=1001 txn_date=2026-01-05 amount=42.5", row.Fields)
+	}
+}
+
+// TestCSVSourceColumnAliasRequiredMissingIsStructuralError is A-3: no
+// alias and no matching identifier for a required field is still a
+// construction-time error, naming the field and the real header.
+func TestCSVSourceColumnAliasRequiredMissingIsStructuralError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "transactions.csv")
+	writeFile(t, path, "Transaction ID,Amount\n1001,42.50\n")
+
+	_, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "txn_id", Type: value.Type{Kind: value.Int}},
+			{Name: "txn_date", Type: value.Type{Kind: value.String}},
+		}},
+		Columns: map[string]string{"txn_id": "Transaction ID", "txn_date": "Date"},
+	})
+	if err == nil {
+		t.Fatal("expected an error: no \"Date\" column exists and txn_date is required")
+	}
+	if got := err.Error(); !strings.Contains(got, `required column "txn_date" not found`) || !strings.Contains(got, "Transaction ID, Amount") {
+		t.Errorf("error = %q, want it to name txn_date and the real header", got)
+	}
+}
+
+// TestCSVSourceColumnAliasOptionalMissingIsAbsent is design/column-aliases.md's
+// acceptance case D: an Optional field with an alias whose header isn't
+// in the file at all resolves to absent, not a construction error.
+func TestCSVSourceColumnAliasOptionalMissingIsAbsent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "transactions.csv")
+	writeFile(t, path, "Transaction ID,Amount\n1001,42.50\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "txn_id", Type: value.Type{Kind: value.Int}},
+			{Name: "txn_date", Type: value.Type{Kind: value.String, Optional: true}},
+		}},
+		Columns: map[string]string{"txn_id": "Transaction ID", "txn_date": "Date"},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v, want no error since txn_date is Optional", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	if _, absent := row.Fields["txn_date"].(value.Absent); !absent {
+		t.Errorf("Fields[txn_date] = %#v, want value.Absent", row.Fields["txn_date"])
+	}
+}
+
 // TestCSVSourceOptionalUnparseableIsRowFailure is OF-D: optionality
 // excuses absence, never malformed presence. A present-but-garbage cell
 // in an optional numeric field is still a row Failure.

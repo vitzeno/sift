@@ -40,12 +40,13 @@ type csvSource struct {
 
 // NewCSVSource is the SourceCtor registered under "csv". It opens the file,
 // reads the header row, and checks every required schema field has a
-// matching column. A missing required column is a construction-time
-// error, not a panic, since it's a real misconfiguration a caller can hit
-// legitimately (a typo'd schema, a header-less export, etc). An Optional
-// field's column may be absent from the header entirely: every row simply
-// reads it as Absent (design/optional-fields.md §2.1); only a required
-// field's absence is structural.
+// matching column, by name or by the columns kwarg's alias
+// (design/column-aliases.md §3). A missing required column is a
+// construction-time error, not a panic, since it's a real misconfiguration
+// a caller can hit legitimately (a typo'd schema, a header-less export,
+// etc). An Optional field's column may be absent from the header entirely:
+// every row simply reads it as Absent (design/optional-fields.md §2.1);
+// only a required field's absence is structural.
 func NewCSVSource(opts runtime.SourceOptions) (runtime.Source, error) {
 	f, err := os.Open(opts.Path)
 	if err != nil {
@@ -59,15 +60,10 @@ func NewCSVSource(opts runtime.SourceOptions) (runtime.Source, error) {
 		return nil, fmt.Errorf("csv source %q: reading header: %w", opts.Name, err)
 	}
 
-	col := make(map[string]int, len(header))
-	for i, h := range header {
-		col[h] = i
-	}
-	for _, field := range opts.Schema.Fields {
-		if _, ok := col[field.Name]; !ok && !field.Type.Optional {
-			f.Close()
-			return nil, fmt.Errorf("csv source %q: required column %q not found in header %s", opts.Name, field.Name, strings.Join(header, ", "))
-		}
+	col, missing, ok := resolveColumns(opts.Schema, header, opts.Columns)
+	if !ok {
+		f.Close()
+		return nil, fmt.Errorf("csv source %q: required column %q not found in header %s", opts.Name, missing, strings.Join(header, ", "))
 	}
 
 	return &csvSource{
