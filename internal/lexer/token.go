@@ -44,6 +44,7 @@ const (
 	AT       // @
 	QUESTION // ?
 	COALESCE // ??
+	ARROW    // =>
 
 	PLUS  // +
 	MINUS // -
@@ -91,6 +92,7 @@ var kindNames = map[Kind]string{
 	AT:       "AT",
 	QUESTION: "QUESTION",
 	COALESCE: "COALESCE",
+	ARROW:    "ARROW",
 	PLUS:     "PLUS",
 	MINUS:    "MINUS",
 	STAR:     "STAR",

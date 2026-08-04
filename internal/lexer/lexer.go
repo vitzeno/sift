@@ -110,6 +110,10 @@ func (l *Lexer) Next() Token {
 			l.advance()
 			return Token{Kind: EQ, Pos: start}
 		}
+		if l.peek() == '>' {
+			l.advance()
+			return Token{Kind: ARROW, Pos: start}
+		}
 		return Token{Kind: ASSIGN, Pos: start}
 	case '|':
 		l.advance()

@@ -116,6 +116,20 @@ func TestCoalesceOperator(t *testing.T) {
 	})
 }
 
+// TestRouteArrow covers design/routing.md §7's one new token: "=>" lexes
+// as one ARROW, not ASSIGN followed by GT, and a lone "=" (assignment,
+// e.g. a named segment's `=` form) still lexes as ASSIGN.
+func TestRouteArrow(t *testing.T) {
+	assertTokens(t, `.region == "EU" => eu_sink`, []tok{
+		{DOT, ""}, {IDENT, "region"}, {EQ, ""}, {STRING, "EU"}, {ARROW, ""}, {IDENT, "eu_sink"},
+		{EOF, ""},
+	})
+	assertTokens(t, "pipeline clean =", []tok{
+		{PIPELINE, ""}, {IDENT, "clean"}, {ASSIGN, ""},
+		{EOF, ""},
+	})
+}
+
 // TestRecordSpreadEllipsis checks "..." lexes as one ELLIPSIS token, not
 // three DOTs, and that a lone "." next to it still lexes as DOT.
 func TestRecordSpreadEllipsis(t *testing.T) {
