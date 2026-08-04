@@ -41,9 +41,8 @@ func assertTokens(t *testing.T, src string, want []tok) {
 	}
 }
 
-// TestAdultsFilterTokens is design.md §7 Case A's adults.sift, tokenized
-// end to end. This is the token table CLAUDE.md's Definition of Done
-// asks for.
+// TestAdultsFilterTokens tokenizes design.md §7 Case A's adults.sift end
+// to end. This is the token table CLAUDE.md's Definition of Done asks for.
 func TestAdultsFilterTokens(t *testing.T) {
 	src := `source in = csv("people.csv", schema: { name: string, age: int })
 sink out = jsonl("adults.jsonl")
@@ -89,7 +88,7 @@ map({ email: mask(.email) })`
 }
 
 // TestOptionalSchemaField covers design/optional-fields.md's `T?` schema
-// syntax, alone and combined with @pii (§4: the two tags coexist).
+// syntax, alone and combined with @pii (§4: the two tags can coexist).
 func TestOptionalSchemaField(t *testing.T) {
 	src := `phone: string?
 email: string? @pii`

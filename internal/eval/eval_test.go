@@ -54,8 +54,8 @@ func TestEvalCoalesceResolvesAbsent(t *testing.T) {
 }
 
 // TestEvalCoalescePassesThroughPresent is ??'s other half: a present
-// left value is returned as-is, and the right side is never evaluated —
-// proven by making the right side a call to an unknown function, which
+// left value is returned as-is, and the right side is never evaluated.
+// Proven by making the right side a call to an unknown function, which
 // evalCall panics on if it's ever reached.
 func TestEvalCoalescePassesThroughPresent(t *testing.T) {
 	r := row(map[string]any{"phone": "555-1234"})

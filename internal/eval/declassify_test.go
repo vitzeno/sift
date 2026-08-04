@@ -9,8 +9,8 @@ import (
 // TestDeclassifyMatchesExpressionPositionCall confirms the exported
 // Declassify function backs both namespaces identically
 // (design-improvements.md §6): calling it directly must produce the
-// exact same result as evaluating the equivalent expression-position
-// Call node, since runtime's Declassify stage (§4) calls this function
+// same result as evaluating the equivalent expression-position Call
+// node, since runtime's Declassify stage (§4) calls this function
 // directly rather than going through Eval/ast.Call at all.
 func TestDeclassifyMatchesExpressionPositionCall(t *testing.T) {
 	for _, fn := range []string{"mask", "hash", "redact"} {

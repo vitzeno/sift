@@ -82,9 +82,8 @@ func TestSchemaFirstPII(t *testing.T) {
 }
 
 // TestRowFailNilByDefault confirms a healthy Row's zero value carries no
-// Failure — design-errors.md §2.1 designates nil as "healthy" and every
-// existing Row literal in the codebase (predating this field) must keep
-// meaning exactly that.
+// Failure. design-errors.md §2.1 defines nil as "healthy", and every Row
+// literal already in the codebase must keep meaning exactly that.
 func TestRowFailNilByDefault(t *testing.T) {
 	row := Row{Fields: map[string]any{"name": "Ada"}}
 	if row.Fail != nil {
@@ -104,7 +103,7 @@ func TestRowFailCarriesReasonAndStage(t *testing.T) {
 	if row.Fail.Stage != "check" {
 		t.Errorf("Fail.Stage = %q, want %q", row.Fail.Stage, "check")
 	}
-	// A Failure never duplicates provenance — it rides on the Row that
+	// A Failure never duplicates provenance: it rides on the Row that
 	// already carries it (design-errors.md §2.1).
 	if row.Prov.Ordinal != 3 {
 		t.Errorf("Prov.Ordinal = %d, want 3", row.Prov.Ordinal)
@@ -113,7 +112,7 @@ func TestRowFailCarriesReasonAndStage(t *testing.T) {
 
 // TestAbsentMarshalsAsJSONNull checks Absent's sink-format representation
 // (design/optional-fields.md §6: no null at the language level, but a
-// sink still needs some external rendering of "no value").
+// sink still needs some way to render "no value").
 func TestAbsentMarshalsAsJSONNull(t *testing.T) {
 	got, err := json.Marshal(Absent{})
 	if err != nil {

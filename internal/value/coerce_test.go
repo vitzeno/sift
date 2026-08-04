@@ -51,8 +51,8 @@ func TestCoerceFailure(t *testing.T) {
 			if fail.Reason != tt.wantSub {
 				t.Errorf("Failure.Reason = %q, want %q", fail.Reason, tt.wantSub)
 			}
-			// Coerce never knows which format/column it's being called
-			// for, so it must leave Stage for the caller to fill in.
+			// Coerce never knows which format or column it's called for,
+			// so it leaves Stage for the caller to fill in.
 			if fail.Stage != "" {
 				t.Errorf("Failure.Stage = %q, want empty (caller-assigned)", fail.Stage)
 			}
@@ -60,9 +60,9 @@ func TestCoerceFailure(t *testing.T) {
 	}
 }
 
-// TestCoerceIgnoresPII confirms Coerce's behavior depends only on Kind —
-// a @pii string coerces exactly like a plain one; the tag has nothing to
-// do with parsing.
+// TestCoerceIgnoresPII confirms Coerce's behavior depends only on Kind: a
+// @pii string coerces exactly like a plain one, since the tag has
+// nothing to do with parsing.
 func TestCoerceIgnoresPII(t *testing.T) {
 	got, fail := Coerce(Type{Kind: String, PII: true}, "secret")
 	if fail != nil {
@@ -76,7 +76,7 @@ func TestCoerceIgnoresPII(t *testing.T) {
 // TestCoerceOptionalAbsent is OF-A/OF-C's unit-level half
 // (design/optional-fields.md §2): a blank or whitespace-only cell against
 // an Optional Type yields Absent, whether the blank came from an empty
-// cell or (per the caller's convention) a column missing entirely.
+// cell or, by the caller's convention, a column missing entirely.
 func TestCoerceOptionalAbsent(t *testing.T) {
 	tests := []struct {
 		name string
@@ -101,7 +101,7 @@ func TestCoerceOptionalAbsent(t *testing.T) {
 }
 
 // TestCoerceOptionalPresent confirms an optional field with a real value
-// coerces exactly like a required one — optionality only changes the
+// coerces exactly like a required one: optionality only changes the
 // blank-cell case, not parsing.
 func TestCoerceOptionalPresent(t *testing.T) {
 	got, fail := Coerce(Type{Kind: Int, Optional: true}, "42")
@@ -114,7 +114,7 @@ func TestCoerceOptionalPresent(t *testing.T) {
 }
 
 // TestCoerceOptionalUnparseableIsFailure is OF-D (design/optional-fields.md
-// §2 notes): optionality excuses absence, never malformed presence — a
+// §2 notes): optionality excuses absence, never malformed presence. A
 // present-but-garbage cell in an optional field is still a row Failure.
 func TestCoerceOptionalUnparseableIsFailure(t *testing.T) {
 	got, fail := Coerce(Type{Kind: Int, Optional: true}, "not-a-number")

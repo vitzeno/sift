@@ -6,27 +6,19 @@ import (
 	"strings"
 )
 
-// Coerce converts a source cell's raw string into t's declared scalar
-// kind, returning a Failure instead of an error when it doesn't parse —
-// this is the shared helper design-errors.md's phase E3 promises: the
-// one place every Source implementation converts a raw cell to a typed
-// value, so a bad cell becomes a row Failure (design-errors.md §2.3)
-// instead of a panic. csvSource calls it today; the xlsx/parquet
-// connectors reuse it unchanged.
+// Coerce converts a raw cell string into t's scalar kind, or returns a
+// Failure if it doesn't parse (design-errors.md §2.3). Every source
+// (csv, xlsx, ...) shares this one function, so a bad cell is never a
+// panic.
 //
-// Coerce never sets Failure.Stage: it has no notion of which format or
-// column it's being called for. The caller fills that in — csvSource
-// uses "csv:<field>" — since only the caller knows both.
+// Coerce never sets Failure.Stage. The caller does that, since only it
+// knows which format and column it's called for.
 //
-// When t is Optional, a blank raw cell yields Absent rather than running
-// the parse below (design/optional-fields.md §2's trichotomy). A missing
-// column is indistinguishable from a blank cell here by design: the
-// caller passes raw = "" for a column that isn't in the header at all,
-// which lands in the same branch — a required column's absence is instead
-// a structural error the caller catches once, before any row reaches
-// Coerce (design/optional-fields.md §2.1). A present-but-unparseable cell
-// still fails below even when t is Optional: optionality excuses absence,
-// never malformed presence.
+// An Optional field with a blank cell returns Absent instead of parsing
+// (design/optional-fields.md §2). A missing column looks the same as a
+// blank cell here: the caller passes raw = "" for both, and a missing
+// required column is caught earlier as its own error. A cell that's
+// present but garbage still fails, even when the field is Optional.
 func Coerce(t Type, raw string) (any, *Failure) {
 	if t.Optional && strings.TrimSpace(raw) == "" {
 		return Absent{}, nil

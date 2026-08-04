@@ -131,10 +131,9 @@ var opSymbols = map[Kind]string{
 }
 
 // Symbol renders a binary operator's surface syntax ("+", ">=", ...)
-// rather than its debug name ("PLUS", "GE") — for output meant to read
-// like the .sift source a user actually typed: checker diagnostics and
-// --emit-ast both need this, so it lives here rather than being
-// duplicated in each.
+// rather than its debug name ("PLUS", "GE"), for output meant to read
+// like the .sift source a user typed. Checker diagnostics and --emit-ast
+// both need this, so it lives here instead of being duplicated in each.
 func (k Kind) Symbol() string {
 	if sym, ok := opSymbols[k]; ok {
 		return sym
@@ -144,10 +143,10 @@ func (k Kind) Symbol() string {
 
 // keywords is the complete, closed set of reserved words in v0. Stage
 // names (filter/map/check), format names (csv/jsonl), and function names
-// (mask/hash/upper/...) are deliberately absent — they're ordinary
+// (mask/hash/upper/...) are absent on purpose: they're ordinary
 // identifiers that the parser/checker resolve, not lexer-level keywords.
-// This keeps the same "resolved late, not special-cased early" shape
-// that the format registry uses (CLAUDE.md non-negotiable #4).
+// This matches the "resolved late, not special-cased early" shape the
+// format registry uses (CLAUDE.md non-negotiable #4).
 var keywords = map[string]Kind{
 	"source":   SOURCE,
 	"sink":     SINK,
@@ -161,9 +160,9 @@ var keywords = map[string]Kind{
 	"false":    FALSE,
 }
 
-// Pos is a source position. It lives here, in the lexer, because that's
-// where positions are first produced; the parser and checker (modules
-// 5-6) reuse this type directly rather than each defining their own.
+// Pos is a source position. It lives here, in the lexer, since that's
+// where positions are first produced. The parser and checker (modules
+// 5-6) reuse this type directly instead of each defining their own.
 type Pos struct {
 	Line int
 	Col  int

@@ -5,8 +5,8 @@ package value
 import "strings"
 
 // Kind is a scalar type. v0 only needs the four primitives design.md's
-// expression grammar can produce (string/int/double literals, bool from
-// comparisons and && / ||).
+// expression grammar produces: string/int/double literals, and bool from
+// comparisons and && / ||.
 type Kind int
 
 const (
@@ -31,11 +31,10 @@ func (k Kind) String() string {
 	}
 }
 
-// Type is a scalar kind plus its two orthogonal tags: @pii and optionality
-// (design/optional-fields.md §4 — both propagate, both must be discharged
-// independently before a sink). `mask(x)` returns the same Kind with PII
-// cleared; `??` returns the same Kind with Optional cleared; everything
-// else preserves both.
+// Type is a scalar kind plus two independent tags, @pii and optionality
+// (design/optional-fields.md §4): both propagate and both must be cleared
+// separately before a sink. `mask(x)` clears PII; `??` clears Optional;
+// everything else preserves both.
 type Type struct {
 	Kind     Kind
 	Optional bool
@@ -53,15 +52,15 @@ func (t Type) String() string {
 	return s
 }
 
-// Absent is the runtime value of a declared-optional field that had no
-// value (design/optional-fields.md §1: absence is a well-typed value, not
-// a failure and not a null). Coerce returns it for a missing column or an
-// empty cell against an Optional Type; it is never confused with Go's nil.
+// Absent is the runtime value of a declared-optional field with no value
+// (design/optional-fields.md §1: absence is a well-typed value, not a
+// failure and not a null). Coerce returns it for a missing column or an
+// empty cell against an Optional Type. It is never Go's nil.
 type Absent struct{}
 
-// MarshalJSON renders Absent as JSON null — a sink-format detail, not a
-// language-level null (design/optional-fields.md §6 forbids null only at
-// the language level).
+// MarshalJSON renders Absent as JSON null. That's a sink-format detail,
+// not a language-level null (design/optional-fields.md §6 forbids null
+// only at the language level).
 func (Absent) MarshalJSON() ([]byte, error) {
 	return []byte("null"), nil
 }
@@ -72,9 +71,9 @@ type Field struct {
 	Type Type
 }
 
-// Schema is the record type of a stream: an ordered list of fields.
-// Order matters — it's what lets a sink write columns in a stable order
-// even though Row.Fields is an unordered map (see jsonlSink).
+// Schema is the record type of a stream: an ordered list of fields. Order
+// matters: it lets a sink write columns in a stable order even though
+// Row.Fields is an unordered map (see jsonlSink).
 type Schema struct {
 	Fields []Field
 }
@@ -91,9 +90,8 @@ func (s Schema) Lookup(name string) (Field, bool) {
 
 // FirstPII returns the first field still tagged @pii, in declared order,
 // and whether one was found. The checker calls this once per sink to
-// enforce design.md §3's rule 3 ("sinks reject unmasked PII") — checking
-// in declared order keeps which field gets named in the error message
-// deterministic.
+// enforce design.md §3's rule 3, "sinks reject unmasked PII". Checking in
+// declared order keeps the field named in the error message deterministic.
 func (s Schema) FirstPII() (Field, bool) {
 	for _, f := range s.Fields {
 		if f.Type.PII {
@@ -104,10 +102,10 @@ func (s Schema) FirstPII() (Field, bool) {
 }
 
 // FirstOptional returns the first field still Optional, in declared
-// order, and whether one was found — the discharge-rule mirror of
-// FirstPII (design/optional-fields.md §3: "reaching a sink... mirrors the
-// PII sink rule"). The checker calls this once per sink to reject a
-// still-optional field the same way it rejects unmasked PII.
+// order, and whether one was found. It mirrors FirstPII's rule
+// (design/optional-fields.md §3: "reaching a sink... mirrors the PII sink
+// rule"): the checker calls this once per sink to reject a still-optional
+// field the same way it rejects unmasked PII.
 func (s Schema) FirstOptional() (Field, bool) {
 	for _, f := range s.Fields {
 		if f.Type.Optional {
@@ -118,7 +116,7 @@ func (s Schema) FirstOptional() (Field, bool) {
 }
 
 // String renders the schema the way design.md §3 writes it:
-// { name: string, age: int }. --emit-schema (module 8) will just call this.
+// { name: string, age: int }. --emit-schema (module 8) just calls this.
 func (s Schema) String() string {
 	var b strings.Builder
 	b.WriteString("{ ")
@@ -135,30 +133,31 @@ func (s Schema) String() string {
 }
 
 // Provenance records where a row came from: the declared source name, its
-// ordinal position in the stream (0-based), and a format-specific offset
-// (for CSV, the 1-based line number of the record).
+// 0-based ordinal position in the stream, and a format-specific offset
+// (for CSV, the record's 1-based line number).
 type Provenance struct {
 	Source  string
 	Ordinal int
 	Offset  int
 }
 
-// Failure marks a Row that failed somewhere in the pipeline — a check
-// condition that was false, or (from design-errors.md's phase E3) a
-// source cell that wouldn't coerce to its declared type. It never
-// duplicates Provenance: the Row it rides on already carries source,
-// ordinal, and offset (design-errors.md §2.1).
+// Failure marks a Row that failed somewhere in the pipeline: a check
+// condition that was false, or (design-errors.md's phase E3) a source
+// cell that wouldn't coerce to its declared type. It never duplicates
+// Provenance: the Row it rides on already carries source, ordinal, and
+// offset (design-errors.md §2.1).
 type Failure struct {
 	Reason string // human-facing, e.g. "missing email"
 	Stage  string // originating stage, e.g. "check", "csv:age"
 }
 
 // Row is one record flowing through the pipeline: named field values plus
-// provenance. Fields is a map (not an ordered struct) because a stage like
-// map can add or drop columns freely — schema order lives on Schema, not Row.
+// provenance. Fields is a map, not an ordered struct, because a stage
+// like map can add or drop columns freely. Schema order lives on Schema,
+// not Row.
 //
 // Fail is nil for a healthy row. Once set, every stage downstream must
-// treat the row as opaque and pass it through untouched — Fields may be
+// treat the row as opaque and pass it through untouched: Fields may be
 // incomplete or suspect, so no stage may evaluate an expression against
 // it (design-errors.md §2.2). Only the driver, at the end of the chain,
 // disposes of a failed row per the program's error policy.

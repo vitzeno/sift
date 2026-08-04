@@ -5,11 +5,11 @@ import (
 	"strings"
 )
 
-// Lexer scans Sift source text into Tokens on demand. It operates on a
+// Lexer scans Sift source text into Tokens on demand. It works on a
 // []rune of the whole input rather than bytes: v0 source files are small
-// ETL scripts, so paying for the upfront conversion buys simple,
-// off-by-one-free indexing (each element is one character) instead of
-// juggling UTF-8 byte widths while scanning.
+// ETL scripts, so the upfront conversion is cheap and buys simple
+// indexing (each element is one character) instead of juggling UTF-8
+// byte widths while scanning.
 type Lexer struct {
 	src []rune
 	pos int // index of the next unread rune
@@ -217,14 +217,14 @@ func (l *Lexer) scanIdent(start Pos) Token {
 }
 
 // scanNumber scans an INT, or a DOUBLE if a '.' is followed by at least
-// one digit. A '.' not followed by a digit is left unconsumed — v0 has
-// no fields or methods on numbers, so it can only be a lexer error at the
+// one digit. A '.' not followed by a digit is left unconsumed: v0 has no
+// fields or methods on numbers, so it can only be a lexer error at the
 // next call, and leaving it alone keeps this function's job to just
 // "read a number."
 //
-// decision: no leading-dot doubles (".5") and no exponents ("1e9") — v0's
-// literal grammar doesn't call for them, and adding them now would be
-// unused surface area.
+// decision: no leading-dot doubles (".5") and no exponents ("1e9"). v0's
+// literal grammar doesn't need them, and adding them now would be unused
+// surface area.
 func (l *Lexer) scanNumber(start Pos) Token {
 	var b strings.Builder
 	for !l.atEOF() && isDigit(l.peek()) {
@@ -242,7 +242,7 @@ func (l *Lexer) scanNumber(start Pos) Token {
 
 // scanString scans a double-quoted string literal, unescaping as it
 // goes. Supported escapes: \" \\ \n \t \r. An unterminated literal or an
-// unknown escape produces ILLEGAL rather than panicking — these are real
+// unknown escape produces ILLEGAL rather than panicking: these are real
 // user typos in a .sift file, not internal invariant violations
 // (CLAUDE.md: "no bare panic on user-facing error paths").
 func (l *Lexer) scanString(start Pos) Token {
