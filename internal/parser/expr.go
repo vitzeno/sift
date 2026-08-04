@@ -7,26 +7,36 @@ import (
 	"github.com/vitzeno/sift/internal/lexer"
 )
 
-// Precedence levels for design.md §2's binary operators, low to high.
-// All are left-associative and none share design.md's grammar with a
-// unary form, so there's no unary tier here at all.
+// Precedence levels for design.md §2's binary operators, low to high,
+// plus design/optional-fields.md §3's `??` discharge operator between
+// comparisons and arithmetic: tighter than comparisons/&&/||, so
+// `.age ?? 0 >= 18` reads as `(.age ?? 0) >= 18` -- the default resolves
+// before the comparison inspects it, not after. Looser than + - * /, so
+// `.amount ?? 0 + 5` reads as `.amount ?? (0 + 5)` -- the whole
+// arithmetic expression to its right is the default, matching a
+// mask/hash-style single-argument call's "one resolved value" shape. All
+// are left-associative and none share design.md's grammar with a unary
+// form, so there's no unary tier here at all.
 //
 // decision: no unary operators in v0 (no "-x", no "!x") -- design.md §2
 // lists only binary + - * /, comparisons, and && / ||. A negative
 // literal or a boolean negation would need one, but neither acceptance
 // case calls for it, so it's left out rather than guessed at.
 const (
-	lowest  = 0
-	orPrec  = 1
-	andPrec = 2
-	eqPrec  = 3
-	cmpPrec = 4
-	addPrec = 5
-	mulPrec = 6
+	lowest       = 0
+	orPrec       = 1
+	andPrec      = 2
+	eqPrec       = 3
+	cmpPrec      = 4
+	coalescePrec = 5
+	addPrec      = 6
+	mulPrec      = 7
 )
 
 func precedenceOf(k lexer.Kind) int {
 	switch k {
+	case lexer.COALESCE:
+		return coalescePrec
 	case lexer.OR:
 		return orPrec
 	case lexer.AND:

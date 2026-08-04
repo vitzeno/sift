@@ -173,6 +173,10 @@ func (l *Lexer) Next() Token {
 		return Token{Kind: AT, Pos: start}
 	case '?':
 		l.advance()
+		if l.peek() == '?' {
+			l.advance()
+			return Token{Kind: COALESCE, Pos: start}
+		}
 		return Token{Kind: QUESTION, Pos: start}
 	case '+':
 		l.advance()

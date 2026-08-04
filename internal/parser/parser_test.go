@@ -52,6 +52,14 @@ func TestExprPrecedenceAndAssociativity(t *testing.T) {
 		{".age >= 18 && .active == true", "((.age GE 18) AND (.active EQ true))"},
 		{"1 != 2 == false", "((1 NE 2) EQ false)"},
 		{"1 < 2", "(1 LT 2)"},
+		// design/optional-fields.md §3: ?? binds tighter than comparisons
+		// (the default resolves before the comparison inspects it) but
+		// looser than arithmetic (the whole right-hand expression is the
+		// default), and chains left-associatively like every other
+		// operator here.
+		{`.age ?? 0 >= 18`, "((.age COALESCE 0) GE 18)"},
+		{`.amount ?? 0 + 5`, "(.amount COALESCE (0 PLUS 5))"},
+		{`.a ?? .b ?? .c`, "((.a COALESCE .b) COALESCE .c)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.src, func(t *testing.T) {

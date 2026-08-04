@@ -102,6 +102,20 @@ email: string? @pii`
 	assertTokens(t, src, want)
 }
 
+// TestCoalesceOperator covers design/optional-fields.md's `??` discharge
+// operator: two "?" lex as one COALESCE token, not two QUESTIONs, and a
+// lone "?" (schema syntax) still lexes as QUESTION.
+func TestCoalesceOperator(t *testing.T) {
+	assertTokens(t, `.phone ?? "n/a"`, []tok{
+		{DOT, ""}, {IDENT, "phone"}, {COALESCE, ""}, {STRING, "n/a"},
+		{EOF, ""},
+	})
+	assertTokens(t, "phone: string?", []tok{
+		{IDENT, "phone"}, {COLON, ""}, {IDENT, "string"}, {QUESTION, ""},
+		{EOF, ""},
+	})
+}
+
 // TestRecordSpreadEllipsis checks "..." lexes as one ELLIPSIS token, not
 // three DOTs, and that a lone "." next to it still lexes as DOT.
 func TestRecordSpreadEllipsis(t *testing.T) {

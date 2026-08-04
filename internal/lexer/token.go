@@ -43,6 +43,7 @@ const (
 	ELLIPSIS // ...
 	AT       // @
 	QUESTION // ?
+	COALESCE // ??
 
 	PLUS  // +
 	MINUS // -
@@ -89,6 +90,7 @@ var kindNames = map[Kind]string{
 	ELLIPSIS: "ELLIPSIS",
 	AT:       "AT",
 	QUESTION: "QUESTION",
+	COALESCE: "COALESCE",
 	PLUS:     "PLUS",
 	MINUS:    "MINUS",
 	STAR:     "STAR",
@@ -111,18 +113,19 @@ func (k Kind) String() string {
 }
 
 var opSymbols = map[Kind]string{
-	PLUS:  "+",
-	MINUS: "-",
-	STAR:  "*",
-	SLASH: "/",
-	LT:    "<",
-	GT:    ">",
-	LE:    "<=",
-	GE:    ">=",
-	EQ:    "==",
-	NE:    "!=",
-	AND:   "&&",
-	OR:    "||",
+	PLUS:     "+",
+	MINUS:    "-",
+	STAR:     "*",
+	SLASH:    "/",
+	LT:       "<",
+	GT:       ">",
+	LE:       "<=",
+	GE:       ">=",
+	EQ:       "==",
+	NE:       "!=",
+	AND:      "&&",
+	OR:       "||",
+	COALESCE: "??",
 }
 
 // Symbol renders a binary operator's surface syntax ("+", ">=", ...)
