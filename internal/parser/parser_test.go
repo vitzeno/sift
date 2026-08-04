@@ -235,6 +235,32 @@ pipeline main {
 	}
 }
 
+// TestParseOptionalSchemaField covers design/optional-fields.md's `T?`
+// schema syntax, alone and combined with @pii (§4: the two tags coexist
+// and either order after the type name is unambiguous since `?` always
+// comes first).
+func TestParseOptionalSchemaField(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, phone: string?, email: string? @pii })`
+
+	prog, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	fields := prog.Sources[0].Schema.Fields
+	nameField, phoneField, emailField := fields[0], fields[1], fields[2]
+
+	if nameField.Optional {
+		t.Errorf("name field = %+v, want not optional", nameField)
+	}
+	if !phoneField.Optional || phoneField.PII {
+		t.Errorf("phone field = %+v, want optional and not PII", phoneField)
+	}
+	if !emailField.Optional || !emailField.PII {
+		t.Errorf("email field = %+v, want optional and PII", emailField)
+	}
+}
+
 // TestParseNamedSegmentEqualsForm covers design.md §2's named-segment
 // syntax (`pipeline clean = ...`, no braces) alongside the brace form,
 // and a NameRef to a named segment used inside another pipeline's body.

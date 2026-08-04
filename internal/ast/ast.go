@@ -132,14 +132,17 @@ type Param struct {
 	Pos      lexer.Pos
 }
 
-// SchemaField is one `name: TypeName [@pii]` pair in a schema literal.
-// TypeName is left as the raw identifier text (e.g. "string", "int") —
-// resolving it to a value.Kind happens in the checker, not the parser,
-// per design.md §4's compilation pipeline (lexer -> parser -> AST ->
-// checker -> ...).
+// SchemaField is one `name: TypeName ["?"] [@pii]` pair in a schema
+// literal. TypeName is left as the raw identifier text (e.g. "string",
+// "int") — resolving it to a value.Kind happens in the checker, not the
+// parser, per design.md §4's compilation pipeline (lexer -> parser -> AST
+// -> checker -> ...). Optional marks a `?` suffix (design/optional-fields.md
+// §2): the field may be absent, distinct from the PII tag and orthogonal
+// to it (design/optional-fields.md §4).
 type SchemaField struct {
 	Name     string
 	TypeName string
+	Optional bool
 	PII      bool
 	Pos      lexer.Pos
 }

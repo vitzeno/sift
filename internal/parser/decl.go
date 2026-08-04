@@ -159,7 +159,7 @@ func (p *Parser) parseSchemaLit() ast.SchemaLit {
 	return ast.SchemaLit{Fields: fields, Pos: pos}
 }
 
-// parseSchemaField := IDENT ":" IDENT ("@" IDENT)?
+// parseSchemaField := IDENT ":" IDENT "?"? ("@" IDENT)?
 //
 // decision: @pii is the only tag v0 recognizes. Rather than building a
 // general attribute grammar for a single case, the parser accepts `@`
@@ -170,6 +170,11 @@ func (p *Parser) parseSchemaField() ast.SchemaField {
 	name := p.expectIdent()
 	p.expect(lexer.COLON)
 	typeName := p.expectIdent()
+	optional := false
+	if p.cur.Kind == lexer.QUESTION {
+		p.next()
+		optional = true
+	}
 	pii := false
 	if p.cur.Kind == lexer.AT {
 		p.next()
@@ -180,7 +185,7 @@ func (p *Parser) parseSchemaField() ast.SchemaField {
 		}
 		pii = true
 	}
-	return ast.SchemaField{Name: name, TypeName: typeName, PII: pii, Pos: pos}
+	return ast.SchemaField{Name: name, TypeName: typeName, Optional: optional, PII: pii, Pos: pos}
 }
 
 // parsePipelineDecl := "pipeline" IDENT ( "(" ParamList ")" )?
