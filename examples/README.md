@@ -15,19 +15,19 @@ is put together, see [`../CLAUDE.md`](../CLAUDE.md).
 3. [Changing rows with map](#changing-rows-with-map)
 4. [Keeping or failing rows: filter and check](#keeping-or-failing-rows-filter-and-check)
 5. [The PII tag](#the-pii-tag)
-6. [Reshaping schemas: select, drop, rename](#reshaping-schemas-select-drop-rename)
-7. [Cutting rows: limit and offset](#cutting-rows-limit-and-offset)
-8. [Masking as a stage](#masking-as-a-stage)
-9. [Putting it together](#putting-it-together)
-10. [When a row fails: error policies](#when-a-row-fails-error-policies)
-11. [Writing to more than one sink](#writing-to-more-than-one-sink)
-12. [Routing rows by condition](#routing-rows-by-condition)
-13. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
-14. [Segments with parameters](#segments-with-parameters)
-15. [A full ETL, with error routing](#a-full-etl-with-error-routing)
-16. [Reading xlsx files](#reading-xlsx-files)
-17. [Fields that may be missing](#fields-that-may-be-missing)
-18. [Naming a column that isn't a valid identifier](#naming-a-column-that-isnt-a-valid-identifier)
+6. [Fields that may be missing](#fields-that-may-be-missing)
+7. [Naming a column that isn't a valid identifier](#naming-a-column-that-isnt-a-valid-identifier)
+8. [Reshaping schemas: select, drop, rename](#reshaping-schemas-select-drop-rename)
+9. [Cutting rows: limit and offset](#cutting-rows-limit-and-offset)
+10. [Masking as a stage](#masking-as-a-stage)
+11. [Putting it together](#putting-it-together)
+12. [When a row fails: error policies](#when-a-row-fails-error-policies)
+13. [Writing to more than one sink](#writing-to-more-than-one-sink)
+14. [Routing rows by condition](#routing-rows-by-condition)
+15. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
+16. [Segments with parameters](#segments-with-parameters)
+17. [A full ETL, with error routing](#a-full-etl-with-error-routing)
+18. [Reading xlsx files](#reading-xlsx-files)
 19. [Quick reference](#quick-reference)
 20. [Project layout](#project-layout)
 21. [Status](#status)
@@ -233,6 +233,115 @@ the tag over** to its result. `upper(.email)` is still `@pii`. There's
 no way to accidentally launder personal data by transforming it: only
 `mask`/`hash`/`redact` clear the tag, because the checker only trusts
 those three. `pii.sift` in this folder shows the same rule.
+
+## Fields that may be missing
+
+Add `?` after a schema field's type and a missing or blank cell no
+longer fails the row. It reads as a well typed **absent** value instead,
+the same way `@pii` adds a tag rather than needing its own type:
+
+```sift
+source in = csv("people.csv", schema: { name: string, phone: string? })
+sink   out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}
+```
+
+```console
+$ ./sift run leaky-optional.sift
+leaky-optional.sift:4:1: error: field "phone" is optional and reaches sink "out" undischarged; resolve with ??
+```
+
+A field marked this way has to be resolved before it can reach a sink or
+be used as a true/false check. The checker tracks it through every
+expression the same way it tracks `@pii`, and `??` is the one operator
+that clears it, by giving a default value for when the field is absent:
+
+```sift
+pipeline main {
+  in |> map({ ...row, phone: .phone ?? "n/a" }) |> out
+}
+```
+
+```console
+$ ./sift run optional.sift
+{"name":"Ada","phone":"555-0100"}
+{"name":"Tom","phone":"n/a"}
+```
+
+The two tags don't interfere with each other: a field can be both
+`string?` and `@pii`, and both have to be cleared, in either order,
+before the row can reach a sink:
+
+```sift
+source in = csv("people.csv", schema: { name: string, email: string? @pii })
+```
+
+```sift
+pipeline main {
+  in |> map({ ...row, email: mask(.email ?? "n/a") }) |> out
+}
+```
+
+`optional.sift` and `pii-optional.sift` in this folder show both cases.
+
+## Naming a column that isn't a valid identifier
+
+A schema field name has to be a plain identifier: letters, digits,
+underscore, no spaces. Real files don't always cooperate. A bank export
+might have a header like `Transaction ID`, and there's no identifier
+that equals that text, so it can never be named in a schema on its own.
+
+Add a `columns` kwarg to bridge the two: it maps a clean identifier to
+the raw header text to look for instead.
+
+```sift
+source in = csv("columns.csv",
+  schema:  { txn_id: int, txn_date: string, amount: double },
+  columns: { txn_id: "Transaction ID", txn_date: "Date", amount: "Amount" }
+)
+sink out = jsonl("columns_out.jsonl")
+
+pipeline main {
+  in |> out
+}
+```
+
+```console
+$ ./sift run columns.sift
+$ cat columns_out.jsonl
+{"txn_id":1001,"txn_date":"2026-01-05","amount":42.5}
+{"txn_id":1002,"txn_date":"2026-01-06","amount":17.25}
+```
+
+A field with no `columns` entry still falls back to matching its own
+name against the header, exactly like before this existed, and that
+match is exact and case-sensitive: `amount` won't match a header spelled
+`Amount` on its own, which is why it's aliased here too, even though it
+has no space. Only fields you actually need to rename require an entry;
+`columns` is optional per field, not all-or-nothing.
+
+A required field that resolves neither by alias nor by name is a
+construction error, the same shape as a plain missing column, naming the
+field and the real header found in the file:
+
+```console
+$ ./sift run leaky-columns.sift
+leaky-columns.sift: error: csv source "in": required column "txn_date" not found in header Transaction ID, Amount
+```
+
+An **optional** field (`string?`) with an alias whose header doesn't
+exist in the file at all is not an error. It resolves to absent, the
+same as a plain optional field with no matching column at all, and `??`
+discharges it downstream as usual.
+
+This works the same way for `xlsx` sources too, once you get there
+([Reading xlsx files](#reading-xlsx-files)): `columns` doesn't know or
+care which format resolved it.
+
+`columns.sift` in this folder is this exact program.
 
 ## Reshaping schemas: select, drop, rename
 
@@ -800,114 +909,6 @@ and go straight to that row.
 
 `xlsx.sift` in this folder is this exact program. `people.xlsx` is the
 workbook it reads.
-
-## Fields that may be missing
-
-Add `?` after a schema field's type and a missing or blank cell no
-longer fails the row. It reads as a well typed **absent** value instead,
-the same way `@pii` adds a tag rather than needing its own type:
-
-```sift
-source in = csv("people.csv", schema: { name: string, phone: string? })
-sink   out = jsonl("out.jsonl")
-
-pipeline main {
-  in |> out
-}
-```
-
-```console
-$ ./sift run leaky-optional.sift
-leaky-optional.sift:4:1: error: field "phone" is optional and reaches sink "out" undischarged; resolve with ??
-```
-
-A field marked this way has to be resolved before it can reach a sink or
-be used as a true/false check. The checker tracks it through every
-expression the same way it tracks `@pii`, and `??` is the one operator
-that clears it, by giving a default value for when the field is absent:
-
-```sift
-pipeline main {
-  in |> map({ ...row, phone: .phone ?? "n/a" }) |> out
-}
-```
-
-```console
-$ ./sift run optional.sift
-{"name":"Ada","phone":"555-0100"}
-{"name":"Tom","phone":"n/a"}
-```
-
-The two tags don't interfere with each other: a field can be both
-`string?` and `@pii`, and both have to be cleared, in either order,
-before the row can reach a sink:
-
-```sift
-source in = csv("people.csv", schema: { name: string, email: string? @pii })
-```
-
-```sift
-pipeline main {
-  in |> map({ ...row, email: mask(.email ?? "n/a") }) |> out
-}
-```
-
-`optional.sift` and `pii-optional.sift` in this folder show both cases.
-
-## Naming a column that isn't a valid identifier
-
-A schema field name has to be a plain identifier: letters, digits,
-underscore, no spaces. Real files don't always cooperate. A bank export
-might have a header like `Transaction ID`, and there's no identifier
-that equals that text, so it can never be named in a schema on its own.
-
-Add a `columns` kwarg to bridge the two: it maps a clean identifier to
-the raw header text to look for instead.
-
-```sift
-source in = csv("columns.csv",
-  schema:  { txn_id: int, txn_date: string, amount: double },
-  columns: { txn_id: "Transaction ID", txn_date: "Date", amount: "Amount" }
-)
-sink out = jsonl("columns_out.jsonl")
-
-pipeline main {
-  in |> out
-}
-```
-
-```console
-$ ./sift run columns.sift
-$ cat columns_out.jsonl
-{"txn_id":1001,"txn_date":"2026-01-05","amount":42.5}
-{"txn_id":1002,"txn_date":"2026-01-06","amount":17.25}
-```
-
-A field with no `columns` entry still falls back to matching its own
-name against the header, exactly like before this existed, and that
-match is exact and case-sensitive: `amount` won't match a header spelled
-`Amount` on its own, which is why it's aliased here too, even though it
-has no space. Only fields you actually need to rename require an entry;
-`columns` is optional per field, not all-or-nothing.
-
-A required field that resolves neither by alias nor by name is a
-construction error, the same shape as a plain missing column, naming the
-field and the real header found in the file:
-
-```console
-$ ./sift run leaky-columns.sift
-leaky-columns.sift: error: csv source "in": required column "txn_date" not found in header Transaction ID, Amount
-```
-
-An **optional** field (`string?`) with an alias whose header doesn't
-exist in the file at all is not an error. It resolves to absent, the
-same as a plain optional field with no matching column at all, and `??`
-discharges it downstream as usual.
-
-This works the same way for `xlsx` sources, alongside `header_row` and
-`sheet`: `columns` doesn't know or care which format resolved it.
-
-`columns.sift` in this folder is this exact program.
 
 ## Quick reference
 
