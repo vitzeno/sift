@@ -34,7 +34,7 @@ func (c *checker) resolveSourceSchemas() error {
 			seen[f.Name] = true
 			fields = append(fields, value.Field{
 				Name: f.Name,
-				Type: value.Type{Kind: kind, PII: f.PII},
+				Type: value.Type{Kind: kind, Optional: f.Optional, PII: f.PII},
 			})
 		}
 		c.sourceSchemas[s.Name] = value.Schema{Fields: fields}

@@ -67,6 +67,25 @@ pipeline main {
 	}
 }
 
+// TestCheckSourceSchemaOptional is OF1's checker-level slice of
+// design/optional-fields.md: a `?` suffix on a schema field resolves into
+// value.Type.Optional on that field only, leaving a plain field untouched.
+// PII × optional coexistence (§4) is OF3, tested separately.
+func TestCheckSourceSchemaOptional(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, phone: string? })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	cp := mustCheck(t, src)
+
+	wantSchema := "{ name: string, phone: string? }"
+	if got := cp.SourceSchema.String(); got != wantSchema {
+		t.Errorf("SourceSchema = %s, want %s", got, wantSchema)
+	}
+}
+
 // TestCheckMultiSinkBroadcast is design-multisink.md MS-A/§5: a terminal
 // list resolves to every named sink, in declared order, all sharing the
 // one computed schema.
