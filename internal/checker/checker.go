@@ -41,10 +41,18 @@ func errorf(pos lexer.Pos, format string, args ...any) *CheckError {
 // represented by the Source/Sinks fields instead of appearing in the
 // list.
 //
-// Sinks holds one or more sinks in declared order (design-multisink.md's
-// terminal broadcast: `|> out, out_2`). They all share the one
-// SinkSchema below — broadcast performs no transform, so there's nothing
-// to compute per sink.
+// Sinks holds every sink the terminal production can write to, in
+// declared order, however it gets there: design-multisink.md's
+// broadcast (`|> out, out_2`, written to unconditionally every row) or
+// design-routing.md's route (`|> route {...}`, at most one write per
+// row, deduplicated across branches that share a target). They all
+// share the one SinkSchema below either way — neither terminal
+// production transforms the row, so there's nothing to compute per sink.
+//
+// Route is nil for a broadcast program and non-nil for a routed one —
+// module 7 (build.go) switches on this exactly once to decide which
+// per-row write behavior to wire up. When set, every Route[i].Target
+// names an entry in Sinks (or is empty when Route[i].Discard).
 //
 // ErrorPolicy defaults to ast.ErrorAbort when the program declares none
 // (design-errors.md §5). ErrorSink is non-nil only when ErrorPolicy is
@@ -56,8 +64,23 @@ type CheckedProgram struct {
 	Sinks        []*ast.SinkDecl
 	SinkSchema   value.Schema
 	Stages       []ast.Stage
+	Route        []RouteBranch
 	ErrorPolicy  ast.ErrorPolicyKind
 	ErrorSink    *ast.SinkDecl
+}
+
+// RouteBranch is one route branch after the checker has resolved its
+// target and type-checked its predicate (design-routing.md §4/§6). Pred
+// is nil exactly when IsElse is true. Target is a sink name, empty
+// exactly when Discard is true — resolved to a name rather than a
+// *ast.SinkDecl pointer so it survives cmd/sift's per-run path-rewrite
+// copy of each sink decl (see run.go) without needing pointer identity
+// to still line up afterward.
+type RouteBranch struct {
+	Pred    ast.Expr
+	IsElse  bool
+	Target  string
+	Discard bool
 }
 
 // declKind classifies a name in the program-wide namespace: a source,
@@ -117,6 +140,39 @@ func Check(prog *ast.Program) (*CheckedProgram, error) {
 	}
 
 	srcName := runnable.Body[0].(*ast.NameRef).Name
+
+	if route, ok := runnable.Body[len(runnable.Body)-1].(*ast.RouteTerminal); ok {
+		middle := runnable.Body[1 : len(runnable.Body)-1]
+		stages, schema, err := c.expandStages(middle, c.sourceSchemas[srcName], map[string]bool{}, runnable.Name)
+		if err != nil {
+			return nil, err
+		}
+		branches, sinks, err := c.checkRouteTerminal(route, schema)
+		if err != nil {
+			return nil, err
+		}
+		if f, ok := schema.FirstOptional(); ok {
+			return nil, errorf(runnable.Pos,
+				"field %q is optional and reaches sink %s undischarged; resolve with ??",
+				f.Name, routeSinkNameList(sinks))
+		}
+		if f, ok := schema.FirstPII(); ok {
+			return nil, errorf(runnable.Pos,
+				"field %q is @pii and reaches sink %s unmasked; declassify with mask/hash/redact",
+				f.Name, routeSinkNameList(sinks))
+		}
+		return &CheckedProgram{
+			Source:       c.sourcesByName[srcName],
+			SourceSchema: c.sourceSchemas[srcName],
+			Sinks:        sinks,
+			SinkSchema:   schema,
+			Stages:       stages,
+			Route:        branches,
+			ErrorPolicy:  errPolicy,
+			ErrorSink:    errSink,
+		}, nil
+	}
+
 	sinkRefs := c.trailingSinkRefs(runnable)
 	if err := c.checkNoDuplicateSink(sinkRefs); err != nil {
 		return nil, err
@@ -209,6 +265,22 @@ func sinkNameList(sinkRefs []*ast.NameRef) string {
 	return strings.Join(names, ", ")
 }
 
+// routeSinkNameList is sinkNameList's route-path counterpart: the same
+// quoted, comma-joined rendering, over the resolved *ast.SinkDecl list
+// checkRouteTerminal returns rather than raw NameRefs — a route
+// terminal's PII/Optional sink check (design-routing.md §5) names every
+// distinct sink a branch can reach, the same way broadcast's does.
+func routeSinkNameList(sinks []*ast.SinkDecl) string {
+	if len(sinks) == 1 {
+		return fmt.Sprintf("%q", sinks[0].Name)
+	}
+	names := make([]string, len(sinks))
+	for i, s := range sinks {
+		names[i] = fmt.Sprintf("%q", s.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
 // buildNamespace resolves every source/sink/pipeline name into one map,
 // rejecting a name declared more than once regardless of which of the
 // three categories it's declared in.
@@ -281,10 +353,10 @@ func (c *checker) checkParamList(p *ast.PipelineDecl) error {
 }
 
 // findRunnablePipeline picks the one pipeline shaped source |> ... |>
-// sink out of the program — CLAUDE.md's v0 scope is "a single linear
-// pipeline", so exactly one such shape must exist. Every other
-// PipelineDecl is a named segment, meant only to be referenced by
-// NameRef from within this one.
+// sink (or source |> ... |> route {...}) out of the program — CLAUDE.md's
+// v0 scope is "a single linear pipeline", so exactly one such shape must
+// exist. Every other PipelineDecl is a named segment, meant only to be
+// referenced by NameRef from within this one.
 func (c *checker) findRunnablePipeline() (*ast.PipelineDecl, error) {
 	var found *ast.PipelineDecl
 	for _, pd := range c.prog.Pipelines {
@@ -295,8 +367,7 @@ func (c *checker) findRunnablePipeline() (*ast.PipelineDecl, error) {
 		if !ok || c.namespace[first.Name] != declSource {
 			continue
 		}
-		last, ok := pd.Body[len(pd.Body)-1].(*ast.NameRef)
-		if !ok || c.namespace[last.Name] != declSink {
+		if !c.isValidTerminal(pd.Body[len(pd.Body)-1]) {
 			continue
 		}
 		if found != nil {
@@ -311,4 +382,21 @@ func (c *checker) findRunnablePipeline() (*ast.PipelineDecl, error) {
 			"no runnable pipeline found (expected one pipeline shaped source |> ... |> sink)")
 	}
 	return found, nil
+}
+
+// isValidTerminal reports whether elem can end a runnable pipeline: a
+// NameRef resolving to a declared sink (the single-sink case, or the
+// first element of a broadcast list — trailingSinkRefs walks the rest
+// once this pipeline is confirmed runnable), or a RouteTerminal
+// (design-routing.md's sibling terminal production, §1: "still
+// terminal, still one row in flight").
+func (c *checker) isValidTerminal(elem ast.Stage) bool {
+	switch e := elem.(type) {
+	case *ast.NameRef:
+		return c.namespace[e.Name] == declSink
+	case *ast.RouteTerminal:
+		return true
+	default:
+		return false
+	}
 }
