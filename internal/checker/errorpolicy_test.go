@@ -15,9 +15,9 @@ pipeline main {
 }`
 
 // TestCheckErrorPolicyDefaultsToAbort confirms design.md §2's default
-// holds when a program declares no `on error` at all — the regression
-// guard design-errors.md §7 asks for: every v0 program (none of which
-// ever wrote `on error`) must keep behaving exactly as before.
+// holds when a program declares no `on error` at all: the regression
+// guard design-errors.md §7 asks for, since every v0 program (none of
+// which ever wrote `on error`) must keep behaving exactly as before.
 func TestCheckErrorPolicyDefaultsToAbort(t *testing.T) {
 	cp := mustCheck(t, errPolicyBaseSrc)
 	if cp.ErrorPolicy != ast.ErrorAbort {
@@ -47,7 +47,7 @@ func TestCheckErrorPolicySkip(t *testing.T) {
 
 // TestCheckErrorPolicyRouteResolvesSink confirms a route target
 // resolves to the actual declared sink, with no schema attached (the
-// checker never threads a pipeline schema into it — design-errors.md
+// checker never threads a pipeline schema into it, design-errors.md
 // §5).
 func TestCheckErrorPolicyRouteResolvesSink(t *testing.T) {
 	const src = `on error |> errs
@@ -78,7 +78,7 @@ func TestCheckErrorPolicyRouteToUndefinedName(t *testing.T) {
 }
 
 // TestCheckErrorPolicyRouteToNonSink confirms the route target must
-// specifically be a sink — naming the source, or a named pipeline
+// specifically be a sink: naming the source, or a named pipeline
 // segment, is rejected with a clear reason, not just "undefined".
 func TestCheckErrorPolicyRouteToNonSink(t *testing.T) {
 	err := checkErr(t, "on error |> in\n"+errPolicyBaseSrc)
@@ -89,7 +89,7 @@ func TestCheckErrorPolicyRouteToNonSink(t *testing.T) {
 
 // TestCheckErrorPolicyDoesNotAffectSinkSchema confirms routing has no
 // effect whatsoever on the main pipeline's checked schema or PII
-// enforcement — the two are entirely independent concerns.
+// enforcement. The two are entirely independent concerns.
 func TestCheckErrorPolicyDoesNotAffectSinkSchema(t *testing.T) {
 	const src = `on error |> errs
 source in = csv("people.csv", schema: { name: string, email: string @pii })

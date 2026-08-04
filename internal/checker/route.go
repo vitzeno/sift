@@ -6,27 +6,19 @@ import (
 )
 
 // checkRouteTerminal validates a route {...} terminal (design-routing.md
-// §6): every non-else branch's predicate must be bool over the terminal
-// schema (type-checked exactly like a filter predicate, including
-// rejecting an undischarged Optional bool — design/optional-fields.md
-// §3's third discharge rule applies here too), else is mandatory (§2 —
-// it's the only way arbitrary boolean predicates can be proven total),
-// and every non-discard target must resolve to a declared sink.
+// §6): each branch's predicate must be bool (like a filter predicate,
+// including the Optional-bool rule from design/optional-fields.md §3),
+// else is required (§2), and each target must be a declared sink.
 //
-// decision: "else is mandatory" is checked as "at least one branch has
-// IsElse" rather than "the last branch is else". Wherever it appears,
-// an else branch already guarantees every row reaching that point
-// matches something, so totality holds regardless of position; branches
-// after it would simply be unreachable, and design-routing.md §8
-// explicitly declines to build reachability/overlap warnings for that.
-// This keeps the check to the one property that actually matters.
+// decision: "else required" means "at least one branch has IsElse", not
+// "the last branch is else". An else branch anywhere already makes every
+// row match something; branches after it are just unreachable, which
+// design-routing.md §8 says not to warn about.
 //
-// Returns the resolved branches (Target as a name, not a decl pointer —
-// see RouteBranch's doc) plus every distinct target sink in
-// first-occurrence order, for CheckedProgram.Sinks. Unlike
-// checkNoDuplicateSink's broadcast rule, the same sink naming more than
-// one branch is allowed (design-routing.md §6) — this dedups rather than
-// rejecting a repeat.
+// Returns the branches (Target is a name, see RouteBranch) plus every
+// distinct sink they target, in first-seen order, for
+// CheckedProgram.Sinks. Unlike broadcast, the same sink can appear in
+// more than one branch (§6), so this dedups instead of rejecting repeats.
 func (c *checker) checkRouteTerminal(rt *ast.RouteTerminal, schema value.Schema) ([]RouteBranch, []*ast.SinkDecl, error) {
 	branches := make([]RouteBranch, len(rt.Branches))
 	var sinks []*ast.SinkDecl

@@ -10,8 +10,8 @@ import (
 )
 
 // binding pairs one of a segment's declared parameters with the actual
-// argument bound to it at one call site -- exactly what substitution
-// needs to rewrite the body (design/segments.md §3), and what dual-site
+// argument bound to it at one call site: what substitution needs to
+// rewrite the body (design/segments.md §3), and what dual-site
 // diagnostics need to print (§4).
 type binding struct {
 	param  ast.Param
@@ -19,13 +19,13 @@ type binding struct {
 	litArg ast.Expr // valid when param.Kind == ast.ParamScalar
 }
 
-// expandSegmentCall resolves a *ast.SegmentCall -- scrub(email),
-// adults(18) -- against schema: monomorphize at the call site
+// expandSegmentCall resolves a *ast.SegmentCall (scrub(email),
+// adults(18)) against schema: monomorphize at the call site
 // (design/segments.md §3), "C++ template" style, not row polymorphism.
 // It copies the target segment's body, substitutes each parameter for
 // its bound argument, and checks the copy with the ordinary stage rules
-// (expandStages) against the real schema at this point in the pipeline
-// -- PII propagation, field existence, and predicate typing all fall out
+// (expandStages) against the real schema at this point in the pipeline.
+// PII propagation, field existence, and predicate typing all fall out
 // of that reuse unchanged, no new rule needed. Any error surfacing from
 // inside the substituted body is wrapped with dual-site context before
 // it propagates further (§4): which segment, which bindings, and where
@@ -103,7 +103,7 @@ func bindParam(segName string, param ast.Param, arg ast.CallArg) (binding, error
 
 // scalarLitKind reports a call argument literal's value.Kind. The
 // parser's parseCallArg only ever produces one of these four node types
-// for a scalar argument, so this is exhaustive by construction.
+// for a scalar argument, so this covers every case by construction.
 func scalarLitKind(e ast.Expr) value.Kind {
 	switch e.(type) {
 	case *ast.IntLit:
@@ -122,7 +122,7 @@ func scalarLitKind(e ast.Expr) value.Kind {
 // wrapSegmentError prepends dual-site context to an error surfacing from
 // inside a substituted segment body (design/segments.md §4): the
 // segment's name and bindings, and where it was instantiated from. The
-// wrapped error keeps the original Pos untouched -- monomorphization
+// wrapped error keeps the original Pos untouched, since monomorphization
 // copies AST nodes without changing their position, so that Pos already
 // points at the real location in the segment's own definition; only the
 // message gains a line naming the call site on top of it. Wrapping
@@ -141,7 +141,7 @@ func wrapSegmentError(err error, call *ast.SegmentCall, params []ast.Param, bind
 }
 
 // formatBindings renders a segment's bindings in declared parameter
-// order -- "col = email", "min = 18" -- for the dual-site "in segment
+// order ("col = email", "min = 18") for the dual-site "in segment
 // scrub(col = email)" line.
 func formatBindings(params []ast.Param, bindings map[string]binding) string {
 	parts := make([]string, len(params))
@@ -174,7 +174,7 @@ func formatLiteral(e ast.Expr) string {
 }
 
 // substituteStages copies stages, replacing every occurrence of a bound
-// parameter's name with its call-site argument -- monomorphization's
+// parameter's name with its call-site argument: monomorphization's
 // "copy the body" step (design/segments.md §3). Positions are preserved
 // node-for-node from the segment's own definition; only the text of a
 // column/parameter reference changes. That's what makes dual-site
@@ -226,7 +226,7 @@ func substituteStage(s ast.Stage, bindings map[string]binding) ast.Stage {
 		return &ast.Declassify{Fn: st.Fn, Columns: substituteColumnRefs(st.Columns, bindings), Pos: st.Pos}
 
 	case *ast.NameRef:
-		// Names a source, sink, or parameterless segment -- never a
+		// Names a source, sink, or parameterless segment, never a
 		// column or scalar, so there's nothing here to substitute.
 		return st
 
@@ -258,9 +258,9 @@ func substituteColumnRefs(cols []ast.ColumnRef, bindings map[string]binding) []a
 }
 
 // substituteColumnName replaces name with its bound column argument when
-// name is a column parameter in scope; every other identifier -- an
+// name is a column parameter in scope; every other identifier (an
 // ordinary column name the segment's author wrote literally, or one that
-// happens to collide with a scalar parameter's name -- passes through
+// happens to collide with a scalar parameter's name) passes through
 // unchanged. The Kind guard is what keeps a scalar parameter's name from
 // being mistaken for a column reference here.
 func substituteColumnName(name string, bindings map[string]binding) string {
@@ -291,7 +291,7 @@ func substituteExpr(e ast.Expr, bindings map[string]binding) ast.Expr {
 		if b, ok := bindings[e.Name]; ok && b.param.Kind == ast.ParamScalar {
 			return b.litArg
 		}
-		// Not one of this segment's scalar parameters -- left as-is;
+		// Not one of this segment's scalar parameters, so left as-is;
 		// checkExpr reports it as an undefined name.
 		return e
 

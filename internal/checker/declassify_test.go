@@ -7,7 +7,7 @@ import (
 
 // TestCheckDeclassifyStageClearsePII is S4-A: |> hash(email) |> out
 // compiles and runs; the output column is present and clean (string, no
-// tag) — design-improvements.md §9.
+// tag), design-improvements.md §9.
 func TestCheckDeclassifyStageClearsPII(t *testing.T) {
 	cp := mustCheck(t, `source in = csv("people.csv", schema: { name: string, email: string @pii })
 sink out = jsonl("out.jsonl")
@@ -58,7 +58,7 @@ pipeline main {
 
 // TestCheckDeclassifyPlainStringRejected confirms the non-PII rejection
 // also fires for a plain (untagged) string column, not just a wrong
-// Kind entirely — "must already be string @pii" excludes both cases.
+// Kind entirely: "must already be string @pii" excludes both cases.
 func TestCheckDeclassifyPlainStringRejected(t *testing.T) {
 	err := checkErr(t, `source in = csv("people.csv", schema: { name: string })
 sink out = jsonl("out.jsonl")

@@ -10,7 +10,7 @@ import (
 
 // funcSig is a built-in scalar function's signature. v0's function table
 // is closed and every entry takes exactly one string and returns a
-// string, so one shape covers all of it -- Declassify marks the three
+// string, so one shape covers all of it. Declassify marks the three
 // that clear @pii (design.md §3, rule 4).
 type funcSig struct {
 	Param      value.Kind
@@ -47,7 +47,7 @@ func (c *checker) checkExpr(e ast.Expr, schema value.Schema) (value.Type, error)
 	case *ast.ParamRef:
 		// A bare identifier that survived to ordinary checking was never
 		// substituted for a scalar parameter's argument (design/segments.md
-		// §2.2) -- either it's outside any parameterized segment body, or
+		// §2.2): either it's outside any parameterized segment body, or
 		// it doesn't name one of the enclosing segment's own parameters.
 		// Either way it's an undefined name, the same diagnostic an
 		// unresolvable stage NameRef gets.
@@ -73,7 +73,7 @@ func (c *checker) checkExpr(e ast.Expr, schema value.Schema) (value.Type, error)
 
 	case *ast.RecordExpr:
 		// A record literal has no scalar type in v0 (value.Kind has no
-		// record variant) -- it's only meaningful as map's direct
+		// record variant). It's only meaningful as map's direct
 		// argument, handled by checkMapRecord, never as a general
 		// sub-expression.
 		return value.Type{}, errorf(e.Pos, "record literal is only valid as map's argument")
@@ -107,7 +107,7 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 	pii := left.PII || right.PII
 	// Optional propagates exactly like PII (design/optional-fields.md §3):
 	// any operator consuming a T? yields a U? until ?? explicitly
-	// discharges it, above. Kind mismatches below are unaffected --
+	// discharges it, above. Kind mismatches below are unaffected, since
 	// optionality never changes what Kinds an operator accepts.
 	optional := left.Optional || right.Optional
 
@@ -148,17 +148,17 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 }
 
 // checkCoalesce types design/optional-fields.md §3's `??` discharge
-// operator: left ?? right always yields a non-Optional result -- right
+// operator: left ?? right always yields a non-Optional result. right
 // supplies the value for left's absent case, so after ?? there is no
 // absent case left to track.
 //
 // decision: right (the default) must share left's Kind and must not
 // itself be Optional. Every acceptance example (§8) supplies a concrete
-// default -- a literal or an already-resolved expression -- never another
-// optional field; requiring that keeps "?? always discharges" a hard
-// guarantee rather than a maybe, and chained optional defaults
-// (`.a ?? .b` where .b is itself optional) can be loosened into later if
-// a real program needs it.
+// default (a literal or an already-resolved expression), never another
+// optional field. Requiring that keeps "?? always discharges" a hard
+// guarantee rather than a maybe; chained optional defaults (`.a ?? .b`
+// where .b is itself optional) can be added later if a real program
+// needs it.
 func (c *checker) checkCoalesce(e *ast.BinaryOp, left, right value.Type) (value.Type, error) {
 	if left.Kind != right.Kind {
 		return value.Type{}, errorf(e.Pos, "?? requires both sides to share a type, got %s and %s", left, right)
@@ -178,7 +178,7 @@ func isNumericOrString(k value.Kind) bool {
 }
 
 // checkCall types a function call against builtinFuncs. An unrecognized
-// name is a compile error, not a silent no-op -- v0's function set is
+// name is a compile error, not a silent no-op: v0's function set is
 // closed, same as its stage set (design.md §4).
 func (c *checker) checkCall(e *ast.Call, schema value.Schema) (value.Type, error) {
 	sig, ok := builtinFuncs[e.Fn]
@@ -199,7 +199,7 @@ func (c *checker) checkCall(e *ast.Call, schema value.Schema) (value.Type, error
 
 	pii := argType.PII && !sig.Declassify
 	// Unlike PII, no builtin function discharges Optional (only ??
-	// does, in checkCoalesce) -- every function call propagates it
+	// does, in checkCoalesce). Every function call propagates it
 	// unconditionally (design/optional-fields.md §3's upper(.phone) is
 	// string? example).
 	return value.Type{Kind: sig.Return, Optional: argType.Optional, PII: pii}, nil

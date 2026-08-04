@@ -7,7 +7,7 @@ import (
 
 // checkDeclassify validates a declassifier stage (mask/hash/redact):
 // every named column must already be string @pii (design-improvements.md
-// §4) — applying a declassifier anywhere else is almost always a
+// §4). Applying a declassifier anywhere else is almost always a
 // mistake and is rejected outright, the default the doc locks for v0.
 // A named column's tag is cleared in place; every other column passes
 // through with its type unchanged.

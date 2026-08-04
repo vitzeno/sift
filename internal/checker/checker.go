@@ -1,11 +1,11 @@
 // Package checker validates a parsed *ast.Program and lowers it into a
 // CheckedProgram module 7 (build + execute) can interpret directly: it
 // resolves source/sink/pipeline names into one namespace, recomputes the
-// schema at every stage (design.md §3 — "the checker's core job"),
+// schema at every stage (design.md §3, "the checker's core job"),
 // inlines named-segment references into a flat stage chain, and enforces
 // that no @pii field reaches a sink unmasked (design.md §3, rule 3) and
-// no Optional field reaches one undischarged
-// (design/optional-fields.md §3).
+// no Optional field reaches one undischarged (design/optional-fields.md
+// §3).
 package checker
 
 import (
@@ -35,7 +35,7 @@ func errorf(pos lexer.Pos, format string, args ...any) *CheckError {
 
 // CheckedProgram is what module 7 builds and runs: the resolved source
 // and sink(s) with their schemas, and the flat chain of stages between
-// them. Stages contains only *ast.Filter/*ast.Map/*ast.Check — every
+// them. Stages contains only *ast.Filter/*ast.Map/*ast.Check: every
 // *ast.NameRef to a named pipeline segment has already been inlined
 // (stage.go's expandStages), and the source/sink boundary NameRefs are
 // represented by the Source/Sinks fields instead of appearing in the
@@ -45,18 +45,18 @@ func errorf(pos lexer.Pos, format string, args ...any) *CheckError {
 // declared order, however it gets there: design-multisink.md's
 // broadcast (`|> out, out_2`, written to unconditionally every row) or
 // design-routing.md's route (`|> route {...}`, at most one write per
-// row, deduplicated across branches that share a target). They all
-// share the one SinkSchema below either way — neither terminal
-// production transforms the row, so there's nothing to compute per sink.
+// row, deduplicated across branches that share a target). They share
+// one SinkSchema either way, since neither terminal production
+// transforms the row.
 //
-// Route is nil for a broadcast program and non-nil for a routed one —
-// module 7 (build.go) switches on this exactly once to decide which
-// per-row write behavior to wire up. When set, every Route[i].Target
-// names an entry in Sinks (or is empty when Route[i].Discard).
+// Route is nil for a broadcast program and non-nil for a routed one.
+// module 7 (build.go) switches on this once to decide which per-row
+// write behavior to wire up. When set, every Route[i].Target names an
+// entry in Sinks (or is empty when Route[i].Discard).
 //
 // ErrorPolicy defaults to ast.ErrorAbort when the program declares none
 // (design-errors.md §5). ErrorSink is non-nil only when ErrorPolicy is
-// ast.ErrorRoute, and carries no schema of its own — it's always built
+// ast.ErrorRoute, and carries no schema of its own: it's always built
 // against the fixed envelope (design-errors.md §4).
 type CheckedProgram struct {
 	Source       *ast.SourceDecl
@@ -72,10 +72,10 @@ type CheckedProgram struct {
 // RouteBranch is one route branch after the checker has resolved its
 // target and type-checked its predicate (design-routing.md §4/§6). Pred
 // is nil exactly when IsElse is true. Target is a sink name, empty
-// exactly when Discard is true — resolved to a name rather than a
+// exactly when Discard is true. It's resolved to a name rather than a
 // *ast.SinkDecl pointer so it survives cmd/sift's per-run path-rewrite
 // copy of each sink decl (see run.go) without needing pointer identity
-// to still line up afterward.
+// to line up afterward.
 type RouteBranch struct {
 	Pred    ast.Expr
 	IsElse  bool
@@ -84,7 +84,7 @@ type RouteBranch struct {
 }
 
 // declKind classifies a name in the program-wide namespace: a source,
-// sink, and pipeline decl all share one namespace because a bare
+// sink, and pipeline decl all share one namespace, since a bare
 // *ast.NameRef inside a pipeline body can resolve to any of the three
 // (design.md §2's `in |> filter(...) |> out` and `in |> clean |> out`
 // use identical syntax for "the source", "the sink", and "a named
@@ -117,9 +117,9 @@ type checker struct {
 // decision: unlike the parser, this package uses plain returned errors
 // throughout rather than panic/recover. The parser's grammar functions
 // call each other dozens of levels deep with no natural place to check
-// an error in between; the checker's phases (namespace, schemas,
-// stage expansion, PII check) are a short, flat sequence where
-// `if err != nil { return nil, err }` costs nothing in readability.
+// an error in between. The checker's phases (namespace, schemas, stage
+// expansion, PII check) are a short, flat sequence where `if err != nil
+// { return nil, err }` costs nothing in readability.
 func Check(prog *ast.Program) (*CheckedProgram, error) {
 	c := &checker{prog: prog}
 
@@ -215,7 +215,7 @@ func Check(prog *ast.Program) (*CheckedProgram, error) {
 // (design-multisink.md §2) off the end of runnable's body: the run of
 // consecutive *ast.NameRef elements, from the last backward, that each
 // resolve to a declared sink. It never looks at index 0 (always the
-// source ref) — findRunnablePipeline already guarantees the final
+// source ref). findRunnablePipeline already guarantees the final
 // element is a sink NameRef, so this always returns at least one.
 func (c *checker) trailingSinkRefs(runnable *ast.PipelineDecl) []*ast.NameRef {
 	body := runnable.Body
@@ -237,7 +237,7 @@ func (c *checker) trailingSinkRefs(runnable *ast.PipelineDecl) []*ast.NameRef {
 // broadcast list (design-multisink.md §5): every listed sink receives
 // every row, so a repeat is a literal double-write, always a mistake.
 // Contrast design-routing.md, where the same sink across branches is
-// fine — that's per-row selection, not broadcast.
+// fine, since that's per-row selection, not broadcast.
 func (c *checker) checkNoDuplicateSink(sinkRefs []*ast.NameRef) error {
 	seen := map[string]bool{}
 	for _, ref := range sinkRefs {
@@ -251,7 +251,7 @@ func (c *checker) checkNoDuplicateSink(sinkRefs []*ast.NameRef) error {
 
 // sinkNameList formats a broadcast list for a diagnostic: a single sink
 // unquoted-joined the way the pre-multisink message already did, or a
-// comma-separated quoted list when there's more than one — the PII check
+// comma-separated quoted list when there's more than one. The PII check
 // runs once against the shared terminal schema (design-multisink.md §4),
 // so one error must name every sink it covers.
 func sinkNameList(sinkRefs []*ast.NameRef) string {
@@ -267,7 +267,7 @@ func sinkNameList(sinkRefs []*ast.NameRef) string {
 
 // routeSinkNameList is sinkNameList's route-path counterpart: the same
 // quoted, comma-joined rendering, over the resolved *ast.SinkDecl list
-// checkRouteTerminal returns rather than raw NameRefs — a route
+// checkRouteTerminal returns rather than raw NameRefs. A route
 // terminal's PII/Optional sink check (design-routing.md §5) names every
 // distinct sink a branch can reach, the same way broadcast's does.
 func routeSinkNameList(sinks []*ast.SinkDecl) string {
@@ -314,7 +314,7 @@ func (c *checker) buildNamespace() error {
 		// A named segment invoked as a bare NameRef (no parens) would be
 		// ambiguous with a built-in stage of the same name written with
 		// parens elsewhere in the same program (design-improvements.md
-		// §7) — reject the shadow outright rather than leave a footgun.
+		// §7), so reject the shadow outright rather than leave a footgun.
 		if ast.BuiltinStageNames[p.Name] {
 			return errorf(p.Pos, "%q is a built-in stage name", p.Name)
 		}
@@ -330,12 +330,12 @@ func (c *checker) buildNamespace() error {
 }
 
 // checkParamList validates a segment's parameter list once, at
-// declaration time, regardless of whether any call site ever
-// instantiates it -- the same "validate the shape once, upfront" spirit
-// as resolveSourceSchemas checking every source's schema literal. Two
-// things can't wait for a call site: a duplicate parameter name (always
-// wrong, no substitution needed to see it), and a scalar parameter's
-// type name not being one of the four v0 scalars.
+// declaration time, regardless of whether any call site ever calls it.
+// Same "validate the shape once, upfront" spirit as resolveSourceSchemas
+// checking every source's schema literal. Two things can't wait for a
+// call site: a duplicate parameter name (always wrong, no substitution
+// needed to see it), and a scalar parameter's type name not being one of
+// the four v0 scalars.
 func (c *checker) checkParamList(p *ast.PipelineDecl) error {
 	seen := map[string]bool{}
 	for _, param := range p.Params {
@@ -353,7 +353,7 @@ func (c *checker) checkParamList(p *ast.PipelineDecl) error {
 }
 
 // findRunnablePipeline picks the one pipeline shaped source |> ... |>
-// sink (or source |> ... |> route {...}) out of the program — CLAUDE.md's
+// sink (or source |> ... |> route {...}) out of the program. CLAUDE.md's
 // v0 scope is "a single linear pipeline", so exactly one such shape must
 // exist. Every other PipelineDecl is a named segment, meant only to be
 // referenced by NameRef from within this one.
@@ -386,7 +386,7 @@ func (c *checker) findRunnablePipeline() (*ast.PipelineDecl, error) {
 
 // isValidTerminal reports whether elem can end a runnable pipeline: a
 // NameRef resolving to a declared sink (the single-sink case, or the
-// first element of a broadcast list — trailingSinkRefs walks the rest
+// first element of a broadcast list; trailingSinkRefs walks the rest
 // once this pipeline is confirmed runnable), or a RouteTerminal
 // (design-routing.md's sibling terminal production, §1: "still
 // terminal, still one row in flight").

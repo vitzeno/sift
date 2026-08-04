@@ -39,7 +39,7 @@ pipeline main {
 
 // TestCheckRouteElseRequired is RT-B: a route with no else branch at all
 // is a compile error, regardless of how many predicate branches precede
-// it — arbitrary boolean predicates can't otherwise be proven total.
+// it. Arbitrary boolean predicates can't otherwise be proven total.
 func TestCheckRouteElseRequired(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, region: string })
 sink eu_sink = jsonl("eu.jsonl")
@@ -81,7 +81,7 @@ pipeline main {
 
 // TestCheckRouteDuplicateSinkAllowed is RT-F: unlike broadcast's
 // duplicate-sink error, the same sink naming more than one branch is
-// fine — different rows, never a double-write of the same row.
+// fine: different rows, never a double-write of the same row.
 func TestCheckRouteDuplicateSinkAllowed(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, region: string })
 sink out = jsonl("out.jsonl")
@@ -104,7 +104,7 @@ pipeline main {
 
 // TestCheckRoutePIIRejectedOnce is RT-G: an unmasked @pii field reaching
 // any branch sink is a single compile error naming every distinct target
-// sink, checked once against the shared terminal schema — exactly
+// sink, checked once against the shared terminal schema. Exactly
 // design-multisink.md §4's rule, reused verbatim for route.
 func TestCheckRoutePIIRejectedOnce(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, region: string, email: string @pii })
@@ -185,7 +185,7 @@ pipeline main {
 
 // TestCheckRouteNonBoolPredicate rejects a branch predicate that isn't
 // bool, and TestCheckRouteOptionalBoolPredicate rejects one that's an
-// undischarged bool? — design/optional-fields.md §3's third discharge
+// undischarged bool?. design/optional-fields.md §3's third discharge
 // rule applies to a route branch exactly like it does to filter/check.
 func TestCheckRouteNonBoolPredicate(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, region: string })

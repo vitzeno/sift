@@ -72,7 +72,7 @@ pipeline main {
 // value.Type.Optional on that field only, leaving a plain field
 // untouched. phone is dropped before the sink so this test stays about
 // schema resolution, not the sink's discharge rule (OF2, tested
-// separately); PII × optional coexistence (§4) is OF3, also separate.
+// separately); PII and optional coexistence (§4) is OF3, also separate.
 func TestCheckSourceSchemaOptional(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, phone: string? })
 sink out = jsonl("out.jsonl")
@@ -123,7 +123,7 @@ pipeline main {
 
 // TestCheckOptionalPropagatesThroughFunctionCall is OF-F: a function
 // called on an Optional argument still yields an Optional result and
-// still can't reach a sink -- optionality propagates through a call the
+// still can't reach a sink. Optionality propagates through a call the
 // same way @pii does, with no per-function declassifier.
 func TestCheckOptionalPropagatesThroughFunctionCall(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
@@ -166,7 +166,7 @@ func TestCheckCoalesceDischargesOptional(t *testing.T) {
 
 // TestCheckOptionalPropagatesThroughComparison is design/optional-fields.md
 // §3's other named example: `.phone == "x"` against a non-Optional string
-// literal type-checks fine and just propagates to bool? -- the comparison
+// literal type-checks fine and just propagates to bool?. The comparison
 // itself never errors, exactly like an Optional binary operand never
 // blocks + or -. The error only surfaces later, wherever that bool? is
 // used as a predicate (TestCheckFilterRejectsOptionalBoolPredicate) or

@@ -29,8 +29,8 @@ pipeline main {
 }
 
 // TestCheckRenamePreservesPII is S2-B: renaming a @pii column and
-// writing it unmasked is still a compile error — the tag survived the
-// rename (design-improvements.md §9).
+// writing it unmasked is still a compile error, since the tag survived
+// the rename (design-improvements.md §9).
 func TestCheckRenamePreservesPII(t *testing.T) {
 	err := checkErr(t, `source in = csv("people.csv", schema: { name: string, email: string @pii })
 sink out = jsonl("out.jsonl")
@@ -94,7 +94,7 @@ pipeline main {
 
 // TestCheckRenameSwapIsRejectedNotOrderDependent confirms rename(a: b,
 // b: a) is judged against the FULL post-rename column set, not an
-// order-dependent, one-pair-at-a-time mutation — a would collide with
+// order-dependent, one-pair-at-a-time mutation. a would collide with
 // nothing surviving (b is also being renamed away), and neither would
 // b, so this should actually succeed.
 func TestCheckRenameSwapSucceeds(t *testing.T) {
@@ -110,7 +110,7 @@ pipeline main {
 		t.Fatalf("SinkSchema = %s, want both a and b present after the swap", cp.SinkSchema)
 	}
 	// a was originally string; it's now named "b" per the swap, but its
-	// value TYPE is unaffected by which column holds which name.
+	// value type is unaffected by which column holds which name.
 	if fA.Type.Kind.String() != "int" {
 		t.Errorf("field \"a\" (was \"b\") type = %s, want int", fA.Type)
 	}

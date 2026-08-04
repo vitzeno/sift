@@ -44,14 +44,14 @@ func (c *checker) resolveSourceSchemas() error {
 
 // checkMapRecord computes map's output schema from its record literal
 // (design.md §3): with a spread, start from the input schema's fields in
-// their original order and original position; each explicit field either
+// their original order and position; each explicit field either
 // overrides an existing field in place or is appended as a new one. This
 // ordering is why the jsonlSink module 2 built can rely on schema field
 // order matching what a reader would expect: map never reorders a field
 // it doesn't touch.
 //
 // Field values are checked against inputSchema, not the schema under
-// construction -- `{ ...row, name: upper(.name) }` reads .name from the
+// construction: `{ ...row, name: upper(.name) }` reads .name from the
 // row being mapped, never from a field this same record literal just
 // defined.
 func (c *checker) checkMapRecord(rec *ast.RecordExpr, inputSchema value.Schema) (value.Schema, error) {

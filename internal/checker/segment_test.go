@@ -11,7 +11,7 @@ import (
 // TestCheckScalarParamReuseAcrossPrograms is design/segments.md PS-A: one
 // `adults(min: int)` definition, instantiated with two different literals
 // in two separate programs, each producing the correctly substituted
-// filter predicate -- proof that monomorphization doesn't leak state
+// filter predicate. Proof that monomorphization doesn't leak state
 // between call sites.
 func TestCheckScalarParamReuseAcrossPrograms(t *testing.T) {
 	const tmpl = `pipeline adults(min: int) = filter(.age >= min)
@@ -89,8 +89,8 @@ pipeline main {
 }
 
 // TestCheckNonDeclassifyingSegmentPreservesPII is PS-D: a segment that
-// transforms but doesn't declassify keeps @pii on a @pii argument column
-// -- it still can't reach a sink unmasked.
+// transforms but doesn't declassify keeps @pii on a @pii argument
+// column. It still can't reach a sink unmasked.
 func TestCheckNonDeclassifyingSegmentPreservesPII(t *testing.T) {
 	const src = `pipeline touch(col) = map({ ...row, col: upper(.col) })
 
@@ -111,12 +111,12 @@ pipeline main {
 // the declassifier stage raises directly, with dual-site context.
 //
 // decision: scrub is defined with the *stage*-form declassifier
-// (`mask(col)`), not the expression form (`mask(.col)`) -- only
+// (`mask(col)`), not the expression form (`mask(.col)`). Only
 // checkDeclassify (the stage) enforces "the target must already be
 // @pii"; checkCall's expression-form mask has no such precondition (it
 // just clears PII on whatever string it's given). Using the stage form
 // is what makes this scenario an actual compile error to reuse, per §5's
-// "no new PII rule here -- reuses the existing ones."
+// "no new PII rule here, reuses the existing ones."
 func TestCheckDeclassifyingSegmentOnNonPIIColumnRejected(t *testing.T) {
 	const src = `pipeline scrub(col) = mask(col)
 
@@ -140,7 +140,7 @@ pipeline main {
 
 // TestCheckBadColumnArgumentDualSiteDiagnostic is PS-F, and design/segments.md
 // §4's own worked example: a misspelled column argument errors against
-// the real schema, naming the segment, its bindings, and the call site --
+// the real schema, naming the segment, its bindings, and the call site,
 // not just "field not in schema" pointing at synthesized AST.
 func TestCheckBadColumnArgumentDualSiteDiagnostic(t *testing.T) {
 	const src = `pipeline scrub(col) = map({ ...row, col: mask(.col) })
@@ -215,7 +215,7 @@ pipeline main {
 }
 
 // TestCheckSegmentCycleDetectionThroughCall is PS-H: a parameterized
-// segment that calls itself, directly, is a compile error -- the
+// segment that calls itself, directly, is a compile error. The
 // existing cycle detection still applies through substitution.
 func TestCheckSegmentCycleDetectionThroughCall(t *testing.T) {
 	const src = `pipeline loopy(col) = mask(col) |> loopy(col)
@@ -268,7 +268,7 @@ pipeline main {
 
 // TestCheckBareIdentifierOutsideSegmentIsUndefined confirms a bare
 // identifier used where no enclosing segment declares it as a scalar
-// parameter is rejected as an undefined name -- the same diagnostic an
+// parameter is rejected as an undefined name, the same diagnostic an
 // unresolvable stage NameRef gets.
 func TestCheckBareIdentifierOutsideSegmentIsUndefined(t *testing.T) {
 	const src = `source in = csv("x.csv", schema: { x: bool })

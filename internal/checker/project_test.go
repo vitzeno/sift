@@ -96,7 +96,7 @@ pipeline main {
 }
 
 // TestCheckDropSatisfiesPIIRule is S1-C: a @pii column dropped before
-// the sink compiles and runs — no mask needed, since dropping the
+// the sink compiles and runs. No mask needed, since dropping the
 // column already satisfies the sink rule.
 func TestCheckDropSatisfiesPIIRule(t *testing.T) {
 	cp := mustCheck(t, `source in = csv("people.csv", schema: { name: string, email: string @pii })

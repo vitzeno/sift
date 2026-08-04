@@ -6,14 +6,14 @@ import (
 )
 
 // checkRename computes rename's output schema: each pair's Old column
-// becomes New in place, keeping its exact type — including the @pii tag
-// (design-improvements.md §2, load-bearing: renaming a PII column must
-// never launder it).
+// becomes New in place, keeping its exact type, including the @pii tag
+// (design-improvements.md §2). This matters: renaming a PII column must
+// never launder it.
 //
 // Every New must avoid two collisions: a surviving column (one not
 // itself being renamed) already using that name, and another pair's New
-// in the same call. Checking against the full "surviving" set — rather
-// than mutating field names one pair at a time — keeps the result
+// in the same call. Checking against the full "surviving" set, rather
+// than mutating field names one pair at a time, keeps the result
 // independent of the order the pairs happen to be written in.
 func (c *checker) checkRename(st *ast.Rename, schema value.Schema) (value.Schema, error) {
 	renamedOld := map[string]bool{}
