@@ -189,6 +189,55 @@ func TestCheckCoalesceTypeErrors(t *testing.T) {
 	}
 }
 
+// TestCheckOptionalAndPIIStackAtSink is OF-G: the two "propagate-and-
+// discharge" mechanisms stack. A field that's both Optional and @pii
+// needs both tags cleared, in either order, before it can reach a sink.
+func TestCheckOptionalAndPIIStackAtSink(t *testing.T) {
+	const schema = `source in = csv("people.csv", schema: { name: string, email: string? @pii })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+`
+	tests := []struct {
+		name       string
+		pipeline   string
+		wantErrSub string // empty means the program must compile clean
+	}{
+		{
+			"neither discharged",
+			"  in |> out\n}",
+			`field "email" is optional and reaches sink "out" undischarged; resolve with ??`,
+		},
+		{
+			"optional discharged, PII remains",
+			`  in |> map({ ...row, email: .email ?? "n/a" }) |> out` + "\n}",
+			`field "email" is @pii and reaches sink "out" unmasked; declassify with mask/hash/redact`,
+		},
+		{
+			"both discharged",
+			`  in |> map({ ...row, email: mask(.email ?? "n/a") }) |> out` + "\n}",
+			"",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := schema + tt.pipeline
+			if tt.wantErrSub == "" {
+				cp := mustCheck(t, src)
+				wantSchema := "{ name: string, email: string }"
+				if got := cp.SinkSchema.String(); got != wantSchema {
+					t.Errorf("SinkSchema = %s, want %s", got, wantSchema)
+				}
+				return
+			}
+			err := checkErr(t, src)
+			if !strings.Contains(err.Error(), tt.wantErrSub) {
+				t.Errorf("error = %q, want it to contain %q", err.Error(), tt.wantErrSub)
+			}
+		})
+	}
+}
+
 // TestCheckFilterRejectsOptionalBoolPredicate and its check-stage
 // sibling below are design/optional-fields.md §3's third discharge
 // rule: an Optional bool can't be used as a predicate directly, even
