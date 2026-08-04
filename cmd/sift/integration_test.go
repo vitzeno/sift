@@ -1,9 +1,9 @@
-// This file maps directly to design-errors.md §7's acceptance list.
-// ERR-A/B/C already have thorough coverage in error_policy_test.go
-// (abort/skip/route against a failing `check`); this file rounds out
-// ERR-D (bad-cell coercion failure) under all three policies and ERR-E
-// (a source-level infra-fatal error) through the real CLI, plus one
-// stronger ERR-A assertion on the full diagnostic string.
+// This file maps to design-errors.md §7's acceptance list. ERR-A/B/C are
+// already covered in error_policy_test.go (abort/skip/route against a
+// failing `check`); this file adds ERR-D (bad-cell coercion failure)
+// under all three policies, ERR-E (a source-level infra-fatal error)
+// through the real CLI, and one stronger ERR-A assertion on the full
+// diagnostic string.
 package main
 
 import (
@@ -14,9 +14,9 @@ import (
 )
 
 // TestERR_A_AbortDiagnosticCarriesSourceOrdinalAndReason strengthens
-// error_policy_test.go's TestRunOnErrorAbort: design-errors.md §7 asks
-// specifically for "a diagnostic carrying source name, ordinal, and
-// reason" — not just *some* error.
+// TestRunOnErrorAbort in error_policy_test.go: design-errors.md §7 asks
+// for "a diagnostic carrying source name, ordinal, and reason", not just
+// any error.
 func TestERR_A_AbortDiagnosticCarriesSourceOrdinalAndReason(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, _ := errorPolicyFixture(t, dir, "on error abort")
@@ -35,9 +35,9 @@ func TestERR_A_AbortDiagnosticCarriesSourceOrdinalAndReason(t *testing.T) {
 
 // badCellFixture writes a CSV whose middle row has a non-numeric "age"
 // cell, plus a .sift program with errPolicyLine as its `on error`
-// declaration. The failure originates at the source (coercion), not at
-// any stage, so the pipeline is just `in |> filter(...) |> out` — proof
-// that ERR-D's failure reaches the driver with no check stage involved.
+// declaration. The pipeline is just `in |> filter(...) |> out`, so the
+// failure originates at the source (coercion), proving ERR-D reaches
+// the driver with no check stage involved.
 func badCellFixture(t *testing.T, dir, errPolicyLine, extra string) (siftPath, outPath string) {
 	t.Helper()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\nTom,not-a-number\nGrace,30\n")
@@ -54,9 +54,8 @@ pipeline main {
 	return siftPath, outPath
 }
 
-// TestERR_D_BadCellAbort: Tom's unparseable age cell aborts the run
-// under the default policy — not a panic — after Ada was already
-// written.
+// TestERR_D_BadCellAbort: under the default policy, Tom's unparseable
+// age cell aborts the run (not a panic) after Ada was already written.
 func TestERR_D_BadCellAbort(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := badCellFixture(t, dir, "on error abort", "")
@@ -79,7 +78,7 @@ func TestERR_D_BadCellAbort(t *testing.T) {
 }
 
 // TestERR_D_BadCellSkip: under `on error skip`, Tom's row is dropped
-// silently; Ada and Grace both make it through; the run succeeds.
+// silently, Ada and Grace both make it through, and the run succeeds.
 func TestERR_D_BadCellSkip(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := badCellFixture(t, dir, "on error skip", "")
@@ -98,9 +97,9 @@ func TestERR_D_BadCellSkip(t *testing.T) {
 	}
 }
 
-// TestERR_D_BadCellRoute: under `on error |> errs`, Tom's row's envelope
-// (Stage "csv:age") lands in the error sink, byte-exact, while Ada and
-// Grace reach the main sink.
+// TestERR_D_BadCellRoute: under `on error |> errs`, Tom's row's
+// envelope (Stage "csv:age") lands in the error sink byte-exact, while
+// Ada and Grace reach the main sink.
 func TestERR_D_BadCellRoute(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := badCellFixture(t, dir, "on error |> errs", `sink errs = jsonl("errs.jsonl")`)
@@ -131,8 +130,8 @@ func TestERR_D_BadCellRoute(t *testing.T) {
 
 // TestERR_E_InfraFatalAbortsEvenUnderSkip: a CSV the reader can't even
 // tokenize (a field-count mismatch) must abort the run regardless of
-// policy — design-errors.md §2.4 and §7 explicitly call out that `skip`
-// must NOT swallow this.
+// policy. design-errors.md §2.4 and §7 say `skip` must NOT swallow
+// this.
 func TestERR_E_InfraFatalAbortsEvenUnderSkip(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nOnlyOneField\n")

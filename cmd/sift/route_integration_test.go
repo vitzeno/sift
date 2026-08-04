@@ -1,9 +1,9 @@
-// This file rounds out design/routing.md's acceptance list with the
-// cases examples/routing.sift + TestExampleRouting doesn't cover: an
+// This file rounds out design/routing.md's acceptance list with cases
+// examples/routing.sift + TestExampleRouting doesn't cover: an
 // overlapping-predicate first-match proof, a missing else compile error,
-// exhaustive row conservation across sinks and discard, and route
-// composed with error routing — all driven through the real CLI entry
-// point the same way the errors/multisink/optional integration tests do.
+// full row conservation across sinks and discard, and route composed
+// with error routing, all driven through the real CLI like the
+// errors/multisink/optional integration tests.
 package main
 
 import (
@@ -44,8 +44,8 @@ pipeline main {
 		t.Errorf("first sink = %q, want %q", gotFirst, want)
 	}
 
-	// Every declared sink is opened at build time regardless of whether
-	// any row ever reaches it, so second.jsonl exists but must be empty.
+	// Every declared sink is opened at build time whether or not a row
+	// reaches it, so second.jsonl exists but must be empty.
 	gotSecond, err := os.ReadFile(secondPath)
 	if err != nil {
 		t.Fatalf("reading second sink: %v", err)
@@ -80,9 +80,9 @@ pipeline main {
 }
 
 // TestRT_D_ExhaustiveCoverageConservesRowCount: every input row lands in
-// exactly one place across the target sinks and discard — total row
-// count is conserved, none duplicated, none silently dropped except
-// through the explicit discard branch.
+// exactly one place across the target sinks and discard. Total row
+// count is conserved: none duplicated, none dropped except through the
+// explicit discard branch.
 func TestRT_D_ExhaustiveCoverageConservesRowCount(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"),
@@ -123,7 +123,7 @@ pipeline main {
 		t.Errorf("us sink = %q, want %q", gotUS, wantUS)
 	}
 	// 6 input rows: 2 EU + 2 US written, Grace (APAC) and Owen (AF)
-	// silently discarded — no row duplicated, none unaccounted for.
+	// discarded. No row duplicated, none unaccounted for.
 	totalWritten := strings.Count(string(gotEU), "\n") + strings.Count(string(gotUS), "\n")
 	if totalWritten != 4 {
 		t.Errorf("total rows written = %d, want 4 (6 input - 2 discarded)", totalWritten)
@@ -131,9 +131,9 @@ pipeline main {
 }
 
 // TestRT_E_RouteComposesWithErrorRouting: a failed row goes to the error
-// sink under `on error |> errs` and is never evaluated by a route branch
-// — the Fail cascade runs first regardless of which terminal production
-// the program uses (design-routing.md §3).
+// sink under `on error |> errs` and never reaches a route branch. The
+// Fail path runs first no matter which terminal production the program
+// uses (design-routing.md §3).
 func TestRT_E_RouteComposesWithErrorRouting(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\nTom,not-a-number\nGrace,15\n")
@@ -186,8 +186,8 @@ pipeline main {
 }
 
 // TestRT_F_DuplicateSinkAcrossBranchesReceivesUnion: the same sink named
-// in two branches receives the union of every row either branch matched
-// — allowed for route, unlike broadcast's duplicate-sink error.
+// in two branches receives the union of rows either branch matched.
+// Allowed for route, unlike broadcast's duplicate-sink error.
 func TestRT_F_DuplicateSinkAcrossBranchesReceivesUnion(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,region\nAda,EU\nTom,US\nGrace,APAC\n")

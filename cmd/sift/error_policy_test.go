@@ -10,9 +10,8 @@ import (
 )
 
 // errorPolicyFixture writes people.csv (one row with a blank email) and
-// a .sift program that filters on age, checks email is present, and
-// declares errPolicyLine as its `on error` declaration (empty for the
-// default). It returns the paths sift run needs.
+// a .sift program with errPolicyLine as its `on error` declaration
+// (empty for the default). Returns the paths sift run needs.
 func errorPolicyFixture(t *testing.T, dir, errPolicyLine string) (siftPath, outPath string) {
 	t.Helper()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age,email\nAda,42,ada@example.com\nTom,15,tom@example.com\nGrace,30,\n")
@@ -30,7 +29,7 @@ pipeline main {
 }
 
 // TestRunOnErrorAbort is ERR-A through the real CLI: Tom is dropped by
-// filter (age 15, healthy), Grace fails check (blank email) — the run
+// filter (age 15, healthy), Grace fails check (blank email). The run
 // must abort with a *runtime.FailureError naming the reason, and must
 // not have written anything for Grace.
 func TestRunOnErrorAbort(t *testing.T) {
@@ -59,9 +58,9 @@ func TestRunOnErrorAbort(t *testing.T) {
 	}
 }
 
-// TestRunOnErrorSkip is ERR-B through the real CLI: the same failing
-// program under `on error skip` drops Grace's row, writes Ada's, and
-// exits with no error at all.
+// TestRunOnErrorSkip is ERR-B through the real CLI: under `on error
+// skip`, the same program drops Grace's row, writes Ada's, and exits
+// with no error.
 func TestRunOnErrorSkip(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := errorPolicyFixture(t, dir, "on error skip")
@@ -82,8 +81,8 @@ func TestRunOnErrorSkip(t *testing.T) {
 
 // TestRunOnErrorRoute is ERR-C through the real CLI: healthy rows reach
 // the main sink, and Grace's failure reaches the declared error sink as
-// exactly one envelope line — asserted byte-exact, per
-// design-errors.md §7.
+// exactly one envelope line, asserted byte-exact per design-errors.md
+// §7.
 func TestRunOnErrorRoute(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age,email\nAda,42,ada@example.com\nTom,15,tom@example.com\nGrace,30,\n")
@@ -124,8 +123,8 @@ pipeline main {
 }
 
 // TestRunOnErrorRouteToUndefinedSinkFailsAtCheckTime confirms a bad
-// route target is caught by the checker before anything runs, not left
-// to fail confusingly at Build/Run time.
+// route target is caught by the checker before anything runs, not at
+// Build/Run time.
 func TestRunOnErrorRouteToUndefinedSinkFailsAtCheckTime(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")

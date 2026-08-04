@@ -40,10 +40,10 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "usage: sift run <file> | sift --emit-ast <file> | sift --emit-schema <file>")
 }
 
-// printErr formats a diagnostic the way CLAUDE.md asks for: a source
-// position when there is one (every parser/checker error carries one),
-// falling back to a plain "file: error: message" for anything else
-// (a missing file, an unregistered format, a failed check at runtime).
+// printErr prints a source position when the error has one (every
+// parser/checker error does), and falls back to a plain "file: error:
+// message" for anything else (missing file, unregistered format, a
+// runtime check failure).
 func printErr(path string, err error) {
 	switch e := err.(type) {
 	case *parser.ParseError:

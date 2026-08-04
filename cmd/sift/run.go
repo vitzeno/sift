@@ -10,18 +10,17 @@ import (
 	"github.com/vitzeno/sift/internal/runtime"
 )
 
-// runFile lexes, parses, checks, builds, and executes the program at
-// path — design.md §4's full compilation pipeline end to end.
+// runFile runs design.md §4's full pipeline: lex, parse, check, build,
+// execute.
 //
-// decision: a source or sink's path (e.g. csv("people.csv", ...))
-// resolves relative to path's own directory, not the process's current
-// working directory — so `sift run some/dir/x.sift` finds
-// `some/dir/people.csv` regardless of where it's invoked from. An
-// already-absolute path is left untouched. This matches how a shell
-// script or Makefile resolves paths relative to itself, and is what
-// lets `go run ./cmd/sift run examples/adults.sift` (CLAUDE.md's
-// documented command) work unmodified from the repo root. The same
-// resolution applies to an `on error |> <name>` route target's path.
+// decision: a source or sink path (e.g. csv("people.csv", ...))
+// resolves relative to path's own directory, not the process's working
+// directory, so `sift run some/dir/x.sift` finds `some/dir/people.csv`
+// no matter where it's invoked from. An absolute path is left
+// unchanged. This is what lets `go run ./cmd/sift run
+// examples/adults.sift` (CLAUDE.md's documented command) work from the
+// repo root. The same resolution applies to an `on error |> <name>`
+// route target's path.
 func runFile(path string) error {
 	src, err := os.ReadFile(path)
 	if err != nil {
@@ -73,11 +72,11 @@ func runFile(path string) error {
 	return runtime.Run(top, runSrc, runSinks, runRoute, toRuntimePolicy(cp.ErrorPolicy), errSink)
 }
 
-// toRouteInputs bridges checker.RouteBranch to runtime.RouteInput — the
+// toRouteInputs bridges checker.RouteBranch to runtime.RouteInput, the
 // same field-for-field mirror BuildInput's other fields already draw
-// between the two packages (build.go's decision comment), kept as one
-// small conversion here since Route is nil for every non-routed program
-// and this is the one place that needs to know both types.
+// between the two packages (build.go's decision comment). Route is nil
+// for every non-routed program, so this is the one place that needs to
+// know both types.
 func toRouteInputs(route []checker.RouteBranch) []runtime.RouteInput {
 	if route == nil {
 		return nil
@@ -89,12 +88,11 @@ func toRouteInputs(route []checker.RouteBranch) []runtime.RouteInput {
 	return in
 }
 
-// toRuntimePolicy translates the checker's frontend-facing
-// ast.ErrorPolicyKind into runtime's own Policy — the same small
-// same-shaped-enum bridge BuildInput already draws between checker and
-// runtime (see build.go's decision comment): runtime doesn't depend on
-// checker, and the checker has no reason to depend on runtime just to
-// spell out three constants it doesn't otherwise need.
+// toRuntimePolicy translates the checker's ast.ErrorPolicyKind into
+// runtime's own Policy, the same small enum bridge BuildInput already
+// draws between checker and runtime (build.go's decision comment):
+// runtime doesn't depend on checker, and checker has no reason to
+// depend on runtime just for three constants.
 func toRuntimePolicy(k ast.ErrorPolicyKind) runtime.Policy {
 	switch k {
 	case ast.ErrorSkip:
@@ -106,9 +104,9 @@ func toRuntimePolicy(k ast.ErrorPolicyKind) runtime.Policy {
 	}
 }
 
-// resolvePath joins path onto base unless path is already absolute, in
-// which case it's returned unchanged — an absolute path always means
-// exactly that, regardless of where the script lives.
+// resolvePath joins path onto base unless path is already absolute. An
+// absolute path always means exactly that, regardless of where the
+// script lives.
 func resolvePath(base, path string) string {
 	if filepath.IsAbs(path) {
 		return path

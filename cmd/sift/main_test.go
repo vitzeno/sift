@@ -13,9 +13,9 @@ import (
 	"github.com/vitzeno/sift/internal/parser"
 )
 
-// captureStdout redirects os.Stdout for the duration of f and returns
-// what was written — emitAST/emitSchema print straight to os.Stdout,
-// so this is the most direct way to assert on their output.
+// captureStdout redirects os.Stdout for the duration of f and returns what
+// was written. emitAST/emitSchema print straight to os.Stdout, so this is
+// the most direct way to assert on their output.
 func captureStdout(t *testing.T, f func()) string {
 	t.Helper()
 	r, w, err := os.Pipe()
@@ -48,11 +48,10 @@ func chdir(t *testing.T, dir string) {
 	t.Cleanup(func() { os.Chdir(cwd) })
 }
 
-// TestRunFileResolvesSourcePathRelativeToScriptDir is this session's
-// scope decision made concrete: an input file ("in") and the output file
-// it produces ("out"), sitting next to a script invoked from a totally
-// different working directory. If paths resolved against cwd instead,
-// this would fail to find people.csv.
+// TestRunFileResolvesSourcePathRelativeToScriptDir checks an input file
+// ("in") and the output file it produces ("out") sit next to a script
+// invoked from a different working directory. If paths resolved against
+// cwd instead, this would fail to find people.csv.
 func TestRunFileResolvesSourcePathRelativeToScriptDir(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\nTom,15\n")
@@ -65,8 +64,8 @@ pipeline main {
 }
 `)
 
-	// cwd is deliberately somewhere else entirely, to prove path
-	// resolution doesn't depend on it.
+	// cwd is somewhere else entirely, to prove path resolution doesn't
+	// depend on it.
 	chdir(t, t.TempDir())
 
 	if err := runFile(siftPath); err != nil {
@@ -84,9 +83,9 @@ pipeline main {
 }
 
 // TestRunFileScriptInSubdirectory confirms resolution walks from the
-// script's own directory even when that's several levels below cwd —
-// exactly CLAUDE.md's documented `sift run examples/adults.sift`
-// invoked from the repo root.
+// script's own directory even several levels below cwd, matching
+// CLAUDE.md's documented `sift run examples/adults.sift` from the repo
+// root.
 func TestRunFileScriptInSubdirectory(t *testing.T) {
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "scripts")

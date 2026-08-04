@@ -1,8 +1,8 @@
 // This file rounds out design/optional-fields.md's acceptance list with
-// the cases the examples/optional.sift + TestExampleOptional pair doesn't
-// cover: a missing required column (OF-C) and a present-but-garbage cell
-// in an optional field (OF-D), both driven through the real CLI entry
-// point the same way the errors and xlsx phases' integration tests do.
+// cases examples/optional.sift + TestExampleOptional doesn't cover: a
+// missing required column (OF-C) and a present-but-garbage cell in an
+// optional field (OF-D), both driven through the real CLI like the
+// errors and xlsx phases' integration tests.
 package main
 
 import (
@@ -13,8 +13,8 @@ import (
 )
 
 // TestOF_C_MissingRequiredColumnIsStructuralError: a required column
-// absent from the header is a construction-time error naming the column
-// and the real header, not a per-row failure.
+// missing from the header is a construction-time error naming the
+// column and the real header, not a per-row failure.
 func TestOF_C_MissingRequiredColumnIsStructuralError(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,phone\nAda,555-0100\n")
@@ -36,10 +36,10 @@ pipeline main { in |> out }
 }
 
 // TestOF_D_OptionalGarbageCellIsRowFailure: optionality excuses absence,
-// never malformed presence — under `on error skip`, Tom's blank age
-// survives as absent (discharged to 0 via ?? before the sink) while
-// Grace's unparseable one is dropped as a row failure, exactly like a
-// required field's bad cell would be.
+// never malformed presence. Under `on error skip`, Tom's blank age
+// survives as absent (turned into 0 via ?? before the sink), while
+// Grace's unparseable one is dropped as a row failure, same as a
+// required field's bad cell.
 func TestOF_D_OptionalGarbageCellIsRowFailure(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\nTom,\nGrace,not-a-number\n")

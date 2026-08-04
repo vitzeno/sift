@@ -1,10 +1,9 @@
 // This file maps to design/xlsx.md §5's acceptance list (XLSX-A through
-// XLSX-G), driving the xlsx source through the real CLI entry point
-// (runFile) the same way every other phase's integration tests do.
-// Fixture workbooks are generated with excelize at test time rather
-// than checked in as binaries, matching internal/format/xlsx_test.go's
-// convention — every fixture's shape is readable as the Go code that
-// built it.
+// XLSX-G), driving the xlsx source through runFile like every other
+// phase's integration tests. Fixture workbooks are generated with
+// excelize at test time, not checked in as binaries, matching
+// internal/format/xlsx_test.go's convention: a fixture's shape is
+// readable straight from the Go code that builds it.
 package main
 
 import (
@@ -73,9 +72,9 @@ func xlsxWriteRows(t *testing.T, f *excelize.File, sheet string, rows [][]string
 	}
 }
 
-// TestXLSX_A_ParityWithCSV: the same adults program, swapped source
-// format, with no frontend change, produces byte-identical output —
-// the headline proof the xlsx connector needs nothing special from the
+// TestXLSX_A_ParityWithCSV: the same adults program with only the
+// source format swapped produces byte-identical output. The headline
+// proof that the xlsx connector needs nothing special from the
 // lexer/parser/checker/executor.
 func TestXLSX_A_ParityWithCSV(t *testing.T) {
 	dir := t.TempDir()
@@ -119,10 +118,10 @@ pipeline main { in |> filter(.age >= 18) |> out }
 	}
 }
 
-// TestXLSX_B_SheetAndHeaderRowKwargsTakeEffect: both keyword arguments
-// parse through the generic kwarg handling (no grammar change for
-// xlsx specifically) and the constructor actually honors them — reads
-// the named sheet starting at the declared header row.
+// TestXLSX_B_SheetAndHeaderRowKwargsTakeEffect: both keyword args parse
+// through the generic kwarg handling (no xlsx-specific grammar) and the
+// constructor honors them, reading the named sheet from the declared
+// header row.
 func TestXLSX_B_SheetAndHeaderRowKwargsTakeEffect(t *testing.T) {
 	dir := t.TempDir()
 	xlsxWorkbook(t, dir, "people.xlsx", []string{"Cover", "Q1"}, map[string][][]string{
@@ -150,8 +149,9 @@ pipeline main { in |> out }
 }
 
 // TestXLSX_C_BadCellGovernedByErrorPolicy: a non-numeric age cell is a
-// row failure, not a panic, routed per the active error policy — same
-// contract as ERR-D/errors-E3, now via the xlsx source's coercion path.
+// row failure, not a panic, and follows the active error policy. Same
+// contract as ERR-D/errors-E3, now through the xlsx source's coercion
+// path.
 func TestXLSX_C_BadCellGovernedByErrorPolicy(t *testing.T) {
 	dir := t.TempDir()
 	xlsxFixture(t, dir, "people.xlsx", "Sheet1", [][]string{
@@ -200,9 +200,8 @@ pipeline main { in |> out }
 	})
 }
 
-// TestXLSX_D_MissingSheetIsInfraFatal: a named sheet that doesn't
-// exist fails at construction, before any row flows, with a clear
-// message.
+// TestXLSX_D_MissingSheetIsInfraFatal: a named sheet that doesn't exist
+// fails at construction, before any row flows, with a clear message.
 func TestXLSX_D_MissingSheetIsInfraFatal(t *testing.T) {
 	dir := t.TempDir()
 	xlsxWorkbook(t, dir, "people.xlsx", []string{"Summary", "Data", "Notes"}, map[string][][]string{
@@ -223,9 +222,9 @@ pipeline main { in |> out }
 	}
 }
 
-// TestXLSX_E_OffsetHeaderIgnoresExtraColumn: a title row, a blank row,
-// the header on row 3, and an extra unmapped column — reads correctly
-// and ignores the extra column.
+// TestXLSX_E_OffsetHeaderIgnoresExtraColumn: title row, blank row,
+// header on row 3, and an extra unmapped column. Reads correctly and
+// ignores the extra column.
 func TestXLSX_E_OffsetHeaderIgnoresExtraColumn(t *testing.T) {
 	dir := t.TempDir()
 	xlsxFixture(t, dir, "people.xlsx", "Sheet1", [][]string{
@@ -276,9 +275,9 @@ pipeline main { in |> out }
 
 // TestXLSX_G_FailFastOrderingLeavesSinkUntouched: sources are
 // constructed, and can fail, before any sink is opened. Pre-creating
-// the output file with known content and asserting it survives a
-// failed run is what catches a refactor that opens sinks first —
-// every other test here would still pass even if that ordering broke.
+// the output file and asserting it survives a failed run catches a
+// refactor that opens sinks first; every other test here would still
+// pass even if that ordering broke.
 func TestXLSX_G_FailFastOrderingLeavesSinkUntouched(t *testing.T) {
 	dir := t.TempDir()
 	xlsxWorkbook(t, dir, "people.xlsx", []string{"Data"}, map[string][][]string{

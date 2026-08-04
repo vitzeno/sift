@@ -13,8 +13,8 @@ import (
 
 // emitAST prints the parsed (not checked) AST: source/sink declarations
 // as written, and each pipeline's `|>` chain one stage per line. It's a
-// parser debugging aid, not a stable machine-readable format — v0 has no
-// consumer for a serialized AST, so there's no format to keep compatible.
+// parser debugging aid, not a stable machine-readable format: nothing
+// consumes a serialized AST, so there's no format to keep compatible.
 func emitAST(path string) error {
 	src, err := os.ReadFile(path)
 	if err != nil {
@@ -40,9 +40,9 @@ func emitAST(path string) error {
 	return nil
 }
 
-// emitSchema prints the checked program's source and sink schemas, using
-// value.Schema.String() directly — the whole reason module 1 gave Schema
-// a String() method in the first place.
+// emitSchema prints the checked program's source and sink schemas using
+// value.Schema.String() directly, the reason module 1 gave Schema a
+// String() method in the first place.
 func emitSchema(path string) error {
 	src, err := os.ReadFile(path)
 	if err != nil {
@@ -78,9 +78,9 @@ func schemaLitString(s ast.SchemaLit) string {
 
 // sourceOptsString renders a source's extra keyword arguments (beyond
 // schema) as ", name: value" suffixes, in declared order, reusing
-// exprString for the literal value — an xlsx source's `sheet:`/
-// `header_row:` opts (design/xlsx.md §1) round-trip through --emit-ast
-// exactly like schema does, rather than being silently dropped.
+// exprString for the literal value. This makes an xlsx source's
+// `sheet:`/`header_row:` opts (design/xlsx.md §1) round-trip through
+// --emit-ast instead of being silently dropped.
 func sourceOptsString(opts []ast.SourceOpt) string {
 	var b strings.Builder
 	for _, o := range opts {

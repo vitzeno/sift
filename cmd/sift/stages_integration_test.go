@@ -1,9 +1,9 @@
 // This file maps directly to design-improvements.md §9's acceptance
-// list (S1-A through S4-B): every scenario already has unit-level
-// coverage in internal/checker and internal/runtime, added alongside
-// each S1-S4 phase. These tests confirm the same scenarios hold through
-// the real CLI end to end (runFile — parse, check, build, run), the
-// highest-confidence layer, one per acceptance ID for auditability.
+// list (S1-A through S4-B). Each scenario already has unit-level
+// coverage in internal/checker and internal/runtime from its S1-S4
+// phase; these tests confirm the same scenarios hold through the real
+// CLI end to end (runFile: parse, check, build, run), one test per
+// acceptance ID.
 package main
 
 import (
@@ -14,8 +14,8 @@ import (
 )
 
 // TestACC_S1_A_DropRemovesColumnAndDownstreamReference: drop(age)
-// removes the column from output and schema; a reference to .age
-// downstream is a compile error against the reduced schema.
+// removes the column from output and schema. A downstream .age
+// reference is a compile error against the reduced schema.
 func TestACC_S1_A_DropRemovesColumnAndDownstreamReference(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
@@ -58,7 +58,7 @@ pipeline main {
 }
 
 // TestACC_S1_B_SelectOrderAndMissingColumn: select(email, name) yields
-// output with columns in that order; a missing column errors citing the
+// output with columns in that order. A missing column errors citing the
 // real set.
 func TestACC_S1_B_SelectOrderAndMissingColumn(t *testing.T) {
 	dir := t.TempDir()
@@ -102,7 +102,7 @@ pipeline main {
 }
 
 // TestACC_S1_C_DroppingPIIColumnSatisfiesSinkRule: a @pii column dropped
-// before the sink compiles and runs — no mask needed.
+// before the sink compiles and runs. No mask needed.
 func TestACC_S1_C_DroppingPIIColumnSatisfiesSinkRule(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@example.com\n")
@@ -148,14 +148,14 @@ pipeline main {
 	if err != nil {
 		t.Fatalf("reading output: %v", err)
 	}
-	// Same position (2nd field) and type (string) as the original dob.
+	// Same position (2nd field) and type (string) as original dob.
 	if want := `{"name":"Ada","birth_date":"1990-01-01","age":42}` + "\n"; string(got) != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }
 
 // TestACC_S2_B_RenamedPIIStillRejectedUnmasked: renaming a @pii column
-// and writing it unmasked is still a compile error — the tag survived
+// and writing it unmasked is still a compile error. The tag survives
 // the rename.
 func TestACC_S2_B_RenamedPIIStillRejectedUnmasked(t *testing.T) {
 	dir := t.TempDir()
@@ -204,9 +204,9 @@ pipeline main {
 }
 
 // TestACC_S3_B_LimitCountsFailedRowsPositionally: with a failing check
-// upstream under on error skip, limit(n) counts the failed rows toward
-// n (failed rows occupy positions) — asserted via the exact healthy-row
-// count reaching the sink.
+// upstream under on error skip, limit(n) counts failed rows toward n
+// (they occupy positions too). Asserted via the exact healthy-row count
+// reaching the sink.
 func TestACC_S3_B_LimitCountsFailedRowsPositionally(t *testing.T) {
 	dir := t.TempDir()
 	// Ada healthy, Grace fails check (blank email), Tom healthy.
@@ -230,15 +230,15 @@ pipeline main {
 		t.Fatalf("reading output: %v", err)
 	}
 	// limit(2) counts Ada (healthy) and Grace (failed) as its two
-	// positions, then stops -- Tom is never reached, even though he'd
-	// have been healthy. Only Ada reaches the sink.
+	// positions, then stops. Tom is never reached even though he'd have
+	// been healthy. Only Ada reaches the sink.
 	if want := `{"name":"Ada","email":"ada@example.com"}` + "\n"; string(got) != want {
 		t.Errorf("output = %q, want %q (only Ada; Grace skipped, Tom never reached)", got, want)
 	}
 }
 
 // TestACC_S4_A_DeclassifyStageCompilesAndRuns: |> hash(email) |> out
-// compiles and runs; the output column is present and clean (string, no
+// compiles and runs. The output column is present and clean (string, no
 // tag).
 func TestACC_S4_A_DeclassifyStageCompilesAndRuns(t *testing.T) {
 	dir := t.TempDir()
@@ -287,8 +287,8 @@ pipeline main {
 }
 
 // TestACC_MS_C_DuplicateSinkInBroadcastListRejected is
-// design-multisink.md MS-C: `|> out, out` is a compile error through the
-// real CLI, not just the checker in isolation.
+// design-multisink.md MS-C: `|> out, out` is a compile error through
+// the real CLI, not just the checker in isolation.
 func TestACC_MS_C_DuplicateSinkInBroadcastListRejected(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
@@ -311,7 +311,7 @@ pipeline main {
 
 // TestACC_MS_D_PIIRejectedOnceAcrossBroadcastList is design-multisink.md
 // MS-D: an unmasked @pii field reaching `|> out, out2` is a single
-// compile error naming both sinks, not one error per sink; masking
+// compile error naming both sinks, not one error per sink. Masking
 // fixes it for both.
 func TestACC_MS_D_PIIRejectedOnceAcrossBroadcastList(t *testing.T) {
 	dir := t.TempDir()
@@ -363,7 +363,7 @@ pipeline main {
 
 // TestACC_MS_E_ErrorRoutingAndBroadcastCompose is design-multisink.md
 // MS-E: `on error |> errsink` with `|> out, out2` routes failed rows to
-// errsink and sends every healthy row to both out and out2 — three
+// errsink and sends every healthy row to both out and out2. Three
 // sinks, one per-row decision.
 func TestACC_MS_E_ErrorRoutingAndBroadcastCompose(t *testing.T) {
 	dir := t.TempDir()

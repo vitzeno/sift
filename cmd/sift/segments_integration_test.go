@@ -1,7 +1,7 @@
 // This file maps to design/segments.md §9's acceptance list (PS-A
-// through PS-H): every scenario already has unit-level coverage in
+// through PS-H). Each scenario already has unit-level coverage in
 // internal/parser and internal/checker; these confirm the same
-// scenarios hold through the real CLI end to end (runFile — parse,
+// scenarios hold through the real CLI end to end (runFile: parse,
 // check, build, run).
 package main
 
@@ -13,8 +13,8 @@ import (
 )
 
 // TestACC_PS_A_ScalarParamReusedWithDifferentLiterals: one
-// `adults(min: int)` definition, two separate programs calling it with
-// different literals, each producing the correctly filtered output.
+// `adults(min: int)` definition, called with different literals in two
+// separate programs, each filtering correctly.
 func TestACC_PS_A_ScalarParamReusedWithDifferentLiterals(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\nTom,15\n")
@@ -68,8 +68,8 @@ pipeline main {
 }
 
 // TestACC_PS_B_ColumnParamDeclassifiesTwoDifferentPIIColumns: one
-// `scrub(col)` definition applied to two different @pii columns; both
-// are declassified and reach the sink cleanly.
+// `scrub(col)` definition applied to two different @pii columns. Both
+// get declassified and reach the sink cleanly.
 func TestACC_PS_B_ColumnParamDeclassifiesTwoDifferentPIIColumns(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email,backup_email\nAda,ada@x.co,ada2@x.co\n")
@@ -98,7 +98,7 @@ pipeline main {
 
 // TestACC_PS_D_NonDeclassifyingSegmentStillRejectedUnmasked: a segment
 // that transforms but doesn't declassify keeps @pii on its argument
-// column — the field still can't reach a sink unmasked.
+// column, so the field still can't reach a sink unmasked.
 func TestACC_PS_D_NonDeclassifyingSegmentStillRejectedUnmasked(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@x.co\n")
@@ -152,7 +152,7 @@ pipeline main {
 
 // TestACC_PS_F_BadColumnArgumentDualSiteDiagnostic: a misspelled column
 // argument errors against the real schema, naming the segment, its
-// binding, and the call site — not just a bare "field not in schema"
+// binding, and the call site, not just a bare "field not in schema"
 // pointing at synthesized AST.
 func TestACC_PS_F_BadColumnArgumentDualSiteDiagnostic(t *testing.T) {
 	dir := t.TempDir()
@@ -208,7 +208,7 @@ pipeline main {
 }
 
 // TestACC_PS_H_SelfReferencingSegmentCallRejected: a parameterized
-// segment defined in terms of itself is a compile error — cycle
+// segment defined in terms of itself is a compile error. Cycle
 // detection holds through substitution.
 func TestACC_PS_H_SelfReferencingSegmentCallRejected(t *testing.T) {
 	dir := t.TempDir()
