@@ -1,0 +1,5 @@
+name,email,phone,region,age
+Ada,ada@example.com,555-0100,EU,42
+Tom,tom@example.com,,US,15
+Liam,liam@example.com,555-0177,AU,29
+Grace,grace@example.com,555-0199,APAC,not-a-number

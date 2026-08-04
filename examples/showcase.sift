@@ -1,0 +1,20 @@
+// A short tour of most of what Sift can do in one pipeline: a masked
+// PII field, an optional field with a default, routing by region, and
+// a bad row sent to an error sink instead of stopping the run.
+on error |> errors
+
+source in = csv("showcase.csv", schema: { name: string, email: string @pii, phone: string?, region: string, age: int })
+sink eu_sink   = jsonl("showcase_eu.jsonl")
+sink us_sink   = jsonl("showcase_us.jsonl")
+sink rest_sink = jsonl("showcase_rest.jsonl")
+sink errors    = jsonl("showcase_errors.jsonl")
+
+pipeline main {
+  in
+    |> map({ ...row, email: mask(.email), phone: .phone ?? "unknown" })
+    |> route {
+         .region == "EU" => eu_sink,
+         .region == "US" => us_sink,
+         else            => rest_sink,
+       }
+}
