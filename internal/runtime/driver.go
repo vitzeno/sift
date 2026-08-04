@@ -81,7 +81,7 @@ func Run(top Stream, src Source, sinks []Sink, route []RouteBranch, policy Polic
 		row, ok := top.Next()
 		if !ok {
 			if srcErr := src.Err(); srcErr != nil {
-				closeAll()
+				_ = closeAll()
 				return srcErr
 			}
 			break
@@ -89,13 +89,13 @@ func Run(top Stream, src Source, sinks []Sink, route []RouteBranch, policy Polic
 		if row.Fail != nil {
 			switch policy {
 			case PolicyAbort:
-				closeAll()
+				_ = closeAll()
 				return &FailureError{Fail: row.Fail, Prov: row.Prov}
 			case PolicySkip:
 				continue
 			case PolicyRoute:
 				if err := errSink.Write(envelopeRow(row.Prov, row.Fail)); err != nil {
-					closeAll()
+					_ = closeAll()
 					return err
 				}
 				continue
@@ -110,7 +110,7 @@ func Run(top Stream, src Source, sinks []Sink, route []RouteBranch, policy Polic
 				}
 				if !b.Discard {
 					if err := sinks[b.SinkIndex].Write(row); err != nil {
-						closeAll()
+						_ = closeAll()
 						return err
 					}
 				}
@@ -120,7 +120,7 @@ func Run(top Stream, src Source, sinks []Sink, route []RouteBranch, policy Polic
 		}
 		for _, s := range sinks {
 			if err := s.Write(row); err != nil {
-				closeAll()
+				_ = closeAll()
 				return err
 			}
 		}
