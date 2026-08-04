@@ -1,6 +1,6 @@
 // Package format holds concrete Source/Sink implementations and registers
 // them with the runtime registry. Per design.md §4, this is the *only*
-// place that knows the string "csv" or "jsonl" — the registry itself, and
+// place that knows the string "csv" or "jsonl". The registry itself, and
 // everything above it, is format-agnostic.
 package format
 
@@ -21,7 +21,7 @@ func init() {
 
 // csvSource reads rows against a declared schema (design.md §3: CSV has no
 // inherent types, so the schema must be given up front). Column order in
-// the file need not match the schema's declared order — csvSource matches
+// the file need not match the schema's declared order; csvSource matches
 // columns by header name.
 type csvSource struct {
 	f    *os.File
@@ -33,18 +33,18 @@ type csvSource struct {
 	ordinal int
 	// err holds an infra-fatal error from the underlying reader (a
 	// malformed record it couldn't tokenize at all, an I/O error mid-
-	// read). It's infra-fatal, not a per-row Failure, because there's no
-	// well-formed row to attach one to — see design-errors.md §2.4.
+	// read). It's infra-fatal, not a per-row Failure, since there's no
+	// well-formed row to attach one to. See design-errors.md §2.4.
 	err error
 }
 
 // NewCSVSource is the SourceCtor registered under "csv". It opens the file,
 // reads the header row, and checks every required schema field has a
-// matching column — a missing required column is a construction-time
+// matching column. A missing required column is a construction-time
 // error, not a panic, since it's a real misconfiguration a caller can hit
 // legitimately (a typo'd schema, a header-less export, etc). An Optional
 // field's column may be absent from the header entirely: every row simply
-// reads it as Absent (design/optional-fields.md §2.1) — only a required
+// reads it as Absent (design/optional-fields.md §2.1); only a required
 // field's absence is structural.
 func NewCSVSource(opts runtime.SourceOptions) (runtime.Source, error) {
 	f, err := os.Open(opts.Path)
@@ -94,7 +94,7 @@ func (s *csvSource) Next() (value.Row, bool) {
 	}
 	if err != nil {
 		// The reader couldn't tokenize this record at all (a bad quote,
-		// a field-count mismatch) — there's no well-formed row to carry
+		// a field-count mismatch). There's no well-formed row to carry
 		// a per-row Failure, so this is infra-fatal (design-errors.md
 		// §2.4): stop the stream and let the driver read it back via
 		// Err() after Next returns ok == false.
@@ -113,8 +113,8 @@ func (s *csvSource) Next() (value.Row, bool) {
 	fields := make(map[string]any, len(s.schema.Fields))
 	for _, field := range s.schema.Fields {
 		// idx is absent only for an Optional field whose column isn't in
-		// the header at all — the header check above already rejected
-		// that for a required field — in which case raw stays "" and
+		// the header at all (the header check above already rejected
+		// that for a required field), in which case raw stays "" and
 		// Coerce reads it as absent (design/optional-fields.md §2.2).
 		var raw string
 		if idx, ok := s.col[field.Name]; ok {
@@ -123,7 +123,7 @@ func (s *csvSource) Next() (value.Row, bool) {
 		v, fail := value.Coerce(field.Type, raw)
 		if fail != nil {
 			// One failure per row (design-errors.md §9): the first bad
-			// cell marks the row and short-circuits — the rest of the
+			// cell marks the row and short-circuits. The rest of the
 			// record is never coerced.
 			fail.Stage = fmt.Sprintf("csv:%s", field.Name)
 			return value.Row{Fail: fail, Prov: prov}, true

@@ -1,7 +1,7 @@
 // Package ast defines Sift's abstract syntax tree: the node shapes the
 // parser (module 5) builds and the checker (module 6) walks. Nodes are
-// inert data — no behavior lives here — but every node carries a source
-// Pos so later diagnostics can point at real code (CLAUDE.md: "every
+// inert data, no behavior lives here, but every node carries a source
+// Pos so diagnostics can point at real code (CLAUDE.md: "every
 // parser/checker error carries a source position").
 package ast
 
@@ -10,8 +10,8 @@ import "github.com/vitzeno/sift/internal/lexer"
 // Program is a whole parsed .sift file: some source declarations, some
 // sink declarations, some pipeline declarations (both the runnable
 // `pipeline main { ... }` and reusable named segments like
-// `pipeline clean = ...` — the AST doesn't distinguish them; that's a
-// checker concern, not a syntax one), and at most one error policy.
+// `pipeline clean = ...`, which the AST doesn't distinguish since that's
+// a checker concern, not a syntax one), and at most one error policy.
 //
 // decision: no FuncDecl. design.md §5 lists scalar user functions as
 // "optional" for v0, and neither acceptance case (§7) uses one. The
@@ -37,7 +37,7 @@ const (
 // ErrorPolicyDecl is `on error (abort | skip | |> <name>)`
 // (design-errors.md §5, reintroducing what v0 deferred). Target is only
 // set when Kind == ErrorRoute, and names a sink by the same NameRef path
-// a pipeline body's stage-chain NameRefs already use — resolving it to
+// a pipeline body's stage-chain NameRefs already use. Resolving it to
 // an actual sink declaration is the checker's job, not the parser's.
 type ErrorPolicyDecl struct {
 	Kind   ErrorPolicyKind
@@ -46,18 +46,17 @@ type ErrorPolicyDecl struct {
 }
 
 // SourceDecl is `source NAME = FORMAT(PATH, schema: { ... }, ...)`. Format
-// is stored as the bare identifier text (e.g. "csv") — the AST never
+// is stored as the bare identifier text (e.g. "csv"). The AST never
 // validates it; resolving it to a registered Source constructor is the
 // checker/executor's job (CLAUDE.md non-negotiable #4).
 //
 // Opts carries every keyword argument other than the required `schema:`
-// (e.g. xlsx's `sheet: "Q1"`, `header_row: 3`, design/xlsx.md §1) —
-// format-specific options the parser and checker never interpret, only
-// pass through opaquely. Only the registered constructor for Format
-// knows what a given opt name means or validates its type; that keeps
-// the "no format special-cased in the frontend" rule (CLAUDE.md
-// non-negotiable #2) intact even as formats grow options csv/jsonl never
-// needed.
+// (e.g. xlsx's `sheet: "Q1"`, `header_row: 3`, design/xlsx.md §1). The
+// parser and checker never interpret these, only pass them through.
+// Only the registered constructor for Format knows what a given opt
+// name means or validates its type, which keeps the "no format
+// special-cased in the frontend" rule (CLAUDE.md non-negotiable #2)
+// intact even as formats grow options csv/jsonl never needed.
 type SourceDecl struct {
 	Name   string
 	Format string
@@ -68,7 +67,7 @@ type SourceDecl struct {
 }
 
 // SourceOpt is one keyword argument in a source declaration beyond
-// `schema:` — `sheet: "Q1"` or `header_row: 3`. Value is always a
+// `schema:`, e.g. `sheet: "Q1"` or `header_row: 3`. Value is always a
 // compile-time scalar literal (IntLit/DoubleLit/StringLit/BoolLit),
 // never a general expression: like a segment call's scalar argument
 // (design/segments.md §2.2), there is no row in scope yet at a source
@@ -96,9 +95,9 @@ type SinkDecl struct {
 // structure nothing will ever branch.
 //
 // Params is nil for a parameterless segment or the runnable pipeline
-// (unchanged from v0); non-empty turns Body into a template the checker
-// monomorphizes at each call site (design/segments.md §3) rather than a
-// stage list it inlines as-is.
+// (unchanged from v0). Non-empty, it turns Body into a template the
+// checker specializes at each call site (design/segments.md §3) rather
+// than a stage list it inlines as-is.
 type PipelineDecl struct {
 	Name   string
 	Params []Param
@@ -123,7 +122,7 @@ const (
 
 // Param is one entry in a `pipeline name(params) = body` declaration's
 // parameter list. TypeName is only set when Kind == ParamScalar, and is
-// left as raw identifier text -- like SchemaField.TypeName, resolving it
+// left as raw identifier text. Like SchemaField.TypeName, resolving it
 // to a value.Kind is the checker's job, not the parser's.
 type Param struct {
 	Name     string
@@ -134,11 +133,11 @@ type Param struct {
 
 // SchemaField is one `name: TypeName ["?"] [@pii]` pair in a schema
 // literal. TypeName is left as the raw identifier text (e.g. "string",
-// "int") — resolving it to a value.Kind happens in the checker, not the
+// "int"); resolving it to a value.Kind happens in the checker, not the
 // parser, per design.md §4's compilation pipeline (lexer -> parser -> AST
 // -> checker -> ...). Optional marks a `?` suffix (design/optional-fields.md
-// §2): the field may be absent, distinct from the PII tag and orthogonal
-// to it (design/optional-fields.md §4).
+// §2): the field may be absent, independent of the PII tag
+// (design/optional-fields.md §4).
 type SchemaField struct {
 	Name     string
 	TypeName string
@@ -150,7 +149,7 @@ type SchemaField struct {
 // SchemaLit is the `{ name: string, age: int }` type literal that
 // appears in a source declaration's `schema:` argument. It is a type-level
 // construct, distinct from RecordExpr (a value-level record literal used
-// inside map) — the two are never interchangeable.
+// inside map). The two are never interchangeable.
 type SchemaLit struct {
 	Fields []SchemaField
 	Pos    lexer.Pos

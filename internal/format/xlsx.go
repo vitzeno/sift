@@ -15,7 +15,7 @@ func init() {
 }
 
 // xlsxSource reads rows from one worksheet of an .xlsx workbook against a
-// declared schema — the same "declared, not inferred" contract csvSource
+// declared schema, the same "declared, not inferred" contract csvSource
 // follows (design/xlsx.md §1): xlsx cells are nominally typed but
 // unreliably so, and a declared schema keeps every source format
 // consistent and explicit.
@@ -24,20 +24,20 @@ func init() {
 // structure and shared-string table up front, so an xlsx source has a
 // fixed memory cost a CSV source does not (design/xlsx.md §2). Row
 // reading itself still streams via the excelize row iterator
-// (Rows/Next/Columns), not GetRows, preserving the one-row-in-flight
-// invariant for the data itself.
+// (Rows/Next/Columns), not GetRows, keeping the data itself to one row
+// in flight at a time.
 type xlsxSource struct {
 	f    *excelize.File
 	rows *excelize.Rows
 	name string
 	// col maps a schema field name to its zero-based column index in
-	// the sheet, bound once from header_row and reused for every row —
-	// mirrors csvSource.col.
+	// the sheet, bound once from header_row and reused for every row.
+	// Mirrors csvSource.col.
 	col     map[string]int
 	schema  value.Schema
 	ordinal int
 	// sheetRow is the 1-based spreadsheet row number of the last row
-	// pulled from rows — becomes each emitted Row's Provenance.Offset
+	// pulled from rows. Becomes each emitted Row's Provenance.Offset
 	// (design/xlsx.md §2: "the one a user can act on"), distinct from
 	// ordinal once header_row > 1.
 	sheetRow int
@@ -85,7 +85,7 @@ func NewXLSXSource(opts runtime.SourceOptions) (runtime.Source, error) {
 
 	// Advance to header_row, discarding everything above it unread
 	// (design/xlsx.md §2.1). seen counts rows actually iterated, so a
-	// sheet shorter than header_row can report its real row count.
+	// sheet shorter than header_row still reports its real row count.
 	var header []string
 	seen := 0
 	for seen < headerRow {
@@ -104,10 +104,10 @@ func NewXLSXSource(opts runtime.SourceOptions) (runtime.Source, error) {
 
 	col := make(map[string]int, len(header))
 	for i, h := range header {
-		// Empty header cells are ignored along with their columns —
+		// Empty header cells are ignored along with their columns:
 		// they're unnameable, so nothing can reference them
-		// (design/xlsx.md §2.1). This also degrades a merged header
-		// cell quietly: excelize returns its value only in the
+		// (design/xlsx.md §2.1). This also quietly handles a merged
+		// header cell: excelize returns its value only in the
 		// top-left cell of the range, leaving the rest empty.
 		if h == "" {
 			continue
@@ -150,7 +150,7 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 		if !s.rows.Next() {
 			// An exhausted iterator can still carry a real read error
 			// (design-errors.md §2.4: infra-fatal, checked after Next
-			// reports EOF) — a clean end of sheet leaves this nil.
+			// reports EOF). A clean end of sheet leaves this nil.
 			s.err = s.rows.Error()
 			return value.Row{}, false
 		}
@@ -164,9 +164,9 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 
 		if blankRow(cells, s.col) {
 			// Skipped, not emitted and not end-of-stream
-			// (design/xlsx.md §7): trailing blank rows are ubiquitous
-			// and must not abort a run, and stopping on the first one
-			// would silently truncate any sheet with a gap in it.
+			// (design/xlsx.md §7): blank rows are common and must not
+			// abort a run, and stopping on the first one would
+			// silently truncate any sheet with a gap in it.
 			continue
 		}
 
@@ -180,7 +180,7 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 		fields := make(map[string]any, len(s.schema.Fields))
 		for _, field := range s.schema.Fields {
 			// A missing key here means an Optional field's column isn't
-			// in the header at all; idx -1 makes cellAt read it as an
+			// in the header at all. idx -1 makes cellAt read it as an
 			// empty cell, which Coerce turns into Absent (mirrors
 			// csvSource's equivalent guard).
 			idx, ok := s.col[field.Name]
@@ -201,7 +201,7 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 
 // cellAt indexes cells defensively: rows.Columns trims trailing empty
 // cells (design/xlsx.md §2.2), so a row shorter than the header is
-// normal, not an error — a missing index is just an empty cell.
+// normal, not an error. A missing index is just an empty cell.
 func cellAt(cells []string, idx int) string {
 	if idx < 0 || idx >= len(cells) {
 		return ""
@@ -222,8 +222,8 @@ func blankRow(cells []string, col map[string]int) bool {
 	return true
 }
 
-// sheetIndex reports whether sheet exists in f, alongside its index —
-// wraps GetSheetIndex's ambiguous "-1 means missing" contract into a
+// sheetIndex reports whether sheet exists in f, alongside its index.
+// Wraps GetSheetIndex's ambiguous "-1 means missing" contract into a
 // plain ok bool at the one call site that needs it.
 func sheetIndex(f *excelize.File, sheet string) (int, bool) {
 	i, err := f.GetSheetIndex(sheet)
@@ -236,7 +236,7 @@ func sheetIndex(f *excelize.File, sheet string) (int, bool) {
 // stringOpt and intOpt read one keyword argument out of
 // runtime.SourceOptions.Opts, applying a default when absent and
 // producing a clear, positioned-by-name error when the argument was
-// given but is the wrong type — the "let constructors validate types"
+// given but is the wrong type: the "let constructors validate types"
 // half of design/xlsx.md §1's registry-boundary note. The parser and
 // checker never know these names mean anything; only this constructor
 // does.

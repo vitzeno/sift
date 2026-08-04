@@ -73,7 +73,7 @@ func TestCSVSourceMissingSchemaField(t *testing.T) {
 // (design-errors.md §2.4): a record the reader can't even tokenize into
 // the right number of fields leaves no well-formed row to attach a
 // per-row Failure to, so Next reports a clean-looking ok=false and the
-// real problem surfaces through Err() — never a panic.
+// real problem surfaces through Err(), never a panic.
 func TestCSVSourceMalformedRecordIsInfraFatal(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "malformed.csv")
@@ -100,7 +100,7 @@ func TestCSVSourceMalformedRecordIsInfraFatal(t *testing.T) {
 }
 
 // TestCSVSourceBadCellIsRowFailure is ERR-D (design-errors.md §7): a
-// non-numeric "age" cell must become a row Failure — not a panic — and
+// non-numeric "age" cell must become a row Failure, not a panic, and
 // the source must keep working normally afterward: the next row still
 // reads, and Ordinal/Offset keep advancing as though nothing went wrong,
 // since only that one row is marked, never the stream itself.
@@ -153,7 +153,7 @@ func TestCSVSourceBadCellIsRowFailure(t *testing.T) {
 	}
 }
 
-// optionalPhoneSchema is name/phone where phone is Optional — the
+// optionalPhoneSchema is name/phone where phone is Optional: the
 // fixture schema for design/optional-fields.md's OF-A/OF-C/OF-D cases.
 func optionalPhoneSchema() value.Schema {
 	return value.Schema{Fields: []value.Field{
@@ -232,7 +232,7 @@ func TestCSVSourceRequiredColumnMissingIsStructuralError(t *testing.T) {
 }
 
 // TestCSVSourceOptionalUnparseableIsRowFailure is OF-D: optionality
-// excuses absence, never malformed presence — a present-but-garbage cell
+// excuses absence, never malformed presence. A present-but-garbage cell
 // in an optional numeric field is still a row Failure.
 func TestCSVSourceOptionalUnparseableIsRowFailure(t *testing.T) {
 	dir := t.TempDir()

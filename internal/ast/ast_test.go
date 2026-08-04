@@ -8,8 +8,8 @@ import (
 
 // Compile-time checks that every concrete node satisfies its marker
 // interface. These catch an accidental typo (e.g. a method on the
-// wrong receiver type) at build time rather than silently producing a
-// type that can never be placed in an Expr/Stage slice.
+// wrong receiver type) at build time instead of silently producing a
+// type that can never go in an Expr/Stage slice.
 var (
 	_ Expr = (*FieldAccess)(nil)
 	_ Expr = (*IntLit)(nil)
@@ -34,7 +34,7 @@ var (
 
 // TestAdultsFilterShape hand-builds design.md §7 Case A's adults.sift as
 // a tree, the way module 5's parser will eventually produce it. It's
-// less "test the AST does something" (it doesn't — these are inert
+// less "test the AST does something" (it doesn't; these are inert
 // structs) and more proof that the node types actually compose into the
 // shape the language needs, with positions intact for diagnostics.
 func TestAdultsFilterShape(t *testing.T) {

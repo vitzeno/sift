@@ -31,7 +31,7 @@ func writeXLSXFixture(t *testing.T, sheet string, rows [][]string) string {
 }
 
 // writeXLSXWorkbook builds a multi-sheet workbook, first sheet named
-// sheets[0], in order — used by tests that need to assert against a
+// sheets[0], in order. Used by tests that need to assert against a
 // real set of sheet names (e.g. a missing-sheet error listing them).
 func writeXLSXWorkbook(t *testing.T, sheets []string, rowsBySheet map[string][][]string) string {
 	t.Helper()
@@ -115,7 +115,7 @@ func TestXLSXSourceTypedParseAndProvenance(t *testing.T) {
 }
 
 // TestXLSXSourceColumnOrderIgnoresSheetOrder: extra/reordered columns
-// in the sheet don't matter — header binding matches by name
+// in the sheet don't matter. Header binding matches by name
 // (design/xlsx.md §2.1).
 func TestXLSXSourceColumnOrderIgnoresSheetOrder(t *testing.T) {
 	path := writeXLSXFixture(t, "Sheet1", [][]string{
@@ -136,8 +136,8 @@ func TestXLSXSourceColumnOrderIgnoresSheetOrder(t *testing.T) {
 }
 
 // TestXLSXSourceHeaderRowAndBlankRows covers XLSX-E: a title row, a
-// blank row, the header on row 3, and an extra unmapped column — reads
-// correctly and skips the blank row without ending the stream.
+// blank row, the header on row 3, and an extra unmapped column. It
+// reads correctly and skips the blank row without ending the stream.
 func TestXLSXSourceHeaderRowAndBlankRows(t *testing.T) {
 	path := writeXLSXFixture(t, "Data", [][]string{
 		{"Q1 Export"},
