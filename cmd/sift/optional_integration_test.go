@@ -36,9 +36,10 @@ pipeline main { in |> out }
 }
 
 // TestOF_D_OptionalGarbageCellIsRowFailure: optionality excuses absence,
-// never malformed presence — under `on error skip`, Tom's blank phone
-// survives as absent while Grace's unparseable one is dropped as a row
-// failure, exactly like a required field's bad cell would be.
+// never malformed presence — under `on error skip`, Tom's blank age
+// survives as absent (discharged to 0 via ?? before the sink) while
+// Grace's unparseable one is dropped as a row failure, exactly like a
+// required field's bad cell would be.
 func TestOF_D_OptionalGarbageCellIsRowFailure(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\nTom,\nGrace,not-a-number\n")
@@ -47,7 +48,7 @@ func TestOF_D_OptionalGarbageCellIsRowFailure(t *testing.T) {
 	writeFile(t, siftPath, `on error skip
 source in = csv("people.csv", schema: { name: string, age: int? })
 sink out = jsonl("out.jsonl")
-pipeline main { in |> out }
+pipeline main { in |> map({ ...row, age: .age ?? 0 }) |> out }
 `)
 
 	if err := runFile(siftPath); err != nil {
@@ -58,7 +59,7 @@ pipeline main { in |> out }
 	if err != nil {
 		t.Fatalf("reading output: %v", err)
 	}
-	want := `{"name":"Ada","age":42}` + "\n" + `{"name":"Tom","age":null}` + "\n"
+	want := `{"name":"Ada","age":42}` + "\n" + `{"name":"Tom","age":0}` + "\n"
 	if string(got) != want {
 		t.Errorf("output = %q, want %q (Grace's garbage cell skipped, Tom's absence survives)", got, want)
 	}

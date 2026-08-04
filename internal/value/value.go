@@ -103,6 +103,20 @@ func (s Schema) FirstPII() (Field, bool) {
 	return Field{}, false
 }
 
+// FirstOptional returns the first field still Optional, in declared
+// order, and whether one was found — the discharge-rule mirror of
+// FirstPII (design/optional-fields.md §3: "reaching a sink... mirrors the
+// PII sink rule"). The checker calls this once per sink to reject a
+// still-optional field the same way it rejects unmasked PII.
+func (s Schema) FirstOptional() (Field, bool) {
+	for _, f := range s.Fields {
+		if f.Type.Optional {
+			return f, true
+		}
+	}
+	return Field{}, false
+}
+
 // String renders the schema the way design.md §3 writes it:
 // { name: string, age: int }. --emit-schema (module 8) will just call this.
 func (s Schema) String() string {

@@ -265,13 +265,13 @@ func TestExampleBadCell(t *testing.T) {
 	}
 }
 
-// TestExampleOptional is OF-A end to end: a blank cell against an
-// optional field reads as an absent value, not a row failure, so all
-// three rows survive and Tom's phone renders as JSON null.
+// TestExampleOptional is OF-A and OF-E end to end: a blank cell against
+// an optional field reads as an absent value, not a row failure, and ??
+// discharges it with a default before the sink.
 func TestExampleOptional(t *testing.T) {
 	got := runExample(t, "optional")
 	want := `{"name":"Ada","phone":"555-0100"}
-{"name":"Tom","phone":null}
+{"name":"Tom","phone":"n/a"}
 {"name":"Nina","phone":"555-0199"}
 `
 	if string(got) != want {

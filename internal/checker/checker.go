@@ -3,7 +3,9 @@
 // resolves source/sink/pipeline names into one namespace, recomputes the
 // schema at every stage (design.md §3 — "the checker's core job"),
 // inlines named-segment references into a flat stage chain, and enforces
-// that no @pii field reaches a sink unmasked (design.md §3, rule 3).
+// that no @pii field reaches a sink unmasked (design.md §3, rule 3) and
+// no Optional field reaches one undischarged
+// (design/optional-fields.md §3).
 package checker
 
 import (
@@ -126,6 +128,11 @@ func Check(prog *ast.Program) (*CheckedProgram, error) {
 		return nil, err
 	}
 
+	if f, ok := schema.FirstOptional(); ok {
+		return nil, errorf(runnable.Pos,
+			"field %q is optional and reaches sink %s undischarged; resolve with ??",
+			f.Name, sinkNameList(sinkRefs))
+	}
 	if f, ok := schema.FirstPII(); ok {
 		return nil, errorf(runnable.Pos,
 			"field %q is @pii and reaches sink %s unmasked; declassify with mask/hash/redact",

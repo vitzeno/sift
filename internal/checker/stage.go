@@ -39,7 +39,7 @@ func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting
 			if err != nil {
 				return nil, value.Schema{}, err
 			}
-			if predType.Kind != value.Bool {
+			if predType.Kind != value.Bool || predType.Optional {
 				return nil, value.Schema{}, errorf(st.Pos, "filter predicate must be bool, got %s", predType)
 			}
 			out = append(out, st)
@@ -49,7 +49,7 @@ func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting
 			if err != nil {
 				return nil, value.Schema{}, err
 			}
-			if condType.Kind != value.Bool {
+			if condType.Kind != value.Bool || condType.Optional {
 				return nil, value.Schema{}, errorf(st.Pos, "check condition must be bool, got %s", condType)
 			}
 			out = append(out, st)

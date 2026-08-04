@@ -78,9 +78,35 @@ func EvalRecord(rec *ast.RecordExpr, row value.Row) map[string]any {
 	return fields
 }
 
+// isAbsent reports whether v is an optional field's absent value
+// (value.Absent), the runtime counterpart of value.Type.Optional the
+// checker tracked ahead of time (design/optional-fields.md §3).
+func isAbsent(v any) bool {
+	_, ok := v.(value.Absent)
+	return ok
+}
+
 func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
+	// ?? is the one operator that ever resolves an Absent left operand,
+	// so it must inspect left before the general Absent short-circuit
+	// below would otherwise swallow it.
+	if e.Op == lexer.COALESCE {
+		left := Eval(e.Left, row)
+		if isAbsent(left) {
+			return Eval(e.Right, row)
+		}
+		return left
+	}
+
 	left := Eval(e.Left, row)
 	right := Eval(e.Right, row)
+	// Every other operator propagates Absent exactly like the checker's
+	// Optional tag propagated at compile time: consuming an absent
+	// operand yields an absent result, never a type assertion panic
+	// below on a value that was never there.
+	if isAbsent(left) || isAbsent(right) {
+		return value.Absent{}
+	}
 
 	switch e.Op {
 	case lexer.PLUS:
@@ -159,7 +185,14 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 // its own arity/type dispatch — the checker already guaranteed both by
 // the time this runs.
 func evalCall(e *ast.Call, row value.Row) any {
-	arg := Eval(e.Args[0], row).(string)
+	argVal := Eval(e.Args[0], row)
+	if isAbsent(argVal) {
+		// The checker lets a function propagate Optional unconditionally
+		// (design/optional-fields.md §3's upper(.phone) is string?) --
+		// mirror that here rather than asserting an Absent to string.
+		return value.Absent{}
+	}
+	arg := argVal.(string)
 	switch e.Fn {
 	case "mask", "hash", "redact":
 		return Declassify(e.Fn, arg)

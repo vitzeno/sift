@@ -99,42 +99,74 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 	if err != nil {
 		return value.Type{}, err
 	}
+
+	if e.Op == lexer.COALESCE {
+		return c.checkCoalesce(e, left, right)
+	}
+
 	pii := left.PII || right.PII
+	// Optional propagates exactly like PII (design/optional-fields.md §3):
+	// any operator consuming a T? yields a U? until ?? explicitly
+	// discharges it, above. Kind mismatches below are unaffected --
+	// optionality never changes what Kinds an operator accepts.
+	optional := left.Optional || right.Optional
 
 	switch e.Op {
 	case lexer.PLUS:
 		if left.Kind != right.Kind || !isNumericOrString(left.Kind) {
 			return value.Type{}, errorf(e.Pos, "cannot apply + to %s and %s", left, right)
 		}
-		return value.Type{Kind: left.Kind, PII: pii}, nil
+		return value.Type{Kind: left.Kind, Optional: optional, PII: pii}, nil
 
 	case lexer.MINUS, lexer.STAR, lexer.SLASH:
 		if left.Kind != right.Kind || !isNumeric(left.Kind) {
 			return value.Type{}, errorf(e.Pos, "cannot apply %s to %s and %s", e.Op.Symbol(), left, right)
 		}
-		return value.Type{Kind: left.Kind, PII: pii}, nil
+		return value.Type{Kind: left.Kind, Optional: optional, PII: pii}, nil
 
 	case lexer.LT, lexer.GT, lexer.LE, lexer.GE:
 		if left.Kind != right.Kind || !isNumeric(left.Kind) {
 			return value.Type{}, errorf(e.Pos, "cannot compare %s and %s", left, right)
 		}
-		return value.Type{Kind: value.Bool, PII: pii}, nil
+		return value.Type{Kind: value.Bool, Optional: optional, PII: pii}, nil
 
 	case lexer.EQ, lexer.NE:
 		if left.Kind != right.Kind {
 			return value.Type{}, errorf(e.Pos, "cannot compare %s and %s", left, right)
 		}
-		return value.Type{Kind: value.Bool, PII: pii}, nil
+		return value.Type{Kind: value.Bool, Optional: optional, PII: pii}, nil
 
 	case lexer.AND, lexer.OR:
 		if left.Kind != value.Bool || right.Kind != value.Bool {
 			return value.Type{}, errorf(e.Pos, "%s requires bool operands, got %s and %s", e.Op.Symbol(), left, right)
 		}
-		return value.Type{Kind: value.Bool, PII: pii}, nil
+		return value.Type{Kind: value.Bool, Optional: optional, PII: pii}, nil
 
 	default:
 		panic(fmt.Sprintf("checker: unhandled binary operator %s", e.Op))
 	}
+}
+
+// checkCoalesce types design/optional-fields.md §3's `??` discharge
+// operator: left ?? right always yields a non-Optional result -- right
+// supplies the value for left's absent case, so after ?? there is no
+// absent case left to track.
+//
+// decision: right (the default) must share left's Kind and must not
+// itself be Optional. Every acceptance example (§8) supplies a concrete
+// default -- a literal or an already-resolved expression -- never another
+// optional field; requiring that keeps "?? always discharges" a hard
+// guarantee rather than a maybe, and chained optional defaults
+// (`.a ?? .b` where .b is itself optional) can be loosened into later if
+// a real program needs it.
+func (c *checker) checkCoalesce(e *ast.BinaryOp, left, right value.Type) (value.Type, error) {
+	if left.Kind != right.Kind {
+		return value.Type{}, errorf(e.Pos, "?? requires both sides to share a type, got %s and %s", left, right)
+	}
+	if right.Optional {
+		return value.Type{}, errorf(e.Pos, "?? default must not itself be optional, got %s", right)
+	}
+	return value.Type{Kind: left.Kind, PII: left.PII || right.PII}, nil
 }
 
 func isNumeric(k value.Kind) bool {
@@ -166,5 +198,9 @@ func (c *checker) checkCall(e *ast.Call, schema value.Schema) (value.Type, error
 	}
 
 	pii := argType.PII && !sig.Declassify
-	return value.Type{Kind: sig.Return, PII: pii}, nil
+	// Unlike PII, no builtin function discharges Optional (only ??
+	// does, in checkCoalesce) -- every function call propagates it
+	// unconditionally (design/optional-fields.md §3's upper(.phone) is
+	// string? example).
+	return value.Type{Kind: sig.Return, Optional: argType.Optional, PII: pii}, nil
 }

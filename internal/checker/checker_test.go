@@ -69,14 +69,16 @@ pipeline main {
 
 // TestCheckSourceSchemaOptional is OF1's checker-level slice of
 // design/optional-fields.md: a `?` suffix on a schema field resolves into
-// value.Type.Optional on that field only, leaving a plain field untouched.
-// PII × optional coexistence (§4) is OF3, tested separately.
+// value.Type.Optional on that field only, leaving a plain field
+// untouched. phone is dropped before the sink so this test stays about
+// schema resolution, not the sink's discharge rule (OF2, tested
+// separately); PII × optional coexistence (§4) is OF3, also separate.
 func TestCheckSourceSchemaOptional(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, phone: string? })
 sink out = jsonl("out.jsonl")
 
 pipeline main {
-  in |> out
+  in |> drop(phone) |> out
 }`
 	cp := mustCheck(t, src)
 
