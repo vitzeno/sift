@@ -17,15 +17,16 @@ $ go build -o sift ./cmd/sift
 
 ## Run it
 
-One example, showing off most of what makes Sift different: a masked
-PII field, a phone number that's allowed to be missing, rows sent to
-different sinks by region, and a bad row that goes to an error sink
-instead of stopping the whole run.
+One example, showing off most of what makes Sift different: a column
+whose real header isn't a valid identifier, a masked PII field, a phone
+number that's allowed to be missing, rows sent to different sinks by
+region, and a bad row that goes to an error sink instead of stopping the
+whole run.
 
 `showcase.csv`:
 
 ```csv
-name,email,phone,region,age
+Full Name,email,phone,region,age
 Ada,ada@example.com,555-0100,EU,42
 Tom,tom@example.com,,US,15
 Liam,liam@example.com,555-0177,AU,29
@@ -37,7 +38,18 @@ Grace,grace@example.com,555-0199,APAC,not-a-number
 ```sift
 on error |> errors
 
-source in = csv("showcase.csv", schema: { name: string, email: string @pii, phone: string?, region: string, age: int })
+source in = csv("showcase.csv",
+  schema: {
+    name: string,
+    email: string @pii,
+    phone: string?,
+    region: string,
+    age: int
+  },
+  columns: {
+    name: "Full Name"
+  }
+)
 sink eu_sink   = jsonl("showcase_eu.jsonl")
 sink us_sink   = jsonl("showcase_us.jsonl")
 sink rest_sink = jsonl("showcase_rest.jsonl")
@@ -70,6 +82,9 @@ $ cat showcase_errors.jsonl
 
 A few things happened here, all in one pass over the file:
 
+- The file's real header is `Full Name`, and that's never a valid schema
+  field name (it has a space). `columns` maps the clean identifier
+  `name` to that raw header text instead.
 - `email` is marked `@pii`. It gets masked before it can reach any sink.
   Sift would refuse to compile this program if it didn't.
 - `phone` is marked optional with `?`. Tom's phone is blank, so it comes

@@ -1,4 +1,4 @@
-name,email,phone,region,age
+Full Name,email,phone,region,age
 Ada,ada@example.com,555-0100,EU,42
 Tom,tom@example.com,,US,15
 Liam,liam@example.com,555-0177,AU,29
