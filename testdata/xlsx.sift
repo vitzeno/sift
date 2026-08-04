@@ -1,0 +1,6 @@
+source in = xlsx("people.xlsx", sheet: "People", header_row: 2, schema: { name: string, age: int })
+sink out = jsonl("xlsx_out.jsonl")
+
+pipeline main {
+  in |> filter(.age >= 18) |> out
+}

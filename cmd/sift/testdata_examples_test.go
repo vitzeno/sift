@@ -1,11 +1,16 @@
-// This file runs every example program in examples/ through the real CLI
+// This file runs every example program in testdata/ through the real CLI
 // entry point (runFile) and asserts its output byte-exact. complex_test.go
 // used to apply this discipline to one big combined program; now it's
-// spread across examples/'s per-feature examples (filter, map, check, pii,
+// spread across testdata/'s per-feature examples (filter, map, check, pii,
 // named-segment) plus the design-errors.md examples (on-error-abort/skip/
 // route, bad-cell). Each example demonstrates exactly one language feature
-// or error policy, matching CLAUDE.md's examples/ convention (".sift
-// programs + input / expected-output fixtures").
+// or error policy.
+//
+// testdata/ holds a copy of every fixture actually exercised by a Go test
+// (this file, plus internal/runtime and internal/format); examples/ is the
+// same set of programs kept for the tutorial in examples/README.md and is
+// never read by a test. The two are expected to stay identical for any
+// fixture that lives in both — if you change one, change the other.
 package main
 
 import (
@@ -18,17 +23,17 @@ import (
 	"github.com/vitzeno/sift/internal/runtime"
 )
 
-// runExample runs examples/name.sift and returns name_out.jsonl's
+// runExample runs testdata/name.sift and returns name_out.jsonl's
 // contents, cleaning up every file the program writes. Script-relative
-// path resolution puts those files directly in examples/ next to the
+// path resolution puts those files directly in testdata/ next to the
 // .sift file, not in a test-private temp directory.
 func runExample(t *testing.T, name string, extraOutputs ...string) []byte {
 	t.Helper()
-	siftPath := filepath.Join("..", "..", "examples", name+".sift")
-	outPath := filepath.Join("..", "..", "examples", name+"_out.jsonl")
+	siftPath := filepath.Join("..", "..", "testdata", name+".sift")
+	outPath := filepath.Join("..", "..", "testdata", name+"_out.jsonl")
 	t.Cleanup(func() { os.Remove(outPath) })
 	for _, extra := range extraOutputs {
-		path := filepath.Join("..", "..", "examples", extra)
+		path := filepath.Join("..", "..", "testdata", extra)
 		t.Cleanup(func() { os.Remove(path) })
 	}
 
@@ -171,8 +176,8 @@ func TestExampleSegments(t *testing.T) {
 // blank email aborts the run, Liam (after her in the CSV) is never
 // reached, and only Ada's row, read before the failure, lands in the sink.
 func TestExampleOnErrorAbort(t *testing.T) {
-	siftPath := filepath.Join("..", "..", "examples", "on-error-abort.sift")
-	outPath := filepath.Join("..", "..", "examples", "on-error-abort_out.jsonl")
+	siftPath := filepath.Join("..", "..", "testdata", "on-error-abort.sift")
+	outPath := filepath.Join("..", "..", "testdata", "on-error-abort_out.jsonl")
 	t.Cleanup(func() { os.Remove(outPath) })
 
 	err := runFile(siftPath)
@@ -220,7 +225,7 @@ func TestExampleOnErrorRoute(t *testing.T) {
 		t.Errorf("main output =\n%s\nwant\n%s", got, want)
 	}
 
-	errPath := filepath.Join("..", "..", "examples", "on-error-route_errors.jsonl")
+	errPath := filepath.Join("..", "..", "testdata", "on-error-route_errors.jsonl")
 	gotErr, err := os.ReadFile(errPath)
 	if err != nil {
 		t.Fatalf("reading error sink: %v", err)
@@ -243,7 +248,7 @@ func TestExampleBroadcast(t *testing.T) {
 		t.Errorf("warehouse output =\n%s\nwant\n%s", got, want)
 	}
 
-	auditPath := filepath.Join("..", "..", "examples", "broadcast_audit.jsonl")
+	auditPath := filepath.Join("..", "..", "testdata", "broadcast_audit.jsonl")
 	gotAudit, err := os.ReadFile(auditPath)
 	if err != nil {
 		t.Fatalf("reading audit sink: %v", err)
@@ -265,7 +270,7 @@ func TestExampleRouting(t *testing.T) {
 		t.Errorf("eu output =\n%s\nwant\n%s", got, want)
 	}
 
-	usPath := filepath.Join("..", "..", "examples", "routing_us.jsonl")
+	usPath := filepath.Join("..", "..", "testdata", "routing_us.jsonl")
 	gotUS, err := os.ReadFile(usPath)
 	if err != nil {
 		t.Fatalf("reading us sink: %v", err)
@@ -276,7 +281,7 @@ func TestExampleRouting(t *testing.T) {
 		t.Errorf("us output =\n%s\nwant\n%s", gotUS, wantUS)
 	}
 
-	restPath := filepath.Join("..", "..", "examples", "routing_rest.jsonl")
+	restPath := filepath.Join("..", "..", "testdata", "routing_rest.jsonl")
 	gotRest, err := os.ReadFile(restPath)
 	if err != nil {
 		t.Fatalf("reading rest sink: %v", err)
@@ -338,7 +343,7 @@ func TestExampleETL(t *testing.T) {
 		t.Errorf("out output =\n%s\nwant\n%s", got, want)
 	}
 
-	auditPath := filepath.Join("..", "..", "examples", "etl_audit.jsonl")
+	auditPath := filepath.Join("..", "..", "testdata", "etl_audit.jsonl")
 	gotAudit, err := os.ReadFile(auditPath)
 	if err != nil {
 		t.Fatalf("reading audit sink: %v", err)
@@ -366,7 +371,7 @@ func TestExampleETLErrors(t *testing.T) {
 		t.Errorf("out output =\n%s\nwant\n%s", got, want)
 	}
 
-	auditPath := filepath.Join("..", "..", "examples", "etl-errors_audit.jsonl")
+	auditPath := filepath.Join("..", "..", "testdata", "etl-errors_audit.jsonl")
 	gotAudit, err := os.ReadFile(auditPath)
 	if err != nil {
 		t.Fatalf("reading audit sink: %v", err)
@@ -375,7 +380,7 @@ func TestExampleETLErrors(t *testing.T) {
 		t.Errorf("audit output =\n%s\nwant byte-identical to out output\n%s", gotAudit, got)
 	}
 
-	errPath := filepath.Join("..", "..", "examples", "etl-errors_errors.jsonl")
+	errPath := filepath.Join("..", "..", "testdata", "etl-errors_errors.jsonl")
 	gotErr, err := os.ReadFile(errPath)
 	if err != nil {
 		t.Fatalf("reading error sink: %v", err)

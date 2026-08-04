@@ -1,0 +1,6 @@
+source in = csv("people.csv", schema: { name: string, age: int })
+sink out = jsonl("adults.jsonl")
+
+pipeline main {
+  in |> filter(.age >= 18) |> out
+}

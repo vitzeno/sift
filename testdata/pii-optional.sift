@@ -1,0 +1,11 @@
+// Demonstrates design/optional-fields.md's OF-G: email is both optional
+// (`string?`) and @pii, and the two tags are orthogonal — both must be
+// discharged before the sink, in either order. Tom's blank email reads
+// as absent; `?? "n/a"` discharges the optional, then mask() discharges
+// the PII tag, in one expression.
+source in = csv("pii-optional.csv", schema: { name: string, email: string? @pii })
+sink   out = jsonl("pii-optional_out.jsonl")
+
+pipeline main {
+  in |> map({ ...row, email: mask(.email ?? "n/a") }) |> out
+}

@@ -1,0 +1,14 @@
+// Demonstrates a named, reusable pipeline segment (design.md §2):
+// `clean` declares no source or sink of its own — it's a
+// stream<T> -> stream<U> value dropped into main by name, just like a
+// built-in stage would be.
+source in  = csv("named-segment.csv", schema: { name: string, email: string })
+sink   out = jsonl("named-segment_out.jsonl")
+
+pipeline clean =
+     check(.email != "", "missing email")
+  |> map({ ...row, email: lower(trim(.email)) })
+
+pipeline main {
+  in |> clean |> out
+}

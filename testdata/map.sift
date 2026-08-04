@@ -1,0 +1,10 @@
+// Demonstrates map rebuilding a row: { ...row, ... } keeps every
+// existing field, transforms name to uppercase in place, and adds two
+// brand-new computed fields — a double comparison (balance_ok) and int
+// arithmetic (age_next_year).
+source in  = csv("map.csv", schema: { name: string, age: int, balance: double })
+sink   out = jsonl("map_out.jsonl")
+
+pipeline main {
+  in |> map({ ...row, name: upper(.name), balance_ok: .balance >= 100.0, age_next_year: .age + 1 }) |> out
+}

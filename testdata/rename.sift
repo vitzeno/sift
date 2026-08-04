@@ -1,0 +1,13 @@
+// Demonstrates rename migrating legacy column names onto a canonical
+// schema (design-improvements.md S2): this export still uses the old
+// CRM field names dob and email_addr; rename brings them onto the
+// names downstream pipelines expect (birth_date, email) while keeping
+// each column's exact position and type. email_addr was @pii, so the
+// tag rides along onto email unchanged — mask(.email) is still required
+// before the sink, proving the rename didn't launder it.
+source in  = csv("rename.csv", schema: { name: string, dob: string, email_addr: string @pii })
+sink   out = jsonl("rename_out.jsonl")
+
+pipeline main {
+  in |> rename(dob: birth_date, email_addr: email) |> map({ ...row, email: mask(.email) }) |> out
+}

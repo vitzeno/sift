@@ -1,0 +1,9 @@
+id,full_name,email,phone,ssn,age,amount,plan,signup_date,internal_notes
+1,Ada Lovelace,ada@example.com,555-0100,111-11-1111,42,250.50,pro,2024-01-15,VIP handled by Sam
+2,Zoe Ellis,,555-0110,777-77-7777,26,80.00,free,2024-02-10,Newsletter signup
+3,Tom Reed,tom@example.com,555-0101,222-22-2222,15,300.00,free,2024-02-20,Flagged for churn risk
+4,Grace Hopper,grace@example.com,555-0102,333-33-3333,30,50.00,pro,2024-03-05,None
+5,Max Payne,max@example.com,555-0111,888-88-8888,33,N/A,pro,2024-03-15,Payment pending
+6,Liam Wu,liam@example.com,555-0103,444-44-4444,25,500.00,free,2024-04-10,Requested refund
+7,Nina Simone,nina@example.com,555-0104,555-55-5555,29,120.00,pro,2024-05-12,None
+8,Owen King,owen@example.com,555-0105,666-66-6666,31,999.99,enterprise,2024-06-18,None

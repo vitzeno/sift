@@ -1,5 +1,5 @@
 // This file rounds out design/routing.md's acceptance list with cases
-// examples/routing.sift + TestExampleRouting doesn't cover: an
+// testdata/routing.sift + TestExampleRouting doesn't cover: an
 // overlapping-predicate first-match proof, a missing else compile error,
 // full row conservation across sinks and discard, and route composed
 // with error routing, all driven through the real CLI like the

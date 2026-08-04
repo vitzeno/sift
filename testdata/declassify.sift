@@ -1,0 +1,14 @@
+// Demonstrates mask/hash/redact as first-class stages
+// (design-improvements.md S4): a support-ticket export carries two @pii
+// columns for different downstream needs. hash(email) turns email into
+// a stable, one-way pseudonymous ID an analytics join can use without
+// ever seeing the real address; redact(phone) drops it to a fixed
+// placeholder entirely, since nothing downstream needs its shape. Both
+// stages clear the @pii tag, so the plain subject line and both
+// declassified columns reach the sink legally.
+source in  = csv("declassify.csv", schema: { ticket_id: int, email: string @pii, phone: string @pii, subject: string })
+sink   out = jsonl("declassify_out.jsonl")
+
+pipeline main {
+  in |> hash(email) |> redact(phone) |> out
+}

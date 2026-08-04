@@ -53,14 +53,14 @@ func toRouteInputs(route []checker.RouteBranch) []runtime.RouteInput {
 // 6's checker-only assertions. Every module from 1 through 7 takes part
 // in producing this one output file.
 //
-// decision: the source path here is "../../examples/people.csv",
+// decision: the source path here is "../../testdata/people.csv",
 // relative to this package's test working directory, not the bare
-// "people.csv" design.md §7 writes (and that examples/adults.sift uses).
+// "people.csv" design.md §7 writes (and that testdata/adults.sift uses).
 // Resolving a source path relative to the .sift file's own directory is
 // a real CLI concern for module 8, not yet built; this test only needs
 // *a* path that resolves correctly from here.
 func TestBuildFullPipelineAdultsFilter(t *testing.T) {
-	src := `source in = csv("../../examples/people.csv", schema: { name: string, age: int })
+	src := `source in = csv("../../testdata/people.csv", schema: { name: string, age: int })
 sink out = jsonl("` + filepath.ToSlash(t.TempDir()+"/adults.jsonl") + `")
 
 pipeline main {
@@ -97,7 +97,7 @@ pipeline main {
 // mode holds across the real parser+checker, not just hand-built ASTs:
 // Build is never reached at all, since Check fails first.
 func TestBuildFullPipelinePIIRejectedBeforeBuild(t *testing.T) {
-	src := `source in = csv("../../examples/people.csv", schema: { name: string, age: int, email: string @pii })
+	src := `source in = csv("../../testdata/people.csv", schema: { name: string, age: int, email: string @pii })
 sink out = jsonl("out.jsonl")
 
 pipeline main {
@@ -117,7 +117,7 @@ pipeline main {
 // unmasked is still rejected, proof the tag survived the rename, through
 // the real parser and checker rather than a hand-built AST.
 func TestBuildFullPipelineRenamePreservesPII(t *testing.T) {
-	src := `source in = csv("../../examples/people.csv", schema: { name: string, age: int, email: string @pii })
+	src := `source in = csv("../../testdata/people.csv", schema: { name: string, age: int, email: string @pii })
 sink out = jsonl("out.jsonl")
 
 pipeline main {
@@ -184,7 +184,7 @@ pipeline main {
 // together through the full pipeline, including a named segment
 // (design.md §2) inlined by the checker before Build ever sees it. It
 // uses its own small CSV fixture (with an email column check/map need)
-// rather than examples/people.csv, which only has name/age.
+// rather than testdata/people.csv, which only has name/age.
 func TestBuildFullPipelineMapFilterCheck(t *testing.T) {
 	dir := t.TempDir()
 	inPath := filepath.Join(dir, "people.csv")

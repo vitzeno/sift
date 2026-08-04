@@ -1,5 +1,5 @@
 // This file rounds out design/optional-fields.md's acceptance list with
-// cases examples/optional.sift + TestExampleOptional doesn't cover: a
+// cases testdata/optional.sift + TestExampleOptional doesn't cover: a
 // missing required column (OF-C) and a present-but-garbage cell in an
 // optional field (OF-D), both driven through the real CLI like the
 // errors and xlsx phases' integration tests.

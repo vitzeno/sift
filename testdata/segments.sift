@@ -1,0 +1,13 @@
+// Demonstrates parameterized named segments (design/segments.md): `scrub`
+// takes a column parameter and is applied to two different @pii columns,
+// `adults` takes a scalar parameter and is called with a literal — both
+// read exactly like built-in stages at their call sites.
+source in  = csv("segments.csv", schema: { name: string, age: int, email: string @pii, backup_email: string @pii })
+sink   out = jsonl("segments_out.jsonl")
+
+pipeline scrub(col)       = map({ ...row, col: mask(.col) })
+pipeline adults(min: int) = filter(.age >= min)
+
+pipeline main {
+  in |> scrub(email) |> scrub(backup_email) |> adults(18) |> out
+}

@@ -1,0 +1,10 @@
+// Demonstrates check: fails a row (governed by the active error policy)
+// when its condition is false. Every row here has a non-empty email, so
+// check never fires and every row reaches the sink unchanged — see
+// on-error-*.sift for what happens when a check actually fails.
+source in  = csv("check.csv", schema: { name: string, email: string })
+sink   out = jsonl("check_out.jsonl")
+
+pipeline main {
+  in |> check(.email != "", "missing email") |> out
+}

@@ -1,0 +1,64 @@
+// A composite, real-world pipeline exercising nearly every language
+// feature at once: a full signup export turned into a GDPR-safe
+// analytics extract, broadcast to a warehouse and an audit copy.
+//
+//   1. validate         — a reusable, parameterless named segment
+//      (design.md §2): shared row-level checks every ingest pipeline
+//      for this dataset would want, factored out once.
+//   2. filter(.age >= 18)          — a plain built-in stage.
+//   3. eligible(100.0)             — a parameterized named segment
+//      (design/segments.md): a scalar parameter reused wherever a
+//      minimum-order-amount filter is needed.
+//   4. map(...)                    — normalizes plan to uppercase and
+//      derives a boolean field from a comparison.
+//   5. drop(ssn, internal_notes)   — two columns that must never leave
+//      at all, not even masked.
+//   6. rename(...)                 — onto the warehouse's canonical
+//      column names.
+//   7. hash(email)                 — a stable, one-way join key.
+//   8. scrub(phone)                — a parameterized named segment: a
+//      column parameter reused wherever a shape-preserving mask is
+//      needed, applied here to phone.
+//   9. select(...)                 — the exact output column set, in
+//      the warehouse's expected order.
+//  10. offset(1) |> limit(2)       — a small page out of the eligible
+//      rows, positional over every row each stage itself sees.
+//  11. |> out, audit               — terminal broadcast: every surviving
+//      row reaches both sinks, pulled once.
+source in = csv("etl.csv", schema: {
+  id: int,
+  full_name: string,
+  email: string @pii,
+  phone: string @pii,
+  ssn: string @pii,
+  age: int,
+  amount: double,
+  plan: string,
+  signup_date: string,
+  internal_notes: string
+})
+sink out   = jsonl("etl_out.jsonl")
+sink audit = jsonl("etl_audit.jsonl")
+
+pipeline validate =
+     check(.email != "", "missing email")
+  |> check(.amount > 0.0, "non-positive amount")
+
+pipeline eligible(min: double) = filter(.amount >= min)
+pipeline scrub(col)            = mask(col)
+
+pipeline main {
+  in
+    |> validate
+    |> filter(.age >= 18)
+    |> eligible(100.0)
+    |> map({ ...row, plan: upper(.plan), high_value: .amount >= 500.0 })
+    |> drop(ssn, internal_notes)
+    |> rename(full_name: name, signup_date: joined_at)
+    |> hash(email)
+    |> scrub(phone)
+    |> select(id, name, email, phone, age, amount, plan, high_value, joined_at)
+    |> offset(1)
+    |> limit(2)
+    |> out, audit
+}

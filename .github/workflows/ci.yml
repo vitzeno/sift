@@ -26,7 +26,7 @@ jobs:
       - run: go build -o sift ./cmd/sift
       - name: adults.sift runs and produces the expected output
         run: |
-          cd examples
+          cd testdata
           ../sift run adults.sift
           diff <(printf '%s\n' '{"name":"Ada","age":42}') adults.jsonl
       - name: unmasked PII fails to compile

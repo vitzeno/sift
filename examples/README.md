@@ -902,7 +902,9 @@ internal/checker/     name resolution, schema recompute, PII + error-policy enfo
 internal/eval/        eval(expr, row) any
 internal/runtime/     Stream/Source/Sink, driver loop, error policy, format registry, build
 internal/format/      csv source, jsonl sink, xlsx source
-examples/             one .sift + fixture pair per language feature or error policy
+examples/             one .sift + fixture pair per language feature or error policy,
+                       for this tutorial; never read by a test
+testdata/             a copy of every examples/ fixture an actual Go test reads
 design/               language spec + one design doc per build phase
 ```
 

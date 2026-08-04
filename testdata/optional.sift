@@ -1,0 +1,11 @@
+// Demonstrates design/optional-fields.md's OF-A and OF-E: phone is
+// declared optional (`string?`), so Tom's blank phone cell reads as an
+// absent value instead of failing the row. Every row survives; `??`
+// discharges the optional with a default before the sink, which would
+// otherwise reject an undischarged `string?` outright (OF-E).
+source in = csv("optional.csv", schema: { name: string, phone: string? })
+sink   out = jsonl("optional_out.jsonl")
+
+pipeline main {
+  in |> map({ ...row, phone: .phone ?? "n/a" }) |> out
+}

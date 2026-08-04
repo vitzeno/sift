@@ -18,7 +18,7 @@ func TestAdultsFilterEndToEnd(t *testing.T) {
 
 	src, err := NewCSVSource(runtime.SourceOptions{
 		Name:   "in",
-		Path:   "../../examples/people.csv",
+		Path:   "../../testdata/people.csv",
 		Schema: schema,
 	})
 	if err != nil {

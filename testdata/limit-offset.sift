@@ -1,0 +1,11 @@
+// Demonstrates offset/limit row-slicing (design-improvements.md S3):
+// pulling one small page out of a much larger activity log to smoke-test
+// a pipeline against a handful of rows instead of the full dataset.
+// offset(2) discards Ada and Tom, then limit(2) takes exactly the next
+// two rows (Grace, Liam) and stops — Nina and Owen are never reached.
+source in  = csv("limit-offset.csv", schema: { name: string, event: string })
+sink   out = jsonl("limit-offset_out.jsonl")
+
+pipeline main {
+  in |> offset(2) |> limit(2) |> out
+}

@@ -1,0 +1,11 @@
+// Demonstrates select as a projection (design-improvements.md S1): the
+// full signup export carries an internal id and acquisition channel the
+// analytics team has no use for. select(email, name, plan) keeps only
+// the three columns analytics needs, in that order — not the source's
+// original column order.
+source in  = csv("select.csv", schema: { id: int, name: string, email: string, channel: string, plan: string })
+sink   out = jsonl("select_out.jsonl")
+
+pipeline main {
+  in |> select(email, name, plan) |> out
+}

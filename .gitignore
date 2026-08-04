@@ -3,10 +3,12 @@
 *.exe
 *.test
 
-# Generated pipeline output — examples/ only ever commits .sift/.csv
-# fixtures; every .jsonl there is produced by running one of them
-# (see Makefile's `clean` target).
+# Generated pipeline output. examples/ and testdata/ only ever commit
+# .sift/.csv fixtures; every .jsonl there is produced by running one of
+# them (see Makefile's `clean` target for examples/; testdata/'s own
+# output is cleaned up automatically by each test's t.Cleanup).
 examples/*.jsonl
+testdata/*.jsonl
 
 # Coverage output
 *.out
