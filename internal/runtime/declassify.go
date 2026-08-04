@@ -32,6 +32,13 @@ func (d *Declassify) Next() (value.Row, bool) {
 		fields[k] = v
 	}
 	for _, name := range d.columns {
+		// A column can be both Optional and @pii (design/optional-fields.md
+		// §4): an absent value has nothing to declassify, so it passes
+		// through untouched rather than panicking the type assertion
+		// below on a value that was never there.
+		if _, absent := fields[name].(value.Absent); absent {
+			continue
+		}
 		fields[name] = eval.Declassify(d.fn, fields[name].(string))
 	}
 	return value.Row{Fields: fields, Prov: row.Prov}, true
