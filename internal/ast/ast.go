@@ -57,13 +57,22 @@ type ErrorPolicyDecl struct {
 // name means or validates its type, which keeps the "no format
 // special-cased in the frontend" rule (CLAUDE.md non-negotiable #2)
 // intact even as formats grow options csv/jsonl never needed.
+//
+// Columns carries the optional `columns: { ... }` kwarg
+// (design/column-aliases.md §3): it's parsed the same way Schema is, as
+// its own dedicated field rather than folded into Opts, since its value
+// is a map of pairs, not a single scalar literal like every Opts value
+// is. Like Opts, the checker never interprets it; only the registered
+// Source constructor does, at construction time, against the real file
+// header.
 type SourceDecl struct {
-	Name   string
-	Format string
-	Path   string
-	Schema SchemaLit
-	Opts   []SourceOpt
-	Pos    lexer.Pos
+	Name    string
+	Format  string
+	Path    string
+	Schema  SchemaLit
+	Columns []ColumnAlias
+	Opts    []SourceOpt
+	Pos     lexer.Pos
 }
 
 // SourceOpt is one keyword argument in a source declaration beyond
@@ -76,6 +85,18 @@ type SourceOpt struct {
 	Name  string
 	Value Expr
 	Pos   lexer.Pos
+}
+
+// ColumnAlias is one `field: "Raw Header Text"` pair inside a source's
+// `columns:` kwarg (design/column-aliases.md §3): Field names a schema
+// field, Header is the literal header string to match against instead of
+// Field's own identifier text. This is how a column whose real header
+// contains spaces (or otherwise isn't a valid identifier) gets named in a
+// schema at all.
+type ColumnAlias struct {
+	Field  string
+	Header string
+	Pos    lexer.Pos
 }
 
 // SinkDecl is `sink NAME = FORMAT(PATH)`. Unlike SourceDecl, it carries
