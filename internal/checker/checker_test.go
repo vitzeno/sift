@@ -164,6 +164,31 @@ func TestCheckCoalesceDischargesOptional(t *testing.T) {
 	}
 }
 
+// TestCheckOptionalPropagatesThroughComparison is design/optional-fields.md
+// §3's other named example: `.phone == "x"` against a non-Optional string
+// literal type-checks fine and just propagates to bool? -- the comparison
+// itself never errors, exactly like an Optional binary operand never
+// blocks + or -. The error only surfaces later, wherever that bool? is
+// used as a predicate (TestCheckFilterRejectsOptionalBoolPredicate) or
+// reaches a sink.
+func TestCheckOptionalPropagatesThroughComparison(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "phone", Type: value.Type{Kind: value.String, Optional: true}},
+	}}
+	expr, err := parser.ParseExpr(`.phone == "x"`)
+	if err != nil {
+		t.Fatalf("ParseExpr error: %v", err)
+	}
+	c := &checker{}
+	got, err := c.checkExpr(expr, schema)
+	if err != nil {
+		t.Fatalf("checkExpr error: %v", err)
+	}
+	if !got.Optional || got.Kind != value.Bool {
+		t.Errorf(".phone == \"x\" = %s, want bool?", got)
+	}
+}
+
 // TestCheckCoalesceTypeErrors covers ?? 's own type rule (checkCoalesce):
 // both sides must share a Kind, and the default (right side) must not
 // itself be Optional.
