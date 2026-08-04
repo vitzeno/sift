@@ -66,10 +66,11 @@ type RouteBranch struct {
 // since only Build knows which position each sink landed at.
 func Build(in BuildInput) (top Stream, src Source, sinks []Sink, route []RouteBranch, err error) {
 	src, err = NewSource(in.Source.Format, SourceOptions{
-		Name:   in.Source.Name,
-		Path:   in.Source.Path,
-		Schema: in.SourceSchema,
-		Opts:   sourceOptValues(in.Source.Opts),
+		Name:    in.Source.Name,
+		Path:    in.Source.Path,
+		Schema:  in.SourceSchema,
+		Opts:    sourceOptValues(in.Source.Opts),
+		Columns: columnAliases(in.Source.Columns),
 	})
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -165,6 +166,22 @@ func sourceOptValues(opts []ast.SourceOpt) map[string]any {
 		case *ast.BoolLit:
 			m[o.Name] = v.Value
 		}
+	}
+	return m
+}
+
+// columnAliases flattens a source's columns kwarg
+// (design/column-aliases.md §3) into the field->header map
+// SourceOptions.Columns exposes to a format constructor. nil for a
+// source with no columns kwarg, so a format that never looks here (every
+// format but csv/xlsx) sees exactly what it did before this existed.
+func columnAliases(aliases []ast.ColumnAlias) map[string]string {
+	if len(aliases) == 0 {
+		return nil
+	}
+	m := make(map[string]string, len(aliases))
+	for _, a := range aliases {
+		m[a.Field] = a.Header
 	}
 	return m
 }

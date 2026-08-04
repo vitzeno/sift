@@ -30,6 +30,11 @@ type SourceOptions struct {
 	// given format interprets a key's meaning or validates its type;
 	// the registry itself stays format-agnostic.
 	Opts map[string]any
+	// Columns holds the optional columns kwarg (design/column-aliases.md
+	// §3): schema field name to the raw header string to match instead
+	// of the field's own identifier. Nil for a source with no columns
+	// kwarg. Only csv and xlsx look here.
+	Columns map[string]string
 }
 
 type SinkOptions struct {
