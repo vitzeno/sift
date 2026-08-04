@@ -38,6 +38,7 @@ var BuiltinStageNames = map[string]bool{
 	"mask":   true,
 	"hash":   true,
 	"redact": true,
+	"route":  true,
 }
 
 // ColumnRef is a bare column-name reference — the argument form
@@ -216,3 +217,31 @@ type SegmentCall struct {
 }
 
 func (*SegmentCall) stageNode() {}
+
+// RouteBranch is one `<expr> => <target>` or `else => <target>` line
+// inside a route terminal (design/routing.md §7). Pred is nil exactly
+// when IsElse is true — the mandatory catch-all carries no predicate of
+// its own to check, it always matches. Target is nil exactly when
+// Discard is true — `else => discard` drops unmatched rows explicitly
+// rather than silently, design/routing.md §2's one way to opt out of
+// totality.
+type RouteBranch struct {
+	Pred    Expr
+	IsElse  bool
+	Target  *NameRef
+	Discard bool
+	Pos     lexer.Pos
+}
+
+// RouteTerminal is `route { <branch> ("," <branch>)* }`
+// (design/routing.md §7): the sibling terminal production to a trailing
+// sink NameRef or comma-separated broadcast list. Exactly one row goes
+// to exactly one target, chosen by the first branch (top to bottom)
+// whose predicate is true or that is the else branch — never more than
+// one write per row, unlike broadcast.
+type RouteTerminal struct {
+	Branches []RouteBranch
+	Pos      lexer.Pos
+}
+
+func (*RouteTerminal) stageNode() {}
