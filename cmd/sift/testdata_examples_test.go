@@ -256,6 +256,41 @@ func TestExampleBroadcast(t *testing.T) {
 	}
 }
 
+// TestExampleRouting is design-routing.md's own example end to end:
+// masking once, then routing each row to exactly one of three sinks by
+// region — Ada's EU row lands only in the primary output, and Tom/Grace
+// land in the other two, never more than one write per row.
+func TestExampleRouting(t *testing.T) {
+	got := runExample(t, "routing", "routing_us.jsonl", "routing_rest.jsonl")
+	want := `{"name":"Ada","email":"***************","region":"EU"}
+`
+	if string(got) != want {
+		t.Errorf("eu output =\n%s\nwant\n%s", got, want)
+	}
+
+	usPath := filepath.Join("..", "..", "examples", "routing_us.jsonl")
+	gotUS, err := os.ReadFile(usPath)
+	if err != nil {
+		t.Fatalf("reading us sink: %v", err)
+	}
+	wantUS := `{"name":"Tom","email":"***************","region":"US"}
+`
+	if string(gotUS) != wantUS {
+		t.Errorf("us output =\n%s\nwant\n%s", gotUS, wantUS)
+	}
+
+	restPath := filepath.Join("..", "..", "examples", "routing_rest.jsonl")
+	gotRest, err := os.ReadFile(restPath)
+	if err != nil {
+		t.Fatalf("reading rest sink: %v", err)
+	}
+	wantRest := `{"name":"Grace","email":"*****************","region":"APAC"}
+`
+	if string(gotRest) != wantRest {
+		t.Errorf("rest output =\n%s\nwant\n%s", gotRest, wantRest)
+	}
+}
+
 func TestExampleBadCell(t *testing.T) {
 	got := runExample(t, "bad-cell")
 	want := `{"name":"Ada","age":42}
