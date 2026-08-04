@@ -17,11 +17,11 @@ $ go build -o sift ./cmd/sift
 
 ## Run it
 
-One example, showing off most of what makes Sift different: a column
-whose real header isn't a valid identifier, a masked PII field, a phone
-number that's allowed to be missing, rows sent to different sinks by
-region, and a bad row that goes to an error sink instead of stopping the
-whole run.
+One example that touches most of the language: a column whose real
+header isn't a valid identifier, a masked PII field, a phone number
+that's allowed to be missing, rows sent to different sinks by region,
+and a bad row that goes to an error sink instead of stopping the whole
+run.
 
 `showcase.csv`:
 
