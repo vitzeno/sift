@@ -27,9 +27,10 @@ is put together, see [`../CLAUDE.md`](../CLAUDE.md).
 15. [A full ETL, with error routing](#a-full-etl-with-error-routing)
 16. [Reading xlsx files](#reading-xlsx-files)
 17. [Fields that may be missing](#fields-that-may-be-missing)
-18. [Quick reference](#quick-reference)
-19. [Project layout](#project-layout)
-20. [Status](#status)
+18. [Naming a column that isn't a valid identifier](#naming-a-column-that-isnt-a-valid-identifier)
+19. [Quick reference](#quick-reference)
+20. [Project layout](#project-layout)
+21. [Status](#status)
 
 ## Building the CLI
 
@@ -853,12 +854,68 @@ pipeline main {
 
 `optional.sift` and `pii-optional.sift` in this folder show both cases.
 
+## Naming a column that isn't a valid identifier
+
+A schema field name has to be a plain identifier: letters, digits,
+underscore, no spaces. Real files don't always cooperate. A bank export
+might have a header like `Transaction ID`, and there's no identifier
+that equals that text, so it can never be named in a schema on its own.
+
+Add a `columns` kwarg to bridge the two: it maps a clean identifier to
+the raw header text to look for instead.
+
+```sift
+source in = csv("columns.csv",
+  schema:  { txn_id: int, txn_date: string, amount: double },
+  columns: { txn_id: "Transaction ID", txn_date: "Date", amount: "Amount" }
+)
+sink out = jsonl("columns_out.jsonl")
+
+pipeline main {
+  in |> out
+}
+```
+
+```console
+$ ./sift run columns.sift
+$ cat columns_out.jsonl
+{"txn_id":1001,"txn_date":"2026-01-05","amount":42.5}
+{"txn_id":1002,"txn_date":"2026-01-06","amount":17.25}
+```
+
+A field with no `columns` entry still falls back to matching its own
+name against the header, exactly like before this existed, and that
+match is exact and case-sensitive: `amount` won't match a header spelled
+`Amount` on its own, which is why it's aliased here too, even though it
+has no space. Only fields you actually need to rename require an entry;
+`columns` is optional per field, not all-or-nothing.
+
+A required field that resolves neither by alias nor by name is a
+construction error, the same shape as a plain missing column, naming the
+field and the real header found in the file:
+
+```console
+$ ./sift run leaky-columns.sift
+leaky-columns.sift: error: csv source "in": required column "txn_date" not found in header Transaction ID, Amount
+```
+
+An **optional** field (`string?`) with an alias whose header doesn't
+exist in the file at all is not an error. It resolves to absent, the
+same as a plain optional field with no matching column at all, and `??`
+discharges it downstream as usual.
+
+This works the same way for `xlsx` sources, alongside `header_row` and
+`sheet`: `columns` doesn't know or care which format resolved it.
+
+`columns.sift` in this folder is this exact program.
+
 ## Quick reference
 
 - **Sources and sinks** name a format (`csv`, `jsonl`, `xlsx` for
   sources) and a path. A source also declares its schema, since neither
   CSV nor xlsx carries reliable types of its own. `xlsx` also takes
-  `sheet:` and `header_row:`.
+  `sheet:` and `header_row:`. Either format also takes `columns:`, to
+  name a column whose real header isn't a valid identifier.
 - **Pipelines** are a plain `in |> stage |> ... |> out` chain. The last
   step can be a comma separated list of sinks to broadcast to, or
   `route { <bool> => sink, ..., else => sink|discard }` to send each row
@@ -933,5 +990,6 @@ tutorial, these have shipped: failing rows as data with `on error`
 mask/hash/redact as stages (`../design/improvements.md`), writing to more
 than one sink (`../design/multisink.md`), named segments with parameters
 (`../design/segments.md`), the `xlsx` source (`../design/xlsx.md`),
-optional fields (`../design/optional-fields.md`), and conditional
-routing (`../design/routing.md`).
+optional fields (`../design/optional-fields.md`), conditional routing
+(`../design/routing.md`), and column aliases for headers that aren't
+valid identifiers (`../design/column-aliases.md`).
