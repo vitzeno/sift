@@ -265,6 +265,19 @@ func TestExampleBadCell(t *testing.T) {
 	}
 }
 
+// TestExamplePIIOptional is OF-G end to end: email is both optional and
+// @pii, and one expression (`mask(.email ?? "n/a")`) discharges both tags
+// before the sink.
+func TestExamplePIIOptional(t *testing.T) {
+	got := runExample(t, "pii-optional")
+	want := `{"name":"Ada","email":"***************"}
+{"name":"Tom","email":"***"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
 // TestExampleOptional is OF-A and OF-E end to end: a blank cell against
 // an optional field reads as an absent value, not a row failure, and ??
 // discharges it with a default before the sink.
