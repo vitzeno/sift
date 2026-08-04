@@ -1,6 +1,9 @@
 package value
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestTypeString(t *testing.T) {
 	tests := []struct {
@@ -11,6 +14,8 @@ func TestTypeString(t *testing.T) {
 		{"plain string", Type{Kind: String}, "string"},
 		{"plain int", Type{Kind: Int}, "int"},
 		{"pii string", Type{Kind: String, PII: true}, "string @pii"},
+		{"optional string", Type{Kind: String, Optional: true}, "string?"},
+		{"optional pii string", Type{Kind: String, Optional: true, PII: true}, "string? @pii"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -103,5 +108,18 @@ func TestRowFailCarriesReasonAndStage(t *testing.T) {
 	// already carries it (design-errors.md §2.1).
 	if row.Prov.Ordinal != 3 {
 		t.Errorf("Prov.Ordinal = %d, want 3", row.Prov.Ordinal)
+	}
+}
+
+// TestAbsentMarshalsAsJSONNull checks Absent's sink-format representation
+// (design/optional-fields.md §6: no null at the language level, but a
+// sink still needs some external rendering of "no value").
+func TestAbsentMarshalsAsJSONNull(t *testing.T) {
+	got, err := json.Marshal(Absent{})
+	if err != nil {
+		t.Fatalf("Marshal(Absent{}): %v", err)
+	}
+	if string(got) != "null" {
+		t.Errorf("Marshal(Absent{}) = %s, want null", got)
 	}
 }

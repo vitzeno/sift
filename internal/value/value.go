@@ -31,19 +31,39 @@ func (k Kind) String() string {
 	}
 }
 
-// Type is a scalar kind plus the @pii tag. PII propagation (design.md §3)
-// is a property of Type, not Kind: `mask(x)` returns the same Kind with
-// PII cleared, everything else preserves both.
+// Type is a scalar kind plus its two orthogonal tags: @pii and optionality
+// (design/optional-fields.md §4 — both propagate, both must be discharged
+// independently before a sink). `mask(x)` returns the same Kind with PII
+// cleared; `??` returns the same Kind with Optional cleared; everything
+// else preserves both.
 type Type struct {
-	Kind Kind
-	PII  bool
+	Kind     Kind
+	Optional bool
+	PII      bool
 }
 
 func (t Type) String() string {
-	if t.PII {
-		return t.Kind.String() + " @pii"
+	s := t.Kind.String()
+	if t.Optional {
+		s += "?"
 	}
-	return t.Kind.String()
+	if t.PII {
+		s += " @pii"
+	}
+	return s
+}
+
+// Absent is the runtime value of a declared-optional field that had no
+// value (design/optional-fields.md §1: absence is a well-typed value, not
+// a failure and not a null). Coerce returns it for a missing column or an
+// empty cell against an Optional Type; it is never confused with Go's nil.
+type Absent struct{}
+
+// MarshalJSON renders Absent as JSON null — a sink-format detail, not a
+// language-level null (design/optional-fields.md §6 forbids null only at
+// the language level).
+func (Absent) MarshalJSON() ([]byte, error) {
+	return []byte("null"), nil
 }
 
 // Field is one named column of a Schema.

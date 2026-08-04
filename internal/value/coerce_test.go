@@ -72,3 +72,56 @@ func TestCoerceIgnoresPII(t *testing.T) {
 		t.Errorf("Coerce = %#v, want \"secret\"", got)
 	}
 }
+
+// TestCoerceOptionalAbsent is OF-A/OF-C's unit-level half
+// (design/optional-fields.md §2): a blank or whitespace-only cell against
+// an Optional Type yields Absent, whether the blank came from an empty
+// cell or (per the caller's convention) a column missing entirely.
+func TestCoerceOptionalAbsent(t *testing.T) {
+	tests := []struct {
+		name string
+		kind Kind
+		raw  string
+	}{
+		{"empty string", String, ""},
+		{"empty int", Int, ""},
+		{"whitespace only", String, "   "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, fail := Coerce(Type{Kind: tt.kind, Optional: true}, tt.raw)
+			if fail != nil {
+				t.Fatalf("Coerce(%q) failed: %+v", tt.raw, fail)
+			}
+			if _, ok := got.(Absent); !ok {
+				t.Errorf("Coerce(%q) = %#v, want Absent", tt.raw, got)
+			}
+		})
+	}
+}
+
+// TestCoerceOptionalPresent confirms an optional field with a real value
+// coerces exactly like a required one — optionality only changes the
+// blank-cell case, not parsing.
+func TestCoerceOptionalPresent(t *testing.T) {
+	got, fail := Coerce(Type{Kind: Int, Optional: true}, "42")
+	if fail != nil {
+		t.Fatalf("Coerce failed: %+v", fail)
+	}
+	if got != 42 {
+		t.Errorf("Coerce = %#v, want 42", got)
+	}
+}
+
+// TestCoerceOptionalUnparseableIsFailure is OF-D (design/optional-fields.md
+// §2 notes): optionality excuses absence, never malformed presence — a
+// present-but-garbage cell in an optional field is still a row Failure.
+func TestCoerceOptionalUnparseableIsFailure(t *testing.T) {
+	got, fail := Coerce(Type{Kind: Int, Optional: true}, "not-a-number")
+	if fail == nil {
+		t.Fatalf("Coerce = %#v, nil; want a Failure for garbage in an optional field", got)
+	}
+	if fail.Reason != `cannot parse "not-a-number" as int` {
+		t.Errorf("Failure.Reason = %q, want %q", fail.Reason, `cannot parse "not-a-number" as int`)
+	}
+}

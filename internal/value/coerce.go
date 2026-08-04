@@ -3,6 +3,7 @@ package value
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // Coerce converts a source cell's raw string into t's declared scalar
@@ -16,7 +17,20 @@ import (
 // Coerce never sets Failure.Stage: it has no notion of which format or
 // column it's being called for. The caller fills that in — csvSource
 // uses "csv:<field>" — since only the caller knows both.
+//
+// When t is Optional, a blank raw cell yields Absent rather than running
+// the parse below (design/optional-fields.md §2's trichotomy). A missing
+// column is indistinguishable from a blank cell here by design: the
+// caller passes raw = "" for a column that isn't in the header at all,
+// which lands in the same branch — a required column's absence is instead
+// a structural error the caller catches once, before any row reaches
+// Coerce (design/optional-fields.md §2.1). A present-but-unparseable cell
+// still fails below even when t is Optional: optionality excuses absence,
+// never malformed presence.
 func Coerce(t Type, raw string) (any, *Failure) {
+	if t.Optional && strings.TrimSpace(raw) == "" {
+		return Absent{}, nil
+	}
 	switch t.Kind {
 	case String:
 		return raw, nil
