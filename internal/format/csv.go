@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/vitzeno/sift/internal/runtime"
 	"github.com/vitzeno/sift/internal/value"
@@ -65,7 +66,7 @@ func NewCSVSource(opts runtime.SourceOptions) (runtime.Source, error) {
 	for _, field := range opts.Schema.Fields {
 		if _, ok := col[field.Name]; !ok && !field.Type.Optional {
 			f.Close()
-			return nil, fmt.Errorf("csv source %q: required column %q not found in header %v", opts.Name, field.Name, header)
+			return nil, fmt.Errorf("csv source %q: required column %q not found in header %s", opts.Name, field.Name, strings.Join(header, ", "))
 		}
 	}
 

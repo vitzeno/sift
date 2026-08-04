@@ -1,0 +1,10 @@
+// Demonstrates design/optional-fields.md's OF-A: phone is declared
+// optional (`string?`), so Tom's blank phone cell reads as an absent
+// value instead of failing the row. The run completes with all three
+// rows; Tom's phone renders as JSON null, not an empty string.
+source in = csv("optional.csv", schema: { name: string, phone: string? })
+sink   out = jsonl("optional_out.jsonl")
+
+pipeline main {
+  in |> out
+}

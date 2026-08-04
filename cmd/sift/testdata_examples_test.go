@@ -265,6 +265,20 @@ func TestExampleBadCell(t *testing.T) {
 	}
 }
 
+// TestExampleOptional is OF-A end to end: a blank cell against an
+// optional field reads as an absent value, not a row failure, so all
+// three rows survive and Tom's phone renders as JSON null.
+func TestExampleOptional(t *testing.T) {
+	got := runExample(t, "optional")
+	want := `{"name":"Ada","phone":"555-0100"}
+{"name":"Tom","phone":null}
+{"name":"Nina","phone":"555-0199"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
+
 // TestExampleETL exercises etl.sift end to end: a reusable parameterless
 // segment (validate), a plain filter, a parameterized scalar segment
 // (eligible), map, drop, rename, hash, a parameterized column segment
