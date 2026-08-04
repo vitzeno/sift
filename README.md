@@ -34,9 +34,10 @@ organized, see [`CLAUDE.md`](CLAUDE.md).
 13. [Parameterized segments](#parameterized-segments)
 14. [A complete ETL, with error routing](#a-complete-etl-with-error-routing)
 15. [Reading xlsx workbooks](#reading-xlsx-workbooks)
-16. [Quick reference](#quick-reference)
-17. [Project layout](#project-layout)
-18. [Status](#status)
+16. [Optional fields](#optional-fields)
+17. [Quick reference](#quick-reference)
+18. [Project layout](#project-layout)
+19. [Status](#status)
 
 ## Building the CLI
 
@@ -753,6 +754,59 @@ one you can act on — open the workbook and go straight to that row.
 `examples/xlsx.sift` is this exact program; `examples/people.xlsx` is the
 workbook it reads.
 
+## Optional fields
+
+Suffix a schema field's type with `?` and a missing or blank cell no
+longer fails the row — it reads as a well-typed **absent** value instead,
+the same way `@pii` attaches a tag rather than special-casing a type:
+
+```sift
+source in = csv("people.csv", schema: { name: string, phone: string? })
+sink   out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}
+```
+
+```console
+$ ./sift run leaky-optional.sift
+leaky-optional.sift:4:1: error: field "phone" is optional and reaches sink "out" undischarged; resolve with ??
+```
+
+An optional value has to be resolved before it can reach a sink or act as
+a bool predicate — the checker tracks `Optional` through every expression
+exactly like it tracks `@pii`, and `??` is the one operator that clears
+it, supplying a default for the absent case:
+
+```sift
+pipeline main {
+  in |> map({ ...row, phone: .phone ?? "n/a" }) |> out
+}
+```
+
+```console
+$ ./sift run optional.sift
+{"name":"Ada","phone":"555-0100"}
+{"name":"Tom","phone":"n/a"}
+```
+
+The two tags are orthogonal: a field can be both `string?` and `@pii`,
+and both have to clear — in either order — before a sink:
+
+```sift
+source in = csv("people.csv", schema: { name: string, email: string? @pii })
+```
+
+```sift
+pipeline main {
+  in |> map({ ...row, email: mask(.email ?? "n/a") }) |> out
+}
+```
+
+`examples/optional.sift` and `examples/pii-optional.sift` demonstrate both
+shapes.
+
 ## Quick reference
 
 - **Sources and sinks** declare a format (`csv`, `jsonl`, `xlsx` for
@@ -774,6 +828,11 @@ workbook it reads.
 - **PII:** `@pii` attaches at the source, propagates through every
   expression, and is only cleared by `mask`/`hash`/`redact`. A sink
   rejects any field still tagged `@pii`.
+- **Optional fields:** `T?` in a source schema attaches at the source, a
+  missing/blank cell reads as absent, `Optional` propagates through every
+  expression, and only `??` clears it by supplying a default. A sink
+  rejects any field still `Optional`; a bool predicate can't be `Optional`
+  either.
 - **Error policy:** `on error abort | skip | |> <sink>`. `abort` (default)
   stops the run; `skip` drops the failing row; routing sends a fixed
   envelope — never the row's own fields — to a second sink.
@@ -787,7 +846,7 @@ which are shipped.
 
 ```
 cmd/sift/            CLI: run, --emit-ast, --emit-schema
-internal/value/       Row, Provenance, Type (+ @pii), Schema, Coerce
+internal/value/       Row, Provenance, Type (+ @pii, Optional), Schema, Coerce, Absent
 internal/lexer/       source text -> tokens
 internal/ast/         AST node types
 internal/parser/      recursive descent + Pratt expression parsing
@@ -816,7 +875,7 @@ deliberately closed — see `design/language.md` §5 for what's built and
 what's explicitly deferred (joins, dedupe, fan-out, an optimizer, schema
 inference, and more formats beyond csv/jsonl).
 
-Five phases have shipped on top of it, each with its own acceptance tests
+Six phases have shipped on top of it, each with its own acceptance tests
 and a runnable `examples/` fixture:
 
 - `design/errors.md` — failures are data, not exceptions; `on error
@@ -831,10 +890,13 @@ and a runnable `examples/` fixture:
 - `design/xlsx.md` — an `xlsx` source, streaming via excelize's row
   iterator, declared schema and explicit `header_row`/`sheet:` matching
   the csv contract (§5, XLSX-A through XLSX-G).
+- `design/optional-fields.md` — a `T?` source-schema field may be absent;
+  `Optional` propagates through every expression exactly like `@pii` and
+  a sink rejects it undischarged; `??` discharges it. The two tags are
+  orthogonal and independently enforced (§8, OF-A through OF-G).
 
 One more is designed but not built: `design/routing.md` (per-row
 conditional dispatch, depends on the multi-sink driver spine).
-`design/parquet.md` (a sink connector), `design/optional-fields.md`
-(`T?` source-schema fields), `design/type-conversions.md`
+`design/parquet.md` (a sink connector), `design/type-conversions.md`
 (`T(x)`/`try_T(x)` mid-pipeline conversion), and `design/cloud-storage.md`
 (s3/gs/az backends) are drafted but not yet built either.
