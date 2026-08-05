@@ -2,11 +2,15 @@
 // type model, including the @pii tag that the checker enforces (design.md §3).
 package value
 
-import "strings"
+import (
+	"encoding/json"
+	"strings"
+	"time"
+)
 
 // Kind is a scalar type. v0 only needs the four primitives design.md's
 // expression grammar produces: string/int/double literals, and bool from
-// comparisons and && / ||.
+// comparisons and && / ||. Date was added by design/date.md.
 type Kind int
 
 const (
@@ -14,6 +18,7 @@ const (
 	Int
 	Double
 	Bool
+	Date
 )
 
 func (k Kind) String() string {
@@ -26,6 +31,8 @@ func (k Kind) String() string {
 		return "double"
 	case Bool:
 		return "bool"
+	case Date:
+		return "date"
 	default:
 		return "unknown"
 	}
@@ -63,6 +70,29 @@ type Absent struct{}
 // only at the language level).
 func (Absent) MarshalJSON() ([]byte, error) {
 	return []byte("null"), nil
+}
+
+// DateValue is a calendar date: year, month, day, with no time-of-day or
+// timezone (design/date.md §2). It wraps time.Time rather than aliasing
+// it (`type DateValue time.Time`, not `= time.Time`) so a DateValue never
+// silently inherits every time.Time method — most of them (timezone
+// conversion, Now()-adjacent constructors) don't make sense for a
+// date-only value. Converting back for comparison is an explicit
+// time.Time(d) at the call site (design/date.md §3).
+type DateValue time.Time
+
+// String renders a DateValue the same way it's parsed and marshaled:
+// ISO-8601 (design/date.md §3 locks this as the canonical rendering,
+// independent of whatever format the source cell used).
+func (d DateValue) String() string {
+	return time.Time(d).Format("2006-01-02")
+}
+
+// MarshalJSON renders a DateValue as a plain ISO-8601 string, not
+// time.Time's own RFC 3339 (which would leak a time-of-day component a
+// date-only value never had) (design/date.md §3).
+func (d DateValue) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
 }
 
 // Field is one named column of a Schema.

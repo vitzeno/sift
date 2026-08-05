@@ -1,6 +1,9 @@
 package value
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestCoerceSuccess(t *testing.T) {
 	tests := []struct {
@@ -123,5 +126,71 @@ func TestCoerceOptionalUnparseableIsFailure(t *testing.T) {
 	}
 	if fail.Reason != `cannot parse "not-a-number" as int` {
 		t.Errorf("Failure.Reason = %q, want %q", fail.Reason, `cannot parse "not-a-number" as int`)
+	}
+}
+
+// TestCoerceDateDefaultFormat is DATE-A: with no dateFormat argument at
+// all, Coerce falls back to the ISO-8601 default.
+func TestCoerceDateDefaultFormat(t *testing.T) {
+	got, fail := Coerce(Type{Kind: Date}, "2026-01-05")
+	if fail != nil {
+		t.Fatalf("Coerce failed: %+v", fail)
+	}
+	want := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	if !time.Time(got.(DateValue)).Equal(want) {
+		t.Errorf("Coerce = %v, want %v", time.Time(got.(DateValue)), want)
+	}
+}
+
+// TestCoerceDateExplicitFormat is DATE-B: a dateFormat argument, when
+// given, drives parsing instead of the default, proving day/month order
+// is actually read from it rather than assumed.
+func TestCoerceDateExplicitFormat(t *testing.T) {
+	got, fail := Coerce(Type{Kind: Date}, "05/01/2026", "02/01/2006")
+	if fail != nil {
+		t.Fatalf("Coerce failed: %+v", fail)
+	}
+	want := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	if !time.Time(got.(DateValue)).Equal(want) {
+		t.Errorf("Coerce = %v, want %v", time.Time(got.(DateValue)), want)
+	}
+}
+
+// TestCoerceDateFailure is DATE-C: a cell that doesn't match the format,
+// and separately one that matches the format but names a calendar date
+// that doesn't exist, are both row failures, not panics.
+func TestCoerceDateFailure(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{"format mismatch", "not-a-date"},
+		{"impossible calendar date", "2026-02-30"},
+		{"impossible month", "2026-13-01"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, fail := Coerce(Type{Kind: Date}, tt.raw)
+			if fail == nil {
+				t.Fatalf("Coerce(%q) = %#v, nil; want a Failure", tt.raw, got)
+			}
+			want := `cannot parse "` + tt.raw + `" as date`
+			if fail.Reason != want {
+				t.Errorf("Failure.Reason = %q, want %q", fail.Reason, want)
+			}
+		})
+	}
+}
+
+// TestCoerceDateOptionalAbsent confirms the Optional blank-cell carve-out
+// (design/optional-fields.md §2) applies to Date exactly like every other
+// Kind, with no Date-specific code needed for it.
+func TestCoerceDateOptionalAbsent(t *testing.T) {
+	got, fail := Coerce(Type{Kind: Date, Optional: true}, "")
+	if fail != nil {
+		t.Fatalf("Coerce failed: %+v", fail)
+	}
+	if _, ok := got.(Absent); !ok {
+		t.Errorf("Coerce(\"\") = %#v, want Absent", got)
 	}
 }

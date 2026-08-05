@@ -4,7 +4,13 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// DefaultDateFormat is the Go reference-layout used to parse a Date-kind
+// cell when a source's formats: kwarg names no entry for that field
+// (design/date.md §3): ISO-8601 (YYYY-MM-DD).
+const DefaultDateFormat = "2006-01-02"
 
 // Coerce converts a raw cell string into t's scalar kind, or returns a
 // Failure if it doesn't parse (design-errors.md §2.3). Every source
@@ -19,7 +25,13 @@ import (
 // blank cell here: the caller passes raw = "" for both, and a missing
 // required column is caught earlier as its own error. A cell that's
 // present but garbage still fails, even when the field is Optional.
-func Coerce(t Type, raw string) (any, *Failure) {
+//
+// dateFormat is the Go reference-layout to parse a Date-kind cell
+// against; every other Kind ignores it. decision: variadic rather than a
+// plain third parameter, so every existing non-Date call site (and every
+// existing test) is unaffected — only a Date-kind caller needs to pass
+// one (design/date.md §3, §5).
+func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
 	if t.Optional && strings.TrimSpace(raw) == "" {
 		return Absent{}, nil
 	}
@@ -44,6 +56,16 @@ func Coerce(t Type, raw string) (any, *Failure) {
 			return nil, &Failure{Reason: fmt.Sprintf("cannot parse %q as bool", raw)}
 		}
 		return v, nil
+	case Date:
+		format := DefaultDateFormat
+		if len(dateFormat) > 0 && dateFormat[0] != "" {
+			format = dateFormat[0]
+		}
+		v, err := time.Parse(format, raw)
+		if err != nil {
+			return nil, &Failure{Reason: fmt.Sprintf("cannot parse %q as date", raw)}
+		}
+		return DateValue(v), nil
 	default:
 		return nil, &Failure{Reason: fmt.Sprintf("unsupported scalar kind %v", t.Kind)}
 	}

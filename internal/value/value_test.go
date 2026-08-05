@@ -3,6 +3,7 @@ package value
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestTypeString(t *testing.T) {
@@ -13,6 +14,7 @@ func TestTypeString(t *testing.T) {
 	}{
 		{"plain string", Type{Kind: String}, "string"},
 		{"plain int", Type{Kind: Int}, "int"},
+		{"plain date", Type{Kind: Date}, "date"},
 		{"pii string", Type{Kind: String, PII: true}, "string @pii"},
 		{"optional string", Type{Kind: String, Optional: true}, "string?"},
 		{"optional pii string", Type{Kind: String, Optional: true, PII: true}, "string? @pii"},
@@ -120,5 +122,30 @@ func TestAbsentMarshalsAsJSONNull(t *testing.T) {
 	}
 	if string(got) != "null" {
 		t.Errorf("Marshal(Absent{}) = %s, want null", got)
+	}
+}
+
+// TestDateValueString confirms DateValue's own textual form is
+// ISO-8601, independent of whatever format the source cell used
+// (design/date.md §3).
+func TestDateValueString(t *testing.T) {
+	d := DateValue(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
+	if got := d.String(); got != "2026-01-05" {
+		t.Errorf("DateValue.String() = %q, want %q", got, "2026-01-05")
+	}
+}
+
+// TestDateValueMarshalsAsISODateString is DATE-F: the JSON form is a
+// plain ISO-8601 string, not time.Time's own RFC 3339 (which would leak
+// a "T00:00:00Z" time-of-day component a date-only value never had).
+func TestDateValueMarshalsAsISODateString(t *testing.T) {
+	d := DateValue(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
+	got, err := json.Marshal(d)
+	if err != nil {
+		t.Fatalf("Marshal(DateValue): %v", err)
+	}
+	want := `"2026-01-05"`
+	if string(got) != want {
+		t.Errorf("Marshal(DateValue) = %s, want %s", got, want)
 	}
 }
