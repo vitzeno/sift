@@ -210,11 +210,16 @@ func literalKind(e ast.Expr) (value.Kind, bool) {
 	}
 }
 
-// isOrderable reports whether < > <= >= accept k (design/date.md §3):
-// every numeric Kind, plus Date, which is comparable but deliberately
-// not numeric (no +, -, *, / on it — isNumeric stays unchanged).
+// isOrderable reports whether < > <= >= accept k (design/date.md §3,
+// widened by design/datetime.md §3): every numeric Kind, plus Date and
+// DateTime, both comparable but deliberately not numeric (no +, -, *, /
+// on either — isNumeric stays unchanged). Date and DateTime never mix
+// with each other here: this only says k itself is orderable, and
+// checkBinaryOp's separate left.Kind != right.Kind rejection is what
+// actually keeps the two temporal Kinds from comparing against one
+// another (design/datetime.md §2).
 func isOrderable(k value.Kind) bool {
-	return isNumeric(k) || k == value.Date
+	return isNumeric(k) || k == value.Date || k == value.DateTime
 }
 
 func isNumericOrString(k value.Kind) bool {

@@ -1031,6 +1031,134 @@ func TestCheckDecimalCoalesceLiteralDefaultNotPromoted(t *testing.T) {
 	}
 }
 
+// TestCheckSourceSchemaDateTime confirms "datetime" resolves in
+// typeNames (design/datetime.md §3).
+func TestCheckSourceSchemaDateTime(t *testing.T) {
+	const src = `source in = csv("events.csv", schema: { id: int, occurred_at: datetime })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	cp := mustCheck(t, src)
+	wantSchema := "{ id: int, occurred_at: datetime }"
+	if got := cp.SourceSchema.String(); got != wantSchema {
+		t.Errorf("SourceSchema = %s, want %s", got, wantSchema)
+	}
+}
+
+// TestCheckDateTimeComparison is DT-D/DT-E's compile-time half:
+// datetime-datetime comparisons type-check to bool (design/datetime.md
+// §3): isOrderable, widened to include DateTime, is the gate for
+// </>/<=/>=, and ==/!= already accepted any matching Kind pair.
+func TestCheckDateTimeComparison(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "clock_in", Type: value.Type{Kind: value.DateTime}},
+		{Name: "clock_out", Type: value.Type{Kind: value.DateTime}},
+	}}
+	tests := []string{
+		".clock_in < .clock_out",
+		".clock_in <= .clock_out",
+		".clock_in > .clock_out",
+		".clock_in >= .clock_out",
+		".clock_in == .clock_out",
+		".clock_in != .clock_out",
+	}
+	for _, src := range tests {
+		t.Run(src, func(t *testing.T) {
+			c := &checker{}
+			expr, err := parser.ParseExpr(src)
+			if err != nil {
+				t.Fatalf("ParseExpr(%q): %v", src, err)
+			}
+			typ, err := c.checkExpr(expr, schema)
+			if err != nil {
+				t.Fatalf("checkExpr(%q) error: %v", src, err)
+			}
+			if typ.Kind != value.Bool {
+				t.Errorf("checkExpr(%q) = %s, want bool", src, typ)
+			}
+		})
+	}
+}
+
+// TestCheckDateTimeArithmeticRejected confirms datetime deliberately
+// isn't numeric (design/datetime.md §2): no +, -, *, / on it, even
+// though it's comparable -- the same cut date.md made.
+func TestCheckDateTimeArithmeticRejected(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "clock_in", Type: value.Type{Kind: value.DateTime}},
+		{Name: "clock_out", Type: value.Type{Kind: value.DateTime}},
+	}}
+	tests := []struct {
+		src     string
+		wantSub string
+	}{
+		{".clock_in + .clock_out", "cannot apply + to datetime and datetime"},
+		{".clock_in - .clock_out", "cannot apply - to datetime and datetime"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			err := checkExprErr(t, tt.src, schema)
+			if err == nil || !strings.Contains(err.Error(), tt.wantSub) {
+				t.Errorf("error = %v, want it to contain %q", err, tt.wantSub)
+			}
+		})
+	}
+}
+
+// TestCheckDateAndDateTimeNeverMix is DT-I: a date field and a datetime
+// field are different Kinds, so the ordinary left.Kind != right.Kind
+// rejection already refuses to compare them, confirming design/
+// datetime.md §2's "never mix" decision is actually enforced.
+func TestCheckDateAndDateTimeNeverMix(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "signup_date", Type: value.Type{Kind: value.Date}},
+		{Name: "last_login", Type: value.Type{Kind: value.DateTime}},
+	}}
+	err := checkExprErr(t, ".signup_date == .last_login", schema)
+	want := "cannot compare date and datetime"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %v, want it to contain %q", err, want)
+	}
+}
+
+// TestCheckDateTimePIIRejectsUnmaskedSink is design/datetime.md §2's PII
+// propagation half: a datetime @pii field reaches a sink unmasked
+// exactly like any other Kind, with no DateTime-specific carve-out.
+// Regression test, not new behavior.
+func TestCheckDateTimePIIRejectsUnmaskedSink(t *testing.T) {
+	const src = `source in = csv("events.csv", schema: { id: int, signup_time: datetime @pii })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	err := checkErr(t, src)
+	want := `field "signup_time" is @pii and reaches sink "out" unmasked; declassify with mask/hash/redact`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
+// TestCheckDateTimeOptionalRejectsUndischargedSink is design/datetime.md
+// §2's Optional-interaction half: a datetime? field reaches a sink
+// undischarged exactly like any other Kind. Regression test, not new
+// behavior.
+func TestCheckDateTimeOptionalRejectsUndischargedSink(t *testing.T) {
+	const src = `source in = csv("events.csv", schema: { id: int, signup_time: datetime? })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	err := checkErr(t, src)
+	want := `field "signup_time" is optional and reaches sink "out" undischarged; resolve with ??`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
 func TestCheckFunctionErrors(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "age", Type: value.Type{Kind: value.Int}},
