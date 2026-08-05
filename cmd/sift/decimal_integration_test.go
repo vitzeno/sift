@@ -1,8 +1,9 @@
-// This file rounds out design/decimal.md's acceptance list with the
-// cases testdata/decimal.sift + TestExampleDecimal can't show: a bad
-// cell routed as a row failure, and the compile error the whole
-// literal-context design is built around, driven through the real CLI
-// like the date phase's integration tests.
+// This file rounds out design/decimal.md's and design/decimal-leniency.md's
+// acceptance lists with the cases testdata/decimal.sift + TestExampleDecimal
+// can't show: a bad cell routed as a row failure, the compile error the
+// whole literal-context design is built around, and a European-formatted
+// cell the thousands-comma guard rule must still reject, driven through
+// the real CLI like the date phase's integration tests.
 package main
 
 import (
@@ -49,6 +50,47 @@ pipeline main { in |> out }
 	}
 	if !strings.Contains(string(errGot), `cannot parse \"not-a-number\" as decimal`) {
 		t.Errorf("errors.jsonl = %q, want it to mention the bad cell", errGot)
+	}
+}
+
+// TestLENIENT_C_EuropeanFormatFailsLoudly is decimal-leniency.md's
+// LENIENT-C, driven through the real CLI: a comma sitting after the
+// cell's last '.' is European decimal-point formatting, not US/UK
+// thousands grouping, so the guard rule refuses to strip it and the row
+// fails loudly instead of silently parsing to the wrong number.
+func TestLENIENT_C_EuropeanFormatFailsLoudly(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "orders.csv"), "id,amount\n1,\"1.234,56\"\n")
+	siftPath := filepath.Join(dir, "prog.sift")
+	outPath := filepath.Join(dir, "out.jsonl")
+	errPath := filepath.Join(dir, "errors.jsonl")
+	writeFile(t, siftPath, `on error |> errors
+
+source in     = csv("orders.csv", schema: { id: int, amount: decimal })
+sink   out    = jsonl("out.jsonl")
+sink   errors = jsonl("errors.jsonl")
+
+pipeline main { in |> out }
+`)
+
+	if err := runFile(siftPath); err != nil {
+		t.Fatalf("runFile error: %v", err)
+	}
+
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("reading %s: %v", outPath, err)
+	}
+	if string(got) != "" {
+		t.Errorf("out.jsonl = %q, want empty (the row should have failed)", got)
+	}
+
+	errGot, err := os.ReadFile(errPath)
+	if err != nil {
+		t.Fatalf("reading %s: %v", errPath, err)
+	}
+	if !strings.Contains(string(errGot), `cannot parse \"1.234,56\" as decimal`) {
+		t.Errorf("errors.jsonl = %q, want it to mention the unparsed European-formatted cell", errGot)
 	}
 }
 
