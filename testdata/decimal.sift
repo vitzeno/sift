@@ -1,0 +1,16 @@
+// Demonstrates the decimal type (design/decimal.md): exact arithmetic
+// with no float64 representation error. A bare int/double literal
+// standing against a decimal column adapts to decimal (0.08 below), but
+// two real columns of different Kind never mix silently.
+source in = csv("decimal.csv", schema: { id: int, price: decimal, discount: decimal })
+sink out = jsonl("decimal_out.jsonl")
+
+pipeline main {
+  in
+    |> map({ ...row,
+         net: .price - .discount,
+         tax: .price * 0.08
+       })
+    |> filter(.net > 0)
+    |> out
+}

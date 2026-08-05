@@ -439,3 +439,20 @@ func TestExampleDate(t *testing.T) {
 		t.Errorf("output =\n%s\nwant\n%s", got, want)
 	}
 }
+
+// TestExampleDecimal drives testdata/decimal.sift through the real CLI
+// (design/decimal.md): a bare double literal (0.08) standing against a
+// decimal column adapts to decimal for tax, net's subtraction stays
+// exact, and filter(.net > 0) drops Tom, whose discount exceeds his
+// price. Row 3's trailing zeros ("100.00", "0.00") round-trip exactly --
+// the case a naive decimal.Decimal-without-a-wrapper implementation
+// gets wrong (it silently renders "100" and "0" instead).
+func TestExampleDecimal(t *testing.T) {
+	got := runExample(t, "decimal")
+	want := `{"id":1,"price":19.99,"discount":5.00,"net":14.99,"tax":1.5992}
+{"id":3,"price":100.00,"discount":0.00,"net":100.00,"tax":8.0000}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
