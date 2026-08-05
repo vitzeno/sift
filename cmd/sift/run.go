@@ -21,7 +21,13 @@ import (
 // examples/adults.sift` (CLAUDE.md's documented command) work from the
 // repo root. The same resolution applies to an `on error |> <name>`
 // route target's path.
-func runFile(path string) error {
+//
+// print is variadic, not a plain second parameter, so every existing
+// call site (and every existing test) is unaffected -- only --print's
+// own caller in main.go passes one, the same reason Coerce's dateFormat
+// is variadic (internal/value/coerce.go).
+func runFile(path string, print ...bool) error {
+	printToConsole := len(print) > 0 && print[0]
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -44,6 +50,9 @@ func runFile(path string) error {
 	for i, s := range cp.Sinks {
 		sink := *s
 		sink.Path = resolvePath(base, sink.Path)
+		if printToConsole {
+			sink.Format = "console"
+		}
 		sinks[i] = &sink
 	}
 
@@ -63,6 +72,9 @@ func runFile(path string) error {
 	if cp.ErrorPolicy == ast.ErrorRoute {
 		errSinkDecl := *cp.ErrorSink
 		errSinkDecl.Path = resolvePath(base, errSinkDecl.Path)
+		if printToConsole {
+			errSinkDecl.Format = "console"
+		}
 		errSink, err = runtime.NewErrorSink(&errSinkDecl)
 		if err != nil {
 			return err

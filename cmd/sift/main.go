@@ -12,16 +12,17 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 3 {
+	args, print := stripPrintFlag(os.Args[1:])
+	if len(args) != 2 {
 		usage()
 		os.Exit(2)
 	}
-	verb, path := os.Args[1], os.Args[2]
+	verb, path := args[0], args[1]
 
 	var err error
 	switch verb {
 	case "run":
-		err = runFile(path)
+		err = runFile(path, print)
 	case "--emit-ast":
 		err = emitAST(path)
 	case "--emit-schema":
@@ -36,8 +37,24 @@ func main() {
 	}
 }
 
+// stripPrintFlag pulls a --print flag out of args, wherever it appears,
+// and reports whether it was present. run is the only verb that reads
+// it; --emit-ast/--emit-schema just ignore a stray one the same way an
+// unrecognized flag would be an error anywhere else -- kept permissive
+// here rather than adding a real flag parser for one boolean.
+func stripPrintFlag(args []string) (rest []string, print bool) {
+	for _, a := range args {
+		if a == "--print" {
+			print = true
+			continue
+		}
+		rest = append(rest, a)
+	}
+	return rest, print
+}
+
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: sift run <file> | sift --emit-ast <file> | sift --emit-schema <file>")
+	fmt.Fprintln(os.Stderr, "usage: sift run <file> [--print] | sift --emit-ast <file> | sift --emit-schema <file>")
 }
 
 // printErr prints a source position when the error has one (every
