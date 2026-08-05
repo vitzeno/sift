@@ -78,6 +78,19 @@ func (Absent) MarshalJSON() ([]byte, error) {
 	return []byte("null"), nil
 }
 
+// OrderedValue is implemented by a struct-backed Kind's runtime value
+// whose Go == doesn't correctly compare the value it denotes (design/
+// datetime.md §2): DateValue, DecimalValue, and DateTimeValue all wrap a
+// struct (time.Time, or decimal.Decimal's own *big.Int underneath) that
+// bare == would compare by internal representation, not the value
+// denoted. CompareValue follows time.Time.Compare/decimal.Decimal.Cmp's
+// own -1/0/1 contract, so internal/eval's LT/GT/LE/GE/EQ/NE dispatch can
+// share one path for any current or future struct-backed Kind instead of
+// a hand-copied branch per type.
+type OrderedValue interface {
+	CompareValue(other any) int
+}
+
 // DateValue is a calendar date: year, month, day, with no time-of-day or
 // timezone (design/date.md §2). It wraps time.Time rather than aliasing
 // it (`type DateValue time.Time`, not `= time.Time`) so a DateValue never
@@ -99,6 +112,13 @@ func (d DateValue) String() string {
 // date-only value never had) (design/date.md §3).
 func (d DateValue) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
+}
+
+// CompareValue implements OrderedValue via time.Time.Compare, the same
+// instant-aware comparison EQ/NE used before this existed (design/
+// datetime.md §2).
+func (d DateValue) CompareValue(other any) int {
+	return time.Time(d).Compare(time.Time(other.(DateValue)))
 }
 
 // DecimalValue is an exact-arithmetic scalar (design/decimal.md §2). It
@@ -131,6 +151,13 @@ func (d DecimalValue) String() string {
 // renders as a quoted string, and strips trailing zeros regardless).
 func (d DecimalValue) MarshalJSON() ([]byte, error) {
 	return []byte(d.String()), nil
+}
+
+// CompareValue implements OrderedValue via decimal.Decimal.Cmp, which
+// shares time.Time.Compare's own -1/0/1 contract (confirmed via `go doc`,
+// design/datetime.md §2).
+func (d DecimalValue) CompareValue(other any) int {
+	return decimal.Decimal(d).Cmp(decimal.Decimal(other.(DecimalValue)))
 }
 
 // Field is one named column of a Schema.
