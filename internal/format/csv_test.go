@@ -477,6 +477,132 @@ func TestCSVSourceDateBadCellIsRowFailure(t *testing.T) {
 	}
 }
 
+// TestCSVSourceDateTimeDefaultFormat is DT-A: a datetime column with no
+// formats entry reads correctly against the ISO-8601-with-time default,
+// distinct from Date's own ISO-8601-no-time default.
+func TestCSVSourceDateTimeDefaultFormat(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "events.csv")
+	writeFile(t, path, "name,occurred_at\nAda,2026-07-31T04:10:25\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "name", Type: value.Type{Kind: value.String}},
+			{Name: "occurred_at", Type: value.Type{Kind: value.DateTime}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	got, isDateTime := row.Fields["occurred_at"].(value.DateTimeValue)
+	if !isDateTime {
+		t.Fatalf("Fields[occurred_at] = %#v, want a value.DateTimeValue", row.Fields["occurred_at"])
+	}
+	if got.String() != "2026-07-31T04:10:25" {
+		t.Errorf("occurred_at = %s, want 2026-07-31T04:10:25", got.String())
+	}
+}
+
+// TestCSVSourceDateTimeExplicitFormat is DT-B: formats: drives parsing
+// against the real Tide file's own space-separated shape, not the
+// ISO-8601-with-T default.
+func TestCSVSourceDateTimeExplicitFormat(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tide.csv")
+	writeFile(t, path, "transaction_id,date\nTX1,2026-07-31 04:10:25\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "transaction_id", Type: value.Type{Kind: value.String}},
+			{Name: "date", Type: value.Type{Kind: value.DateTime}},
+		}},
+		DateFormats: map[string]string{"date": "2006-01-02 15:04:05"},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	got := row.Fields["date"].(value.DateTimeValue)
+	if got.String() != "2026-07-31T04:10:25" {
+		t.Errorf("date = %s, want 2026-07-31T04:10:25", got.String())
+	}
+}
+
+// TestCSVSourceDateAndDateTimeTwoFieldsIndependentDefaults proves a date
+// field and a datetime field on the same source, both with no formats
+// entry, resolve against their own Kind-appropriate default independently
+// on the same row (design/datetime.md §3's resolveDateFormat widening).
+func TestCSVSourceDateAndDateTimeTwoFieldsIndependentDefaults(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mixed.csv")
+	writeFile(t, path, "signup_date,last_login\n2026-01-05,2026-02-10T09:30:00\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "signup_date", Type: value.Type{Kind: value.Date}},
+			{Name: "last_login", Type: value.Type{Kind: value.DateTime}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	if got := row.Fields["signup_date"].(value.DateValue).String(); got != "2026-01-05" {
+		t.Errorf("signup_date = %s, want 2026-01-05", got)
+	}
+	if got := row.Fields["last_login"].(value.DateTimeValue).String(); got != "2026-02-10T09:30:00" {
+		t.Errorf("last_login = %s, want 2026-02-10T09:30:00", got)
+	}
+}
+
+// TestCSVSourceDateTimeBadCellIsRowFailure is DT-C: a cell that matches
+// the format but names an impossible time component is a row failure,
+// same shape as a bad date/decimal cell, not a panic.
+func TestCSVSourceDateTimeBadCellIsRowFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "events.csv")
+	writeFile(t, path, "name,occurred_at\nAda,2026-07-31T25:10:25\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "name", Type: value.Type{Kind: value.String}},
+			{Name: "occurred_at", Type: value.Type{Kind: value.DateTime}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok {
+		t.Fatal("Next() returned ok=false, want the failed row returned normally")
+	}
+	if row.Fail == nil {
+		t.Fatal("Fail is nil, want a coercion failure for an impossible hour")
+	}
+}
+
 // TestCSVSourceDecimal is DEC-A's csv half: parses exactly, with
 // trailing zeros preserved ("5.00" stays "5.00", not "5" --
 // value.DecimalValue's whole reason for existing).

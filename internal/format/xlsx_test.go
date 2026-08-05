@@ -412,6 +412,37 @@ func TestXLSXSourceDate(t *testing.T) {
 	}
 }
 
+// TestXLSXSourceDateTime is DT-G: a datetime-typed field reads correctly
+// from an xlsx fixture with no format-specific code path of its own --
+// regression-shaped, proving design/datetime.md §3's "no source/sink code
+// changes" claim the same way TestXLSXSourceDate already did for date.
+func TestXLSXSourceDateTime(t *testing.T) {
+	path := writeXLSXFixture(t, "Sheet1", [][]string{
+		{"transaction_id", "date"},
+		{"TX1", "2026-07-31 04:10:25"},
+	})
+	src, err := NewXLSXSource(runtime.SourceOptions{
+		Name: "in", Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "transaction_id", Type: value.Type{Kind: value.String}},
+			{Name: "date", Type: value.Type{Kind: value.DateTime}},
+		}},
+		DateFormats: map[string]string{"date": "2006-01-02 15:04:05"},
+	})
+	if err != nil {
+		t.Fatalf("NewXLSXSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	got := row.Fields["date"].(value.DateTimeValue)
+	if got.String() != "2026-07-31T04:10:25" {
+		t.Errorf("date = %s, want 2026-07-31T04:10:25", got.String())
+	}
+}
+
 // TestXLSXSourceDecimal is DEC-A's xlsx half: a decimal-typed field
 // reads correctly from an xlsx fixture with no format-specific code
 // path of its own -- regression-shaped, proving design/decimal.md §3's
