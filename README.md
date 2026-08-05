@@ -19,18 +19,18 @@ $ go build -o sift ./cmd/sift
 
 One example that touches most of the language: a column whose real
 header isn't a valid identifier, a masked PII field, a phone number
-that's allowed to be missing, rows sent to different sinks by region,
-and a bad row that goes to an error sink instead of stopping the whole
-run.
+that's allowed to be missing, a date column with its own parsing
+format, rows sent to different sinks by region, and a bad row that goes
+to an error sink instead of stopping the whole run.
 
 `showcase.csv`:
 
 ```csv
-Full Name,email,phone,region,age
-Ada,ada@example.com,555-0100,EU,42
-Tom,tom@example.com,,US,15
-Liam,liam@example.com,555-0177,AU,29
-Grace,grace@example.com,555-0199,APAC,not-a-number
+Full Name,email,phone,region,age,signup_date
+Ada,ada@example.com,555-0100,EU,42,05/01/2026
+Tom,tom@example.com,,US,15,20/02/2026
+Liam,liam@example.com,555-0177,AU,29,10/03/2026
+Grace,grace@example.com,555-0199,APAC,not-a-number,01/04/2026
 ```
 
 `showcase.sift`:
@@ -44,10 +44,14 @@ source in = csv("showcase.csv",
     email: string @pii,
     phone: string?,
     region: string,
-    age: int
+    age: int,
+    signup_date: date
   },
   columns: {
     name: "Full Name"
+  },
+  formats: {
+    signup_date: "02/01/2006"
   }
 )
 sink eu_sink   = jsonl("showcase_eu.jsonl")
@@ -71,11 +75,11 @@ Run it:
 ```console
 $ ./sift run showcase.sift
 $ cat showcase_eu.jsonl
-{"name":"Ada","email":"***************","phone":"555-0100","region":"EU","age":42}
+{"name":"Ada","email":"***************","phone":"555-0100","region":"EU","age":42,"signup_date":"2026-01-05"}
 $ cat showcase_us.jsonl
-{"name":"Tom","email":"***************","phone":"unknown","region":"US","age":15}
+{"name":"Tom","email":"***************","phone":"unknown","region":"US","age":15,"signup_date":"2026-02-20"}
 $ cat showcase_rest.jsonl
-{"name":"Liam","email":"****************","phone":"555-0177","region":"AU","age":29}
+{"name":"Liam","email":"****************","phone":"555-0177","region":"AU","age":29,"signup_date":"2026-03-10"}
 $ cat showcase_errors.jsonl
 {"source":"in","ordinal":3,"offset":5,"reason":"cannot parse \"not-a-number\" as int","stage":"csv:age"}
 ```
@@ -90,6 +94,9 @@ A few things happened here, all in one pass over the file:
 - `phone` is marked optional with `?`. Tom's phone is blank, so it comes
   through as absent, and `??` gives it the default `"unknown"` instead
   of failing the row.
+- `signup_date` is a real `date`, not text, and its cells are written
+  day-first (`05/01/2026`). `formats` names that layout explicitly, the
+  same `{ field: "value" }` shape `columns` uses for header names.
 - `route` sends each row to exactly one sink based on `region`. Ada goes
   to `eu_sink`, Tom to `us_sink`, and Liam, who doesn't match either,
   falls through to `rest_sink` via the required `else` branch.

@@ -1,7 +1,8 @@
 // A short tour of most of what Sift can do in one pipeline: a header
 // that isn't a valid identifier, a masked PII field, an optional field
-// with a default, routing by region, and a bad row sent to an error
-// sink instead of stopping the run.
+// with a default, a date field with its own parsing format, routing by
+// region, and a bad row sent to an error sink instead of stopping the
+// run.
 on error |> errors
 
 source in = csv("showcase.csv",
@@ -10,10 +11,14 @@ source in = csv("showcase.csv",
     email: string @pii,
     phone: string?,
     region: string,
-    age: int
+    age: int,
+    signup_date: date
   },
   columns: {
     name: "Full Name"
+  },
+  formats: {
+    signup_date: "02/01/2006"
   }
 )
 sink eu_sink   = jsonl("showcase_eu.jsonl")

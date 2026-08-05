@@ -1,5 +1,5 @@
-Full Name,email,phone,region,age
-Ada,ada@example.com,555-0100,EU,42
-Tom,tom@example.com,,US,15
-Liam,liam@example.com,555-0177,AU,29
-Grace,grace@example.com,555-0199,APAC,not-a-number
+Full Name,email,phone,region,age,signup_date
+Ada,ada@example.com,555-0100,EU,42,05/01/2026
+Tom,tom@example.com,,US,15,20/02/2026
+Liam,liam@example.com,555-0177,AU,29,10/03/2026
+Grace,grace@example.com,555-0199,APAC,not-a-number,01/04/2026
