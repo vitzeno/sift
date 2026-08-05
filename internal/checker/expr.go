@@ -100,18 +100,13 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 		return value.Type{}, err
 	}
 
-	if e.Op == lexer.COALESCE {
-		return c.checkCoalesce(e, left, right)
-	}
-
 	// decision: a bare int/double literal standing directly against a
 	// decimal operand adapts to decimal in that position only
 	// (design/decimal.md §2) -- mirrors Go's own untyped-constant model.
-	// Checked before the ordinary Kind-equality rejection below, not
-	// instead of it: a real column of a different Kind (e.g. `rate:
-	// double`) never mixes this way, only a literal constant does.
-	// Mutating the local left/right copies is enough -- nothing past
-	// this point reads the original ast.Expr nodes, only the Kinds.
+	// Checked before every operator dispatch below, ?? included: a real
+	// column of a different Kind never mixes this way, only a literal
+	// constant does. Mutating the local left/right copies is enough --
+	// nothing past this point reads the original ast.Expr nodes.
 	if left.Kind == value.Decimal && right.Kind != value.Decimal {
 		if _, ok := literalKind(e.Right); ok {
 			right.Kind = value.Decimal
@@ -120,6 +115,10 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 		if _, ok := literalKind(e.Left); ok {
 			left.Kind = value.Decimal
 		}
+	}
+
+	if e.Op == lexer.COALESCE {
+		return c.checkCoalesce(e, left, right)
 	}
 
 	pii := left.PII || right.PII

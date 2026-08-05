@@ -72,7 +72,14 @@ func (t Type) String() string {
 // (design/optional-fields.md §1: absence is a well-typed value, not a
 // failure and not a null). Coerce returns it for a missing column or an
 // empty cell against an Optional Type. It is never Go's nil.
-type Absent struct{}
+//
+// Kind records the field's declared scalar type, so ??'s decimal-literal
+// promotion (design/decimal.md §2) can still apply when the left operand
+// is absent and there's no real DecimalValue to inspect. A propagated
+// Absent (built in internal/eval, not by Coerce) leaves Kind unset.
+type Absent struct {
+	Kind Kind
+}
 
 // MarshalJSON renders Absent as JSON null. That's a sink-format detail,
 // not a language-level null (design/optional-fields.md §6 forbids null

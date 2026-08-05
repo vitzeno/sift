@@ -272,8 +272,12 @@ func TestCoerceDecimalOptionalAbsent(t *testing.T) {
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
-	if _, ok := got.(Absent); !ok {
-		t.Errorf("Coerce(\"\") = %#v, want Absent", got)
+	absent, ok := got.(Absent)
+	if !ok {
+		t.Fatalf("Coerce(\"\") = %#v, want Absent", got)
+	}
+	if absent.Kind != Decimal {
+		t.Errorf("Coerce(\"\").Kind = %s, want decimal", absent.Kind)
 	}
 }
 

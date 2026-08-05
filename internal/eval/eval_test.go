@@ -368,6 +368,22 @@ func TestEvalDateTimeEqualityUsesTimeEqualNotBareEquals(t *testing.T) {
 	}
 }
 
+// TestEvalDecimalCoalesceLiteralDefault confirms an absent decimal field
+// discharges to a real value.DecimalValue, not a plain int/float64 --
+// value.Absent's Kind is what makes this possible with left genuinely
+// absent and no DecimalValue to inspect.
+func TestEvalDecimalCoalesceLiteralDefault(t *testing.T) {
+	r := row(map[string]any{"balance": value.Absent{Kind: value.Decimal}})
+	expr := &ast.BinaryOp{Op: lexer.COALESCE, Left: &ast.FieldAccess{Field: "balance"}, Right: &ast.IntLit{Value: 0}}
+	got, ok := Eval(expr, r).(value.DecimalValue)
+	if !ok {
+		t.Fatalf("Eval(.balance ?? 0) = %#v, want value.DecimalValue", Eval(expr, r))
+	}
+	if !decimal.Decimal(got).Equal(decimal.Zero) {
+		t.Errorf("Eval(.balance ?? 0) = %s, want 0", got)
+	}
+}
+
 // litOf wraps a Go value as the matching ast literal node, so the table
 // above can stay declarative instead of hand-building each case.
 func litOf(v any) ast.Expr {

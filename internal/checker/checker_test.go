@@ -1012,20 +1012,41 @@ pipeline main {
 	}
 }
 
-// TestCheckDecimalCoalesceLiteralDefaultNotPromoted documents a real gap
-// the design doc doesn't mention: the literal-context promotion rule
-// (§2) is scoped to checkBinaryOp's arithmetic/comparison operators
-// only, never extended to checkCoalesce, so `.balance ?? 0` is a
-// compile error today even though `.balance * 0` type-checks fine. A
-// decimal? field's default must be another decimal-typed expression
-// (design/decimal.md is silent on this; not solved here, only pinned
-// down so it's a known, named gap rather than a surprise).
-func TestCheckDecimalCoalesceLiteralDefaultNotPromoted(t *testing.T) {
+// TestCheckDecimalCoalesceLiteralPromotion confirms the literal-context
+// promotion rule (§2) now applies to ?? too: `.balance ?? 0` and
+// `.balance ?? 0.0` both type-check to a non-optional decimal.
+func TestCheckDecimalCoalesceLiteralPromotion(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "balance", Type: value.Type{Kind: value.Decimal, Optional: true}},
 	}}
-	err := checkExprErr(t, ".balance ?? 0", schema)
-	want := "?? requires both sides to share a type, got decimal? and int"
+	for _, src := range []string{".balance ?? 0", ".balance ?? 0.0"} {
+		t.Run(src, func(t *testing.T) {
+			c := &checker{}
+			expr, err := parser.ParseExpr(src)
+			if err != nil {
+				t.Fatalf("ParseExpr(%q): %v", src, err)
+			}
+			typ, err := c.checkExpr(expr, schema)
+			if err != nil {
+				t.Fatalf("checkExpr(%q) error: %v", src, err)
+			}
+			if typ.Kind != value.Decimal || typ.Optional {
+				t.Errorf("checkExpr(%q) = %s, want a non-optional decimal", src, typ)
+			}
+		})
+	}
+}
+
+// TestCheckDecimalCoalesceRealColumnDefaultStillRejected confirms the
+// promotion stays scoped to a bare literal: a real double column never
+// silently adapts to decimal.
+func TestCheckDecimalCoalesceRealColumnDefaultStillRejected(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "balance", Type: value.Type{Kind: value.Decimal, Optional: true}},
+		{Name: "rate", Type: value.Type{Kind: value.Double}},
+	}}
+	err := checkExprErr(t, ".balance ?? .rate", schema)
+	want := "?? requires both sides to share a type, got decimal? and double"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("error = %v, want it to contain %q", err, want)
 	}

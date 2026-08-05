@@ -46,7 +46,7 @@ const DefaultDateTimeFormat = "2006-01-02T15:04:05"
 // switch case.
 func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
 	if t.Optional && strings.TrimSpace(raw) == "" {
-		return Absent{}, nil
+		return Absent{Kind: t.Kind}, nil
 	}
 	switch t.Kind {
 	case String:

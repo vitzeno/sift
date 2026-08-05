@@ -94,8 +94,15 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 	// would otherwise swallow it.
 	if e.Op == lexer.COALESCE {
 		left := Eval(e.Left, row)
-		if isAbsent(left) {
-			return Eval(e.Right, row)
+		if a, ok := left.(value.Absent); ok {
+			right := Eval(e.Right, row)
+			// left is absent, so there's no DecimalValue to inspect the
+			// way the promotion below relies on -- a.Kind is the only
+			// surviving signal (design/decimal.md §2).
+			if a.Kind == value.Decimal {
+				right = toDecimal(right)
+			}
+			return right
 		}
 		return left
 	}
