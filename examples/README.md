@@ -18,21 +18,22 @@ is put together, see [`../CLAUDE.md`](../CLAUDE.md).
 6. [Fields that may be missing](#fields-that-may-be-missing)
 7. [Naming a column that isn't a valid identifier](#naming-a-column-that-isnt-a-valid-identifier)
 8. [Working with dates](#working-with-dates)
-9. [Exact math with decimal](#exact-math-with-decimal)
-10. [Reshaping schemas: select, drop, rename](#reshaping-schemas-select-drop-rename)
-11. [Cutting rows: limit and offset](#cutting-rows-limit-and-offset)
-12. [Masking as a stage](#masking-as-a-stage)
-13. [Putting it together](#putting-it-together)
-14. [When a row fails: error policies](#when-a-row-fails-error-policies)
-15. [Writing to more than one sink](#writing-to-more-than-one-sink)
-16. [Routing rows by condition](#routing-rows-by-condition)
-17. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
-18. [Segments with parameters](#segments-with-parameters)
-19. [A full ETL, with error routing](#a-full-etl-with-error-routing)
-20. [Reading xlsx files](#reading-xlsx-files)
-21. [Quick reference](#quick-reference)
-22. [Project layout](#project-layout)
-23. [Status](#status)
+9. [Working with datetime](#working-with-datetime)
+10. [Exact math with decimal](#exact-math-with-decimal)
+11. [Reshaping schemas: select, drop, rename](#reshaping-schemas-select-drop-rename)
+12. [Cutting rows: limit and offset](#cutting-rows-limit-and-offset)
+13. [Masking as a stage](#masking-as-a-stage)
+14. [Putting it together](#putting-it-together)
+15. [When a row fails: error policies](#when-a-row-fails-error-policies)
+16. [Writing to more than one sink](#writing-to-more-than-one-sink)
+17. [Routing rows by condition](#routing-rows-by-condition)
+18. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
+19. [Segments with parameters](#segments-with-parameters)
+20. [A full ETL, with error routing](#a-full-etl-with-error-routing)
+21. [Reading xlsx files](#reading-xlsx-files)
+22. [Quick reference](#quick-reference)
+23. [Project layout](#project-layout)
+24. [Status](#status)
 
 ## Building the CLI
 
@@ -404,6 +405,63 @@ either. Both are real, deliberate gaps, not oversights — see
 `../design/date.md` if you're curious why.
 
 `date.sift` in this folder is this exact program.
+
+## Working with datetime
+
+`date` has no idea about time of day: two rows on the same calendar date
+compare equal even if one happened at 9am and the other at 11pm.
+`datetime` is a real scalar type for exactly that: a naive timestamp
+(year, month, day, hour, minute, second — still no timezone or offset at
+all), comparable with `< > <= >= == !=` just like `date`, but
+finer-grained.
+
+```sift
+source in = csv("datetime.csv",
+  schema:  { name: string, clock_in: datetime, clock_out: datetime },
+  formats: { clock_in: "2006-01-02 15:04:05", clock_out: "2006-01-02 15:04:05" }
+)
+sink out = jsonl("datetime_out.jsonl")
+
+pipeline main {
+  in |> filter(.clock_out < .clock_in) |> out
+}
+```
+
+```console
+$ ./sift run datetime.sift
+$ cat datetime_out.jsonl
+{"name":"Tom","clock_in":"2026-07-31T21:00:00","clock_out":"2026-07-31T05:00:00"}
+```
+
+`formats` here is the *exact same kwarg* `date` already uses — not a
+second one. Both `clock_in` and `clock_out` are written space-separated
+(`"2026-07-31 09:00:00"`), the shape a timeclock or bank export
+typically writes timestamps in, so both name that layout explicitly;
+with no `formats` entry at all, a `datetime` field falls back to
+ISO-8601-with-a-`T` (`"2026-07-31T04:10:25"`), a different default than
+`date`'s own ISO-8601-no-time one. A `date` field and a `datetime` field
+can sit on the same source, each resolving its own default or override
+independently.
+
+Only Tom's row reaches the output: his `clock_out` (5am) is
+chronologically *before* his `clock_in` (9pm) on the very same calendar
+date — almost certainly a data-entry mistake (forgetting to roll the
+date forward for a shift that runs past midnight), and exactly the kind
+of bug `date` alone could never catch, since both timestamps would
+compare equal once the time-of-day is thrown away. Ada's ordinary
+same-day shift and Grace's correctly-dated overnight shift (`clock_out`
+on August 1st) are both excluded, same as `date`'s quiet-drop `filter`
+behavior always has.
+
+`date` and `datetime` are different types, even though both are
+"temporal": a schema can declare one field of each, but comparing them
+directly against each other (`.a_date == .a_datetime`) is a compile
+error, the same never-silently-mix rule every other pair of types
+already follows. Like `date`, there's no `datetime` literal syntax and
+no arithmetic (`datetime + 1`, `datetime - datetime`) — see
+`../design/datetime.md` if you're curious why.
+
+`datetime.sift` in this folder is this exact program.
 
 ## Exact math with decimal
 
@@ -1068,13 +1126,18 @@ workbook it reads.
 - **Types:** `string`, `int`, `double`, `bool`, `date` (a calendar date
   only, no time or timezone, comparable but with no arithmetic and no
   literal syntax of its own — a value only ever comes from a source
-  column), and `decimal` (exact arithmetic, no `float64` rounding error;
-  a bare int/double literal standing against a `decimal` column adapts
-  to `decimal`, but two real columns of different Kind never mix, even
-  numeric ones; a comma-thousands-formatted cell like `"2,100.00"`
-  parses unconditionally, no keyword argument needed, unless the comma
-  sits after the cell's last `.`, which fails to parse instead of
-  silently reading as the wrong number).
+  column), `datetime` (a naive timestamp — date plus time-of-day, still
+  no timezone — comparable and finer-grained than `date` but otherwise
+  the same cuts: no arithmetic, no literal syntax, reuses `date`'s own
+  `formats:` kwarg rather than a second one, and never mixes with `date`
+  in a comparison even though both are temporal), and `decimal` (exact
+  arithmetic, no `float64` rounding error; a bare int/double literal
+  standing against a `decimal` column adapts to `decimal`, but two real
+  columns of different Kind never mix, even numeric ones; a
+  comma-thousands-formatted cell like `"2,100.00"` parses
+  unconditionally, no keyword argument needed, unless the comma sits
+  after the cell's last `.`, which fails to parse instead of silently
+  reading as the wrong number).
 - **PII:** `@pii` attaches at the source, is tracked through every
   expression, and is only cleared by `mask`/`hash`/`redact` — which are
   string-only, so a non-string `@pii` field (`date`, `int`, ...) can
