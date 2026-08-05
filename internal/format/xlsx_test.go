@@ -379,3 +379,35 @@ func TestXLSXSourceEmptyHeaderCellsIgnored(t *testing.T) {
 		t.Fatalf("row = %+v, ok=%v, want name=Ada age=42", row, ok)
 	}
 }
+
+// TestXLSXSourceDate is DATE-G: a date-typed field reads correctly from
+// an xlsx fixture with no format-specific code path of its own --
+// regression-shaped, proving design/date.md §3's "xlsx needs no special
+// handling" claim, since excelize's row iterator already delivers cells
+// as strings the same way csv's reader does.
+func TestXLSXSourceDate(t *testing.T) {
+	path := writeXLSXFixture(t, "Sheet1", [][]string{
+		{"name", "dob"},
+		{"Ada", "05/01/2026"},
+	})
+	src, err := NewXLSXSource(runtime.SourceOptions{
+		Name: "in", Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "name", Type: value.Type{Kind: value.String}},
+			{Name: "dob", Type: value.Type{Kind: value.Date}},
+		}},
+		DateFormats: map[string]string{"dob": "02/01/2006"},
+	})
+	if err != nil {
+		t.Fatalf("NewXLSXSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	got := row.Fields["dob"].(value.DateValue)
+	if got.String() != "2026-01-05" {
+		t.Errorf("dob = %s, want 2026-01-05 (5 January, day-first)", got.String())
+	}
+}

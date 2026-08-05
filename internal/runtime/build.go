@@ -66,11 +66,12 @@ type RouteBranch struct {
 // since only Build knows which position each sink landed at.
 func Build(in BuildInput) (top Stream, src Source, sinks []Sink, route []RouteBranch, err error) {
 	src, err = NewSource(in.Source.Format, SourceOptions{
-		Name:    in.Source.Name,
-		Path:    in.Source.Path,
-		Schema:  in.SourceSchema,
-		Opts:    sourceOptValues(in.Source.Opts),
-		Columns: columnAliases(in.Source.Columns),
+		Name:        in.Source.Name,
+		Path:        in.Source.Path,
+		Schema:      in.SourceSchema,
+		Opts:        sourceOptValues(in.Source.Opts),
+		Columns:     columnAliases(in.Source.Columns),
+		DateFormats: dateFormats(in.Source.Formats),
 	})
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -182,6 +183,22 @@ func columnAliases(aliases []ast.ColumnAlias) map[string]string {
 	m := make(map[string]string, len(aliases))
 	for _, a := range aliases {
 		m[a.Field] = a.Header
+	}
+	return m
+}
+
+// dateFormats flattens a source's formats kwarg (design/date.md §3) into
+// the field->layout map SourceOptions.DateFormats exposes to a format
+// constructor. A direct copy of columnAliases's shape. nil for a source
+// with no formats kwarg, so a format that never looks here sees exactly
+// what it did before this existed.
+func dateFormats(formats []ast.FieldFormat) map[string]string {
+	if len(formats) == 0 {
+		return nil
+	}
+	m := make(map[string]string, len(formats))
+	for _, f := range formats {
+		m[f.Field] = f.Format
 	}
 	return m
 }

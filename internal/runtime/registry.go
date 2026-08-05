@@ -35,6 +35,12 @@ type SourceOptions struct {
 	// of the field's own identifier. Nil for a source with no columns
 	// kwarg. Only csv and xlsx look here.
 	Columns map[string]string
+	// DateFormats holds the optional formats kwarg (design/date.md §3):
+	// a date-typed schema field name to the Go reference-layout string to
+	// parse its cells against. A date field absent from this map (or a
+	// nil map, for a source with no formats kwarg at all) uses
+	// value.DefaultDateFormat. Only csv and xlsx look here.
+	DateFormats map[string]string
 }
 
 type SinkOptions struct {

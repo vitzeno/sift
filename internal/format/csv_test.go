@@ -349,6 +349,134 @@ func TestCSVSourceOptionalUnparseableIsRowFailure(t *testing.T) {
 	}
 }
 
+// TestCSVSourceDateDefaultFormat is DATE-A: a date column with no
+// formats entry parses against the ISO-8601 default.
+func TestCSVSourceDateDefaultFormat(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "signups.csv")
+	writeFile(t, path, "name,signup_date\nAda,2026-01-05\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "name", Type: value.Type{Kind: value.String}},
+			{Name: "signup_date", Type: value.Type{Kind: value.Date}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	got, isDate := row.Fields["signup_date"].(value.DateValue)
+	if !isDate {
+		t.Fatalf("Fields[signup_date] = %#v, want a value.DateValue", row.Fields["signup_date"])
+	}
+	if got.String() != "2026-01-05" {
+		t.Errorf("signup_date = %s, want 2026-01-05", got.String())
+	}
+}
+
+// TestCSVSourceDateExplicitFormat is DATE-B: a formats entry drives
+// parsing instead of the ISO default, proving day/month order is
+// actually read from the kwarg.
+func TestCSVSourceDateExplicitFormat(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "uk_export.csv")
+	writeFile(t, path, "name,dob\nAda,05/01/2026\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "name", Type: value.Type{Kind: value.String}},
+			{Name: "dob", Type: value.Type{Kind: value.Date}},
+		}},
+		DateFormats: map[string]string{"dob": "02/01/2006"},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	got := row.Fields["dob"].(value.DateValue)
+	if got.String() != "2026-01-05" {
+		t.Errorf("dob = %s, want 2026-01-05 (5 January, day-first)", got.String())
+	}
+}
+
+// TestCSVSourceDateTwoFieldsTwoFormats is DATE-B2: two date fields on one
+// source, each with its own formats entry, resolve independently on the
+// same row.
+func TestCSVSourceDateTwoFieldsTwoFormats(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "uk_export.csv")
+	writeFile(t, path, "dob,last_login\n05/01/2026,2026-02-10T09:30:00Z\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "dob", Type: value.Type{Kind: value.Date}},
+			{Name: "last_login", Type: value.Type{Kind: value.Date}},
+		}},
+		DateFormats: map[string]string{
+			"dob":        "02/01/2006",
+			"last_login": "2006-01-02T15:04:05Z",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	if got := row.Fields["dob"].(value.DateValue).String(); got != "2026-01-05" {
+		t.Errorf("dob = %s, want 2026-01-05", got)
+	}
+	if got := row.Fields["last_login"].(value.DateValue).String(); got != "2026-02-10" {
+		t.Errorf("last_login = %s, want 2026-02-10", got)
+	}
+}
+
+// TestCSVSourceDateBadCellIsRowFailure is DATE-C: a cell that doesn't
+// match the declared format is a row failure, same shape as a bad
+// int/double cell, not a panic.
+func TestCSVSourceDateBadCellIsRowFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "signups.csv")
+	writeFile(t, path, "name,signup_date\nAda,2026-02-30\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "name", Type: value.Type{Kind: value.String}},
+			{Name: "signup_date", Type: value.Type{Kind: value.Date}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok {
+		t.Fatal("Next() returned ok=false, want the failed row returned normally")
+	}
+	if row.Fail == nil {
+		t.Fatal("Fail is nil, want a coercion failure for an impossible calendar date")
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

@@ -33,9 +33,12 @@ type xlsxSource struct {
 	// col maps a schema field name to its zero-based column index in
 	// the sheet, bound once from header_row and reused for every row.
 	// Mirrors csvSource.col.
-	col     map[string]int
-	schema  value.Schema
-	ordinal int
+	col map[string]int
+	// dateFormats holds the source's formats kwarg (design/date.md §3):
+	// a date-typed field name to the layout string to parse it against.
+	dateFormats map[string]string
+	schema      value.Schema
+	ordinal     int
 	// sheetRow is the 1-based spreadsheet row number of the last row
 	// pulled from rows. Becomes each emitted Row's Provenance.Offset
 	// (design/xlsx.md §2: "the one a user can act on"), distinct from
@@ -130,12 +133,13 @@ func NewXLSXSource(opts runtime.SourceOptions) (runtime.Source, error) {
 	}
 
 	return &xlsxSource{
-		f:        f,
-		rows:     rows,
-		name:     opts.Name,
-		col:      col,
-		schema:   opts.Schema,
-		sheetRow: headerRow,
+		f:           f,
+		rows:        rows,
+		name:        opts.Name,
+		col:         col,
+		dateFormats: opts.DateFormats,
+		schema:      opts.Schema,
+		sheetRow:    headerRow,
 	}, nil
 }
 
@@ -190,7 +194,7 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 				idx = -1
 			}
 			raw := cellAt(cells, idx)
-			v, fail := value.Coerce(field.Type, raw)
+			v, fail := value.Coerce(field.Type, raw, resolveDateFormat(s.dateFormats, field.Name))
 			if fail != nil {
 				fail.Stage = fmt.Sprintf("xlsx:%s", field.Name)
 				return value.Row{Fail: fail, Prov: prov}, true
