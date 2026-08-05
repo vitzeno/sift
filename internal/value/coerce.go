@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // DefaultDateFormat is the Go reference-layout used to parse a Date-kind
@@ -66,6 +68,12 @@ func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
 			return nil, &Failure{Reason: fmt.Sprintf("cannot parse %q as date", raw)}
 		}
 		return DateValue(v), nil
+	case Decimal:
+		v, err := decimal.NewFromString(raw)
+		if err != nil {
+			return nil, &Failure{Reason: fmt.Sprintf("cannot parse %q as decimal", raw)}
+		}
+		return v, nil
 	default:
 		return nil, &Failure{Reason: fmt.Sprintf("unsupported scalar kind %v", t.Kind)}
 	}

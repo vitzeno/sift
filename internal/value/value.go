@@ -10,7 +10,8 @@ import (
 
 // Kind is a scalar type. v0 only needs the four primitives design.md's
 // expression grammar produces: string/int/double literals, and bool from
-// comparisons and && / ||. Date was added by design/date.md.
+// comparisons and && / ||. Date was added by design/date.md; Decimal by
+// design/decimal.md.
 type Kind int
 
 const (
@@ -19,6 +20,7 @@ const (
 	Double
 	Bool
 	Date
+	Decimal
 )
 
 func (k Kind) String() string {
@@ -33,6 +35,8 @@ func (k Kind) String() string {
 		return "bool"
 	case Date:
 		return "date"
+	case Decimal:
+		return "decimal"
 	default:
 		return "unknown"
 	}

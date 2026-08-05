@@ -3,6 +3,8 @@ package value
 import (
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 func TestCoerceSuccess(t *testing.T) {
@@ -187,6 +189,55 @@ func TestCoerceDateFailure(t *testing.T) {
 // Kind, with no Date-specific code needed for it.
 func TestCoerceDateOptionalAbsent(t *testing.T) {
 	got, fail := Coerce(Type{Kind: Date, Optional: true}, "")
+	if fail != nil {
+		t.Fatalf("Coerce failed: %+v", fail)
+	}
+	if _, ok := got.(Absent); !ok {
+		t.Errorf("Coerce(\"\") = %#v, want Absent", got)
+	}
+}
+
+// TestCoerceDecimalParsesExactly is DEC-A's parse half: "19.99" parses
+// to exactly 19.99, not a float64-tainted approximation. Uses .Equal(),
+// not Go's bare ==, since decimal.Decimal is a struct holding a
+// *big.Int (design/decimal.md §2) -- the same reason this file's Date
+// tests never lean on bare == either.
+func TestCoerceDecimalParsesExactly(t *testing.T) {
+	got, fail := Coerce(Type{Kind: Decimal}, "19.99")
+	if fail != nil {
+		t.Fatalf("Coerce failed: %+v", fail)
+	}
+	want := decimal.NewFromFloat(19.99)
+	d, ok := got.(decimal.Decimal)
+	if !ok {
+		t.Fatalf("Coerce = %#v (%T), want decimal.Decimal", got, got)
+	}
+	if !d.Equal(want) {
+		t.Errorf("Coerce(\"19.99\") = %s, want %s", d, want)
+	}
+	if d.String() != "19.99" {
+		t.Errorf("Coerce(\"19.99\").String() = %q, want %q (no trailing-zero normalization)", d.String(), "19.99")
+	}
+}
+
+// TestCoerceDecimalFailure is DEC-B: a non-numeric cell is a row
+// failure, same shape as a bad int/double cell, not a panic.
+func TestCoerceDecimalFailure(t *testing.T) {
+	got, fail := Coerce(Type{Kind: Decimal}, "not-a-number")
+	if fail == nil {
+		t.Fatalf("Coerce(%q) = %#v, nil; want a Failure", "not-a-number", got)
+	}
+	want := `cannot parse "not-a-number" as decimal`
+	if fail.Reason != want {
+		t.Errorf("Failure.Reason = %q, want %q", fail.Reason, want)
+	}
+}
+
+// TestCoerceDecimalOptionalAbsent confirms the Optional blank-cell
+// carve-out applies to Decimal exactly like every other Kind, with no
+// Decimal-specific code needed for it.
+func TestCoerceDecimalOptionalAbsent(t *testing.T) {
+	got, fail := Coerce(Type{Kind: Decimal, Optional: true}, "")
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}

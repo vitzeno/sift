@@ -15,6 +15,7 @@ func TestTypeString(t *testing.T) {
 		{"plain string", Type{Kind: String}, "string"},
 		{"plain int", Type{Kind: Int}, "int"},
 		{"plain date", Type{Kind: Date}, "date"},
+		{"plain decimal", Type{Kind: Decimal}, "decimal"},
 		{"pii string", Type{Kind: String, PII: true}, "string @pii"},
 		{"optional string", Type{Kind: String, Optional: true}, "string?"},
 		{"optional pii string", Type{Kind: String, Optional: true, PII: true}, "string? @pii"},
