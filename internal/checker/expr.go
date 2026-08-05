@@ -104,6 +104,24 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 		return c.checkCoalesce(e, left, right)
 	}
 
+	// decision: a bare int/double literal standing directly against a
+	// decimal operand adapts to decimal in that position only
+	// (design/decimal.md §2) -- mirrors Go's own untyped-constant model.
+	// Checked before the ordinary Kind-equality rejection below, not
+	// instead of it: a real column of a different Kind (e.g. `rate:
+	// double`) never mixes this way, only a literal constant does.
+	// Mutating the local left/right copies is enough -- nothing past
+	// this point reads the original ast.Expr nodes, only the Kinds.
+	if left.Kind == value.Decimal && right.Kind != value.Decimal {
+		if _, ok := literalKind(e.Right); ok {
+			right.Kind = value.Decimal
+		}
+	} else if right.Kind == value.Decimal && left.Kind != value.Decimal {
+		if _, ok := literalKind(e.Left); ok {
+			left.Kind = value.Decimal
+		}
+	}
+
 	pii := left.PII || right.PII
 	// Optional propagates exactly like PII (design/optional-fields.md §3):
 	// any operator consuming a T? yields a U? until ?? explicitly
@@ -169,8 +187,27 @@ func (c *checker) checkCoalesce(e *ast.BinaryOp, left, right value.Type) (value.
 	return value.Type{Kind: left.Kind, PII: left.PII || right.PII}, nil
 }
 
+// isNumeric includes Decimal (design/decimal.md §3): + - * / and the
+// comparison operators all accept it on equal footing with int/double.
 func isNumeric(k value.Kind) bool {
-	return k == value.Int || k == value.Double
+	return k == value.Int || k == value.Double || k == value.Decimal
+}
+
+// literalKind reports e's Kind and true if e is a bare numeric literal
+// node (ast.IntLit or ast.DoubleLit) -- never a field access or a
+// computed expression, even one that happens to be int/double-typed.
+// The only caller is checkBinaryOp's decimal literal-context exception
+// (design/decimal.md §2); an int/double column must never silently
+// adapt to decimal, only a literal constant written at the call site.
+func literalKind(e ast.Expr) (value.Kind, bool) {
+	switch e.(type) {
+	case *ast.IntLit:
+		return value.Int, true
+	case *ast.DoubleLit:
+		return value.Double, true
+	default:
+		return 0, false
+	}
 }
 
 // isOrderable reports whether < > <= >= accept k (design/date.md §3):

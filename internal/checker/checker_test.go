@@ -671,6 +671,85 @@ pipeline main {
 	}
 }
 
+// TestCheckDecimalLiteralPromotion is DEC-C: a bare int or double
+// literal standing directly against a decimal operand adapts to
+// decimal, on either side of the operator, for both arithmetic and
+// comparison (design/decimal.md §2).
+func TestCheckDecimalLiteralPromotion(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "price", Type: value.Type{Kind: value.Decimal}},
+	}}
+	tests := []struct {
+		src      string
+		wantKind value.Kind
+	}{
+		{".price * 3", value.Decimal},
+		{".price * 0.02", value.Decimal},
+		{"3 * .price", value.Decimal},
+		{"0.02 * .price", value.Decimal},
+		{".price - 5", value.Decimal},
+		{".price + 1", value.Decimal},
+		{".price / 2", value.Decimal},
+		{".price > 0", value.Bool},
+		{".price == 19.99", value.Bool},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			c := &checker{}
+			expr, err := parser.ParseExpr(tt.src)
+			if err != nil {
+				t.Fatalf("ParseExpr(%q): %v", tt.src, err)
+			}
+			typ, err := c.checkExpr(expr, schema)
+			if err != nil {
+				t.Fatalf("checkExpr(%q) error: %v", tt.src, err)
+			}
+			if typ.Kind != tt.wantKind {
+				t.Errorf("checkExpr(%q) = %s, want Kind %s", tt.src, typ, tt.wantKind)
+			}
+		})
+	}
+}
+
+// TestCheckDecimalNoCrossColumnPromotion is DEC-D: the literal exception
+// never extends to a second real column of a different Kind, even a
+// numeric one -- two real columns never silently mix.
+func TestCheckDecimalNoCrossColumnPromotion(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "price", Type: value.Type{Kind: value.Decimal}},
+		{Name: "rate", Type: value.Type{Kind: value.Double}},
+		{Name: "qty", Type: value.Type{Kind: value.Int}},
+	}}
+	tests := []struct {
+		src     string
+		wantSub string
+	}{
+		{".price * .rate", "cannot apply * to decimal and double"},
+		{".price * .qty", "cannot apply * to decimal and int"},
+		{".price < .rate", "cannot compare decimal and double"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			err := checkExprErr(t, tt.src, schema)
+			if err == nil || !strings.Contains(err.Error(), tt.wantSub) {
+				t.Errorf("error = %v, want it to contain %q", err, tt.wantSub)
+			}
+		})
+	}
+}
+
+// TestCheckDecimalPromotionRequiresADecimalOperand confirms the literal
+// exception only ever fires when one side is already decimal -- plain
+// int/double literal arithmetic with no decimal in sight is completely
+// unaffected (a regression check on checkBinaryOp's pre-step).
+func TestCheckDecimalPromotionRequiresADecimalOperand(t *testing.T) {
+	err := checkExprErr(t, "1 + 2.5", value.Schema{})
+	want := "cannot apply + to int and double"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %v, want it to contain %q", err, want)
+	}
+}
+
 // TestCheckDateComparison confirms date-date comparisons type-check to
 // bool (design/date.md §3): isOrderable, not isNumeric, is the gate for
 // </>/<=/>=, and ==/!= already accepted any matching Kind pair before
