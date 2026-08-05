@@ -120,7 +120,7 @@ func (s *csvSource) Next() (value.Row, bool) {
 		if idx, ok := s.col[field.Name]; ok {
 			raw = record[idx]
 		}
-		v, fail := value.Coerce(field.Type, raw, resolveDateFormat(s.dateFormats, field.Name))
+		v, fail := value.Coerce(field.Type, raw, resolveDateFormat(s.dateFormats, field.Name, defaultDateFormat(field.Type.Kind)))
 		if fail != nil {
 			// One failure per row (design-errors.md §9): the first bad
 			// cell marks the row and short-circuits. The rest of the

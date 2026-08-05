@@ -194,7 +194,7 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 				idx = -1
 			}
 			raw := cellAt(cells, idx)
-			v, fail := value.Coerce(field.Type, raw, resolveDateFormat(s.dateFormats, field.Name))
+			v, fail := value.Coerce(field.Type, raw, resolveDateFormat(s.dateFormats, field.Name, defaultDateFormat(field.Type.Kind)))
 			if fail != nil {
 				fail.Stage = fmt.Sprintf("xlsx:%s", field.Name)
 				return value.Row{Fail: fail, Prov: prov}, true
