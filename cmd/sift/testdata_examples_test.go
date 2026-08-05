@@ -458,3 +458,22 @@ func TestExampleDecimal(t *testing.T) {
 		t.Errorf("output =\n%s\nwant\n%s", got, want)
 	}
 }
+
+// TestExampleDateTime drives testdata/datetime.sift through the real CLI
+// (design/datetime.md): clock_in/clock_out are space-separated, so
+// formats: names their layout explicitly for both -- reusing date's own
+// kwarg, not a second one. filter(.clock_out < .clock_in) flags Tom's
+// row, whose clock-out time is chronologically before its clock-in on
+// the same calendar date (a data-entry error, forgetting to roll the
+// date forward for an overnight shift); Ada's ordinary same-day shift and
+// Grace's correctly-dated overnight shift are both excluded. The JSON
+// output renders with a "T" separator and no zone suffix (DT-F),
+// confirming the naive-only decision.
+func TestExampleDateTime(t *testing.T) {
+	got := runExample(t, "datetime")
+	want := `{"name":"Tom","clock_in":"2026-07-31T21:00:00","clock_out":"2026-07-31T05:00:00"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}

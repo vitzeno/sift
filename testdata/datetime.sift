@@ -1,0 +1,19 @@
+// Demonstrates the datetime type (design/datetime.md): a naive timestamp
+// (date + time-of-day, no timezone), comparable exactly like date but
+// finer-grained. clock_in/clock_out are written space-separated, the
+// same shape a timeclock or bank export typically uses, so formats
+// names the layout explicitly for both -- reusing date's own kwarg, not
+// a second one. filter(.clock_out < .clock_in) flags a shift whose
+// clock-out is chronologically before its clock-in: almost always a
+// data-entry error (forgetting to roll the date to the next day for an
+// overnight shift), not something date alone could catch once the two
+// times share a calendar date.
+source in = csv("datetime.csv",
+  schema:  { name: string, clock_in: datetime, clock_out: datetime },
+  formats: { clock_in: "2006-01-02 15:04:05", clock_out: "2006-01-02 15:04:05" }
+)
+sink out = jsonl("datetime_out.jsonl")
+
+pipeline main {
+  in |> filter(.clock_out < .clock_in) |> out
+}
