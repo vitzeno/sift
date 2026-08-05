@@ -178,6 +178,9 @@ func TestEvalDateComparison(t *testing.T) {
 func TestEvalDateEqualityUsesTimeEqualNotBareEquals(t *testing.T) {
 	a := value.DateValue(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
 	b := value.DateValue(time.Date(2026, 1, 5, 0, 0, 0, 0, time.FixedZone("UTC", 0)))
+	//nolint:staticcheck // QF1009: the bare == here is the point of this
+	// check, not a mistake -- it confirms the fixture actually diverges
+	// from .Equal() before asserting Sift's own == uses .Equal() below.
 	if time.Time(a) == time.Time(b) {
 		t.Fatal("test setup invalid: a and b must be bare-== unequal despite denoting the same instant")
 	}
