@@ -17,20 +17,21 @@ is put together, see [`../CLAUDE.md`](../CLAUDE.md).
 5. [The PII tag](#the-pii-tag)
 6. [Fields that may be missing](#fields-that-may-be-missing)
 7. [Naming a column that isn't a valid identifier](#naming-a-column-that-isnt-a-valid-identifier)
-8. [Reshaping schemas: select, drop, rename](#reshaping-schemas-select-drop-rename)
-9. [Cutting rows: limit and offset](#cutting-rows-limit-and-offset)
-10. [Masking as a stage](#masking-as-a-stage)
-11. [Putting it together](#putting-it-together)
-12. [When a row fails: error policies](#when-a-row-fails-error-policies)
-13. [Writing to more than one sink](#writing-to-more-than-one-sink)
-14. [Routing rows by condition](#routing-rows-by-condition)
-15. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
-16. [Segments with parameters](#segments-with-parameters)
-17. [A full ETL, with error routing](#a-full-etl-with-error-routing)
-18. [Reading xlsx files](#reading-xlsx-files)
-19. [Quick reference](#quick-reference)
-20. [Project layout](#project-layout)
-21. [Status](#status)
+8. [Working with dates](#working-with-dates)
+9. [Reshaping schemas: select, drop, rename](#reshaping-schemas-select-drop-rename)
+10. [Cutting rows: limit and offset](#cutting-rows-limit-and-offset)
+11. [Masking as a stage](#masking-as-a-stage)
+12. [Putting it together](#putting-it-together)
+13. [When a row fails: error policies](#when-a-row-fails-error-policies)
+14. [Writing to more than one sink](#writing-to-more-than-one-sink)
+15. [Routing rows by condition](#routing-rows-by-condition)
+16. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
+17. [Segments with parameters](#segments-with-parameters)
+18. [A full ETL, with error routing](#a-full-etl-with-error-routing)
+19. [Reading xlsx files](#reading-xlsx-files)
+20. [Quick reference](#quick-reference)
+21. [Project layout](#project-layout)
+22. [Status](#status)
 
 ## Building the CLI
 
@@ -342,6 +343,66 @@ This works the same way for `xlsx` sources too, once you get there
 care which format resolved it.
 
 `columns.sift` in this folder is this exact program.
+
+## Working with dates
+
+`string` has no idea what a date is: `"2026-1-5"` and `"2026-01-05"`
+compare as unrelated text, and sorting them lexically doesn't match
+sorting them chronologically the moment padding or format differs.
+`date` is a real scalar type for exactly that: a calendar date (year,
+month, day, nothing else — no time of day, no timezone), comparable
+with `< > <= >= == !=`.
+
+```sift
+source in = csv("date.csv",
+  schema:  { name: string, started_on: date, renewed_on: date },
+  formats: { renewed_on: "02/01/2006" }
+)
+sink out = jsonl("date_out.jsonl")
+
+pipeline main {
+  in |> filter(.renewed_on >= .started_on) |> out
+}
+```
+
+`started_on`'s cells (`2026-01-05`) parse against the default ISO-8601
+layout (`YYYY-MM-DD`), which needs no kwarg at all. `renewed_on`'s cells
+are written day-first (`10/02/2026`), so the `formats` kwarg names its
+layout explicitly: a Go reference-layout string, the same `{ field:
+"value" }` shape `columns` already uses, one entry per date field that
+isn't already ISO-8601. A date field with no entry in `formats` just
+uses the default; two date fields on one source can each name a
+completely different layout, independently.
+
+```console
+$ ./sift run date.sift
+$ cat date_out.jsonl
+{"name":"Ada","started_on":"2026-01-05","renewed_on":"2026-02-10"}
+{"name":"Grace","started_on":"2026-01-01","renewed_on":"2026-01-01"}
+```
+
+Tom is missing from the output on purpose: his renewal (`15/02/2026`,
+15 February) comes chronologically *before* his subscription started
+(`2026-03-01`, 1 March), so `filter(.renewed_on >= .started_on)` drops
+his row. That's the entire reason this type exists: comparing those two
+values as plain strings would ask whether `"15/02/2026" >= "2026-03-01"`,
+which isn't a meaningful question either way you read it, while as
+`date` the comparison answers the real one.
+
+A cell that doesn't match its format, or names a date that doesn't
+exist on the calendar at all (`2026-02-30`), fails the row exactly like
+a bad `int` or `double` cell, under the same
+[error policy](#when-a-row-fails-error-policies) — skipped, routed, or
+aborting the run depending on `on error`, with a reason like
+`cannot parse "2026-02-30" as date`.
+
+There's no way to write a date *literal* in an expression, so every
+comparison is between two date columns, never a column and a fixed
+cutoff, and there's no arithmetic (`date + 1`, `date - date`) yet
+either. Both are real, deliberate gaps, not oversights — see
+`../design/date.md` if you're curious why.
+
+`date.sift` in this folder is this exact program.
 
 ## Reshaping schemas: select, drop, rename
 
@@ -916,7 +977,8 @@ workbook it reads.
   sources) and a path. A source also declares its schema, since neither
   CSV nor xlsx carries reliable types of its own. `xlsx` also takes
   `sheet:` and `header_row:`. Either format also takes `columns:`, to
-  name a column whose real header isn't a valid identifier.
+  name a column whose real header isn't a valid identifier, and
+  `formats:`, to give a `date` field its own parsing layout.
 - **Pipelines** are a plain `in |> stage |> ... |> out` chain. The last
   step can be a comma separated list of sinks to broadcast to, or
   `route { <bool> => sink, ..., else => sink|discard }` to send each row
@@ -931,9 +993,14 @@ workbook it reads.
   literals, `+ - * /`, `< > <= >= == !=`, `&& ||`, function calls
   (`upper`, `lower`, `trim`, `mask`, `hash`, `redact`), and record
   literals with a spread (`{ ...row, ... }`).
+- **Types:** `string`, `int`, `double`, `bool`, and `date` (a calendar
+  date only, no time or timezone, comparable but with no arithmetic and
+  no literal syntax of its own — a value only ever comes from a source
+  column).
 - **PII:** `@pii` attaches at the source, is tracked through every
-  expression, and is only cleared by `mask`/`hash`/`redact`. A sink
-  rejects any field still tagged `@pii`.
+  expression, and is only cleared by `mask`/`hash`/`redact` — which are
+  string-only, so a non-string `@pii` field (`date`, `int`, ...) can
+  only be dropped, not masked in place.
 - **Optional fields:** `T?` in a source schema attaches at the source. A
   missing or blank cell reads as absent, that state is tracked through
   every expression, and only `??` clears it, by giving a default. A
@@ -992,5 +1059,6 @@ mask/hash/redact as stages (`../design/improvements.md`), writing to more
 than one sink (`../design/multisink.md`), named segments with parameters
 (`../design/segments.md`), the `xlsx` source (`../design/xlsx.md`),
 optional fields (`../design/optional-fields.md`), conditional routing
-(`../design/routing.md`), and column aliases for headers that aren't
-valid identifiers (`../design/column-aliases.md`).
+(`../design/routing.md`), column aliases for headers that aren't valid
+identifiers (`../design/column-aliases.md`), and the `date` type
+(`../design/date.md`).
