@@ -18,6 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/vitzeno/sift/internal/ast"
 	"github.com/vitzeno/sift/internal/lexer"
 	"github.com/vitzeno/sift/internal/value"
@@ -109,6 +111,19 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 		return value.Absent{}
 	}
 
+	// decision: mirrors checkBinaryOp's literal-context promotion at the
+	// type level (design/decimal.md §2). If either operand is already a
+	// decimal.Decimal, the checker only ever let this expression compile
+	// if the other side is an int/float64 literal, so it's safe to
+	// convert that side to decimal.Decimal here too -- the switch below
+	// then dispatches to decimal arithmetic regardless of which side the
+	// real decimal column was physically on.
+	if _, ok := left.(decimal.Decimal); ok {
+		right = toDecimal(right)
+	} else if _, ok := right.(decimal.Decimal); ok {
+		left = toDecimal(left)
+	}
+
 	switch e.Op {
 	case lexer.PLUS:
 		switch l := left.(type) {
@@ -118,6 +133,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l + right.(float64)
 		case string:
 			return l + right.(string)
+		case decimal.Decimal:
+			return l.Add(right.(decimal.Decimal))
 		}
 	case lexer.MINUS:
 		switch l := left.(type) {
@@ -125,6 +142,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l - right.(int)
 		case float64:
 			return l - right.(float64)
+		case decimal.Decimal:
+			return l.Sub(right.(decimal.Decimal))
 		}
 	case lexer.STAR:
 		switch l := left.(type) {
@@ -132,6 +151,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l * right.(int)
 		case float64:
 			return l * right.(float64)
+		case decimal.Decimal:
+			return l.Mul(right.(decimal.Decimal))
 		}
 	case lexer.SLASH:
 		switch l := left.(type) {
@@ -139,6 +160,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l / right.(int)
 		case float64:
 			return l / right.(float64)
+		case decimal.Decimal:
+			return l.Div(right.(decimal.Decimal))
 		}
 	case lexer.LT:
 		switch l := left.(type) {
@@ -148,6 +171,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l < right.(float64)
 		case value.DateValue:
 			return dateCompare(l, right) < 0
+		case decimal.Decimal:
+			return l.LessThan(right.(decimal.Decimal))
 		}
 	case lexer.GT:
 		switch l := left.(type) {
@@ -157,6 +182,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l > right.(float64)
 		case value.DateValue:
 			return dateCompare(l, right) > 0
+		case decimal.Decimal:
+			return l.GreaterThan(right.(decimal.Decimal))
 		}
 	case lexer.LE:
 		switch l := left.(type) {
@@ -166,6 +193,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l <= right.(float64)
 		case value.DateValue:
 			return dateCompare(l, right) <= 0
+		case decimal.Decimal:
+			return l.LessThanOrEqual(right.(decimal.Decimal))
 		}
 	case lexer.GE:
 		switch l := left.(type) {
@@ -175,21 +204,30 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l >= right.(float64)
 		case value.DateValue:
 			return dateCompare(l, right) >= 0
+		case decimal.Decimal:
+			return l.GreaterThanOrEqual(right.(decimal.Decimal))
 		}
 	case lexer.EQ:
-		// decision: value.DateValue wraps time.Time, a struct whose bare
-		// == compares internal representation (wall/ext fields, a
-		// *Location pointer), not the instant it denotes -- two equal
-		// dates aren't guaranteed == (design/date.md §3). Every other
-		// Kind here is a plain comparable Go primitive, so bare == is
-		// correct for them; only Date needs its own branch.
+		// decision: value.DateValue wraps time.Time and decimal.Decimal
+		// wraps a *big.Int, both structs whose bare == compares internal
+		// representation, not the value denoted -- two equal instants or
+		// amounts aren't guaranteed == (design/date.md §3, design/decimal.md
+		// §2). Every other Kind here is a plain comparable Go primitive,
+		// so bare == is correct for them; only these two need their own
+		// branch.
 		if l, ok := left.(value.DateValue); ok {
 			return time.Time(l).Equal(time.Time(right.(value.DateValue)))
+		}
+		if l, ok := left.(decimal.Decimal); ok {
+			return l.Equal(right.(decimal.Decimal))
 		}
 		return left == right
 	case lexer.NE:
 		if l, ok := left.(value.DateValue); ok {
 			return !time.Time(l).Equal(time.Time(right.(value.DateValue)))
+		}
+		if l, ok := left.(decimal.Decimal); ok {
+			return !l.Equal(right.(decimal.Decimal))
 		}
 		return left != right
 	case lexer.AND:
@@ -198,6 +236,24 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 		return left.(bool) || right.(bool)
 	}
 	panic(fmt.Sprintf("eval: unhandled binary operator %s on %T", e.Op, left))
+}
+
+// toDecimal converts an int or float64 literal's runtime value to
+// decimal.Decimal (design/decimal.md §2's literal-context promotion,
+// performed at eval time). v is never already anything else here: the
+// checker only let this call site's expression compile if the operand
+// this promotes is a bare int/double literal or already decimal.Decimal.
+func toDecimal(v any) any {
+	switch v := v.(type) {
+	case decimal.Decimal:
+		return v
+	case int:
+		return decimal.NewFromInt(int64(v))
+	case float64:
+		return decimal.NewFromFloat(v)
+	default:
+		panic(fmt.Sprintf("eval: cannot promote %T to decimal", v))
+	}
 }
 
 // dateCompare orders two value.DateValue operands via time.Time.Compare

@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/vitzeno/sift/internal/ast"
 	"github.com/vitzeno/sift/internal/lexer"
 	"github.com/vitzeno/sift/internal/value"
@@ -189,6 +191,116 @@ func TestEvalDateEqualityUsesTimeEqualNotBareEquals(t *testing.T) {
 	ne := &ast.BinaryOp{Op: lexer.NE, Left: &ast.FieldAccess{Field: "a"}, Right: &ast.FieldAccess{Field: "b"}}
 	if got := Eval(ne, row(fields)); got != false {
 		t.Errorf("Eval(a != b) = %#v, want false (same instant, different representation)", got)
+	}
+}
+
+// TestEvalDecimalArithmetic is DEC-C: decimal-decimal arithmetic is
+// exact, and a bare int/double literal on either side promotes to
+// decimal at eval time exactly like the checker allowed it to at
+// compile time (design/decimal.md §2).
+func TestEvalDecimalArithmetic(t *testing.T) {
+	price := decimal.RequireFromString("19.99")
+	discount := decimal.RequireFromString("5.00")
+	fields := map[string]any{"price": price, "discount": discount}
+
+	tests := []struct {
+		name string
+		expr *ast.BinaryOp
+		want string
+	}{
+		{
+			"decimal - decimal",
+			&ast.BinaryOp{Op: lexer.MINUS, Left: &ast.FieldAccess{Field: "price"}, Right: &ast.FieldAccess{Field: "discount"}},
+			"14.99",
+		},
+		{
+			"decimal * int literal",
+			&ast.BinaryOp{Op: lexer.STAR, Left: &ast.FieldAccess{Field: "price"}, Right: &ast.IntLit{Value: 3}},
+			"59.97",
+		},
+		{
+			"decimal * double literal",
+			&ast.BinaryOp{Op: lexer.STAR, Left: &ast.FieldAccess{Field: "price"}, Right: &ast.DoubleLit{Value: 0.08}},
+			"1.5992",
+		},
+		{
+			"double literal * decimal (literal on the left)",
+			&ast.BinaryOp{Op: lexer.STAR, Left: &ast.DoubleLit{Value: 0.08}, Right: &ast.FieldAccess{Field: "price"}},
+			"1.5992",
+		},
+		{
+			"int literal + decimal (literal on the left)",
+			&ast.BinaryOp{Op: lexer.PLUS, Left: &ast.IntLit{Value: 1}, Right: &ast.FieldAccess{Field: "discount"}},
+			"6",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := Eval(tt.expr, row(fields)).(decimal.Decimal)
+			if !ok {
+				t.Fatalf("Eval(%s) = %#v, want decimal.Decimal", tt.name, Eval(tt.expr, row(fields)))
+			}
+			want := decimal.RequireFromString(tt.want)
+			if !got.Equal(want) {
+				t.Errorf("Eval(%s) = %s, want %s", tt.name, got, want)
+			}
+		})
+	}
+}
+
+// TestEvalDecimalComparison exercises all six comparison operators on
+// decimal.Decimal via FieldAccess, mirroring TestEvalDateComparison.
+func TestEvalDecimalComparison(t *testing.T) {
+	smaller := decimal.RequireFromString("5.00")
+	larger := decimal.RequireFromString("19.99")
+	fields := map[string]any{"a": smaller, "b": larger}
+
+	tests := []struct {
+		name string
+		op   lexer.Kind
+		want bool
+	}{
+		{"a < b", lexer.LT, true},
+		{"a > b", lexer.GT, false},
+		{"a <= b", lexer.LE, true},
+		{"a >= b", lexer.GE, false},
+		{"a == b", lexer.EQ, false},
+		{"a != b", lexer.NE, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expr := &ast.BinaryOp{Op: tt.op, Left: &ast.FieldAccess{Field: "a"}, Right: &ast.FieldAccess{Field: "b"}}
+			got := Eval(expr, row(fields))
+			if got != tt.want {
+				t.Errorf("Eval(a %s b) = %#v, want %#v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEvalDecimalEqualityUsesDecimalEqualNotBareEquals is DEC-E: two
+// decimal.Decimal values that denote the same number but differ in
+// internal representation ("1.50" vs "1.5" -- bare Go == returns false
+// for this pair, confirmed empirically, while decimal.Decimal.Equal
+// returns true) must still compare == true through Sift's == operator.
+// This is the regression a bare `left == right` fallthrough in
+// evalBinaryOp would silently reintroduce.
+func TestEvalDecimalEqualityUsesDecimalEqualNotBareEquals(t *testing.T) {
+	a := decimal.RequireFromString("1.50")
+	b := decimal.RequireFromString("1.5")
+	if a == b {
+		t.Fatal("test setup invalid: a and b must be bare-== unequal despite denoting the same number")
+	}
+	fields := map[string]any{"a": a, "b": b}
+
+	eq := &ast.BinaryOp{Op: lexer.EQ, Left: &ast.FieldAccess{Field: "a"}, Right: &ast.FieldAccess{Field: "b"}}
+	if got := Eval(eq, row(fields)); got != true {
+		t.Errorf("Eval(a == b) = %#v, want true (same number, different representation)", got)
+	}
+
+	ne := &ast.BinaryOp{Op: lexer.NE, Left: &ast.FieldAccess{Field: "a"}, Right: &ast.FieldAccess{Field: "b"}}
+	if got := Eval(ne, row(fields)); got != false {
+		t.Errorf("Eval(a != b) = %#v, want false (same number, different representation)", got)
 	}
 }
 
