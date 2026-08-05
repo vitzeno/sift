@@ -21,7 +21,7 @@ func TestERR_A_AbortDiagnosticCarriesSourceOrdinalAndReason(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, _ := errorPolicyFixture(t, dir, "on error abort")
 
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want an abort error")
 	}
@@ -60,7 +60,7 @@ func TestERR_D_BadCellAbort(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := badCellFixture(t, dir, "on error abort", "")
 
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want an abort error for the bad age cell")
 	}
@@ -83,7 +83,7 @@ func TestERR_D_BadCellSkip(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := badCellFixture(t, dir, "on error skip", "")
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -105,7 +105,7 @@ func TestERR_D_BadCellRoute(t *testing.T) {
 	siftPath, outPath := badCellFixture(t, dir, "on error |> errs", `sink errs = jsonl("errs.jsonl")`)
 	errPath := filepath.Join(dir, "errs.jsonl")
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -145,7 +145,7 @@ pipeline main {
 }
 `)
 
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded under on error skip, want the infra-fatal error to still abort")
 	}

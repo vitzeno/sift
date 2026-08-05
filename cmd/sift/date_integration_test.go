@@ -30,7 +30,7 @@ sink   errors = jsonl("errors.jsonl")
 pipeline main { in |> out }
 `)
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -70,7 +70,7 @@ sink out = jsonl("out.jsonl")
 pipeline main { in |> out }
 `)
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)

@@ -29,7 +29,7 @@ pipeline main {
   in |> drop(age) |> out
 }
 `)
-	if err := runFile(okPath); err != nil {
+	if err := runFile(okPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)
@@ -48,7 +48,7 @@ pipeline main {
   in |> drop(age) |> filter(.age >= 18) |> out
 }
 `)
-	err = runFile(badPath)
+	err = runFile(badPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want a compile error referencing .age after it was dropped")
 	}
@@ -73,7 +73,7 @@ pipeline main {
   in |> select(email, name) |> out
 }
 `)
-	if err := runFile(okPath); err != nil {
+	if err := runFile(okPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)
@@ -92,7 +92,7 @@ pipeline main {
   in |> select(emial) |> out
 }
 `)
-	err = runFile(badPath)
+	err = runFile(badPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want a compile error for the misspelled column")
 	}
@@ -115,7 +115,7 @@ pipeline main {
   in |> drop(email) |> out
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)
@@ -141,7 +141,7 @@ pipeline main {
   in |> rename(dob: birth_date) |> out
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)
@@ -168,7 +168,7 @@ pipeline main {
   in |> rename(email: email_addr) |> out
 }
 `)
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want the renamed column still rejected as unmasked PII")
 	}
@@ -191,7 +191,7 @@ pipeline main {
   in |> limit(1) |> out
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)
@@ -222,7 +222,7 @@ pipeline main {
   in |> check(.email != "", "missing email") |> limit(2) |> out
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)
@@ -252,7 +252,7 @@ pipeline main {
   in |> hash(email) |> out
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)
@@ -277,7 +277,7 @@ pipeline main {
   in |> redact(age) |> out
 }
 `)
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want redact(age) rejected — age is not @pii")
 	}
@@ -300,7 +300,7 @@ pipeline main {
   in |> out, out
 }
 `)
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want the duplicate sink rejected")
 	}
@@ -326,7 +326,7 @@ pipeline main {
   in |> out, out2
 }
 `)
-	err := runFile(badPath)
+	err := runFile(badPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want the unmasked @pii field rejected")
 	}
@@ -345,7 +345,7 @@ pipeline main {
   in |> map({ ...row, email: mask(.email) }) |> out, out2
 }
 `)
-	if err := runFile(okPath); err != nil {
+	if err := runFile(okPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)
@@ -384,7 +384,7 @@ pipeline main {
   in |> check(.email != "", "missing email") |> out, out2
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 

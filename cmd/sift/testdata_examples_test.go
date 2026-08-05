@@ -37,8 +37,8 @@ func runExample(t *testing.T, name string, extraOutputs ...string) []byte {
 		t.Cleanup(func() { os.Remove(path) })
 	}
 
-	if err := runFile(siftPath); err != nil {
-		t.Fatalf("runFile(%s) error: %v", siftPath, err)
+	if err := runFile(siftPath, false); err != nil {
+		t.Fatalf("runFile(%s, false) error: %v", siftPath, err)
 	}
 	got, err := os.ReadFile(outPath)
 	if err != nil {
@@ -180,7 +180,7 @@ func TestExampleOnErrorAbort(t *testing.T) {
 	outPath := filepath.Join("..", "..", "testdata", "on-error-abort_out.jsonl")
 	t.Cleanup(func() { os.Remove(outPath) })
 
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want the default abort policy to stop the run")
 	}

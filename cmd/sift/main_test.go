@@ -68,7 +68,7 @@ pipeline main {
 	// depend on it.
 	chdir(t, t.TempDir())
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -103,7 +103,7 @@ pipeline main {
 
 	chdir(t, dir)
 
-	if err := runFile("scripts/adults.sift"); err != nil {
+	if err := runFile("scripts/adults.sift", false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	if _, err := os.ReadFile(filepath.Join(sub, "adults.jsonl")); err != nil {
@@ -128,7 +128,7 @@ pipeline main {
 }
 `)
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	if _, err := os.ReadFile(filepath.Join(scriptDir, "adults.jsonl")); err != nil {
@@ -137,7 +137,7 @@ pipeline main {
 }
 
 func TestRunFileMissingFile(t *testing.T) {
-	if err := runFile(filepath.Join(t.TempDir(), "does-not-exist.sift")); err == nil {
+	if err := runFile(filepath.Join(t.TempDir(), "does-not-exist.sift"), false); err == nil {
 		t.Fatal("runFile succeeded, want a file-not-found error")
 	}
 }
@@ -154,7 +154,7 @@ pipeline main {
 }
 `)
 
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want a PII rejection")
 	}

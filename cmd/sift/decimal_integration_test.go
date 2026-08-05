@@ -31,7 +31,7 @@ sink   errors = jsonl("errors.jsonl")
 pipeline main { in |> out }
 `)
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -73,7 +73,7 @@ sink   errors = jsonl("errors.jsonl")
 pipeline main { in |> out }
 `)
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -108,7 +108,7 @@ sink   out = jsonl("out.jsonl")
 pipeline main { in |> map({ ...row, tax: .price * .rate }) |> out }
 `)
 
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want a compile error: decimal and double never mix")
 	}

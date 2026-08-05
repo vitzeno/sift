@@ -30,7 +30,7 @@ pipeline main {
   in |> adults(18) |> out
 }
 `)
-	if err := runFile(prog18); err != nil {
+	if err := runFile(prog18, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got18, err := os.ReadFile(out18)
@@ -52,7 +52,7 @@ pipeline main {
   in |> adults(0) |> out
 }
 `)
-	if err := runFile(prog0); err != nil {
+	if err := runFile(prog0, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got0, err := os.ReadFile(out0)
@@ -84,7 +84,7 @@ pipeline main {
   in |> scrub(email) |> scrub(backup_email) |> out
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)
@@ -112,7 +112,7 @@ pipeline main {
   in |> touch(email) |> out
 }
 `)
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want the unmasked @pii field rejected")
 	}
@@ -137,7 +137,7 @@ pipeline main {
   in |> scrub(age) |> out
 }
 `)
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want scrub(age) rejected — age is not @pii")
 	}
@@ -167,7 +167,7 @@ pipeline main {
   in |> scrub(emial) |> out
 }
 `)
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want the misspelled column argument rejected")
 	}
@@ -198,7 +198,7 @@ pipeline main {
   in |> adults(18, 21) |> out
 }
 `)
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want the arity mismatch rejected")
 	}
@@ -223,7 +223,7 @@ pipeline main {
   in |> loopy(email) |> out
 }
 `)
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want the self-referencing segment rejected")
 	}

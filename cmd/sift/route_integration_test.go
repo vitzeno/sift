@@ -32,7 +32,7 @@ pipeline main {
   }
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -69,7 +69,7 @@ pipeline main {
   }
 }
 `)
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want a compile error for the missing else branch")
 	}
@@ -101,7 +101,7 @@ pipeline main {
   }
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -153,7 +153,7 @@ pipeline main {
   }
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -203,7 +203,7 @@ pipeline main {
   }
 }
 `)
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 	got, err := os.ReadFile(outPath)

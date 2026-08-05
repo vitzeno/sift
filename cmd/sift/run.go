@@ -22,12 +22,9 @@ import (
 // repo root. The same resolution applies to an `on error |> <name>`
 // route target's path.
 //
-// print is variadic, not a plain second parameter, so every existing
-// call site (and every existing test) is unaffected -- only --print's
-// own caller in main.go passes one, the same reason Coerce's dateFormat
-// is variadic (internal/value/coerce.go).
-func runFile(path string, print ...bool) error {
-	printToConsole := len(print) > 0 && print[0]
+// printToConsole redirects every sink to stdout instead of its declared
+// file (--print, main.go).
+func runFile(path string, printToConsole bool) error {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return err

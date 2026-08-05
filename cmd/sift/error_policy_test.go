@@ -36,7 +36,7 @@ func TestRunOnErrorAbort(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := errorPolicyFixture(t, dir, "on error abort")
 
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want a FailureError")
 	}
@@ -65,7 +65,7 @@ func TestRunOnErrorSkip(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := errorPolicyFixture(t, dir, "on error skip")
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -99,7 +99,7 @@ pipeline main {
 }
 `)
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 
@@ -138,7 +138,7 @@ pipeline main {
 }
 `)
 
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want an undefined-route-target error")
 	}

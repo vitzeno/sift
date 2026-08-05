@@ -27,7 +27,7 @@ sink out = jsonl("out.jsonl")
 pipeline main { in |> out }
 `)
 
-	err := runFile(siftPath)
+	err := runFile(siftPath, false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want a missing required column error")
 	}
@@ -55,7 +55,7 @@ sink out = jsonl("out.jsonl")
 pipeline main { in |> map({ ...row, txn_date: .txn_date ?? "unknown" }) |> out }
 `)
 
-	if err := runFile(siftPath); err != nil {
+	if err := runFile(siftPath, false); err != nil {
 		t.Fatalf("runFile error: %v", err)
 	}
 

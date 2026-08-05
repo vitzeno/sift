@@ -98,11 +98,11 @@ sink out = jsonl("xlsx_out.jsonl")
 pipeline main { in |> filter(.age >= 18) |> out }
 `)
 
-	if err := runFile(filepath.Join(dir, "csv.sift")); err != nil {
-		t.Fatalf("runFile(csv): %v", err)
+	if err := runFile(filepath.Join(dir, "csv.sift"), false); err != nil {
+		t.Fatalf("runFile(csv, false): %v", err)
 	}
-	if err := runFile(filepath.Join(dir, "xlsx.sift")); err != nil {
-		t.Fatalf("runFile(xlsx): %v", err)
+	if err := runFile(filepath.Join(dir, "xlsx.sift"), false); err != nil {
+		t.Fatalf("runFile(xlsx, false): %v", err)
 	}
 
 	csvOut, err := os.ReadFile(filepath.Join(dir, "csv_out.jsonl"))
@@ -136,7 +136,7 @@ func TestXLSX_B_SheetAndHeaderRowKwargsTakeEffect(t *testing.T) {
 sink out = jsonl("out.jsonl")
 pipeline main { in |> out }
 `)
-	if err := runFile(filepath.Join(dir, "prog.sift")); err != nil {
+	if err := runFile(filepath.Join(dir, "prog.sift"), false); err != nil {
 		t.Fatalf("runFile: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(dir, "out.jsonl"))
@@ -167,7 +167,7 @@ source in = xlsx("people.xlsx", schema: { name: string, age: int })
 sink out = jsonl("skip_out.jsonl")
 pipeline main { in |> out }
 `)
-		if err := runFile(filepath.Join(dir, "skip.sift")); err != nil {
+		if err := runFile(filepath.Join(dir, "skip.sift"), false); err != nil {
 			t.Fatalf("runFile: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(dir, "skip_out.jsonl"))
@@ -187,7 +187,7 @@ sink out = jsonl("route_out.jsonl")
 sink errs = jsonl("route_errs.jsonl")
 pipeline main { in |> out }
 `)
-		if err := runFile(filepath.Join(dir, "route.sift")); err != nil {
+		if err := runFile(filepath.Join(dir, "route.sift"), false); err != nil {
 			t.Fatalf("runFile: %v", err)
 		}
 		errs, err := os.ReadFile(filepath.Join(dir, "route_errs.jsonl"))
@@ -211,7 +211,7 @@ func TestXLSX_D_MissingSheetIsInfraFatal(t *testing.T) {
 sink out = jsonl("out.jsonl")
 pipeline main { in |> out }
 `)
-	err := runFile(filepath.Join(dir, "prog.sift"))
+	err := runFile(filepath.Join(dir, "prog.sift"), false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want a missing-sheet error")
 	}
@@ -237,7 +237,7 @@ func TestXLSX_E_OffsetHeaderIgnoresExtraColumn(t *testing.T) {
 sink out = jsonl("out.jsonl")
 pipeline main { in |> out }
 `)
-	if err := runFile(filepath.Join(dir, "prog.sift")); err != nil {
+	if err := runFile(filepath.Join(dir, "prog.sift"), false); err != nil {
 		t.Fatalf("runFile: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(dir, "out.jsonl"))
@@ -262,7 +262,7 @@ func TestXLSX_F_MissingColumnListsRealHeader(t *testing.T) {
 sink out = jsonl("out.jsonl")
 pipeline main { in |> out }
 `)
-	err := runFile(filepath.Join(dir, "prog.sift"))
+	err := runFile(filepath.Join(dir, "prog.sift"), false)
 	if err == nil {
 		t.Fatal("runFile succeeded, want a missing-column error")
 	}
@@ -291,7 +291,7 @@ pipeline main { in |> out }
 	const sentinel = "pre-existing output, must not be touched\n"
 	writeFile(t, outPath, sentinel)
 
-	if err := runFile(filepath.Join(dir, "prog.sift")); err == nil {
+	if err := runFile(filepath.Join(dir, "prog.sift"), false); err == nil {
 		t.Fatal("runFile succeeded, want a missing-sheet error")
 	}
 
