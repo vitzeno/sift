@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // Kind is a scalar type. v0 only needs the four primitives design.md's
@@ -97,6 +99,38 @@ func (d DateValue) String() string {
 // date-only value never had) (design/date.md §3).
 func (d DateValue) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
+}
+
+// DecimalValue is an exact-arithmetic scalar (design/decimal.md §2). It
+// wraps decimal.Decimal rather than aliasing it, mirroring DateValue's
+// own reasoning exactly: decimal.Decimal's own String()/MarshalJSON
+// silently strip trailing zeros ("5.00" renders as "5") even though the
+// value's internal exponent still remembers the original scale
+// (confirmed empirically, not assumed -- NewFromString("5.00").Exponent()
+// is -2, but .String() drops it anyway). That contradicts §1's "what you
+// parse is what comes back out." DecimalValue's own String()/MarshalJSON
+// render at the value's own remembered scale instead, via StringFixed.
+type DecimalValue decimal.Decimal
+
+// String renders a DecimalValue at its own remembered scale (its
+// exponent, from parsing or from arithmetic that changed it), not
+// decimal.Decimal's own trailing-zero-stripping default.
+func (d DecimalValue) String() string {
+	dec := decimal.Decimal(d)
+	places := -dec.Exponent()
+	if places < 0 {
+		places = 0
+	}
+	return dec.StringFixed(places)
+}
+
+// MarshalJSON renders a DecimalValue as a bare numeric JSON literal (no
+// quotes, matching how int/double already render) at its own remembered
+// scale, not decimal.Decimal's own default MarshalJSON (which, without
+// explicitly setting the package-level decimal.MarshalJSONWithoutQuotes,
+// renders as a quoted string, and strips trailing zeros regardless).
+func (d DecimalValue) MarshalJSON() ([]byte, error) {
+	return []byte(d.String()), nil
 }
 
 // Field is one named column of a Schema.

@@ -73,7 +73,7 @@ func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
 		if err != nil {
 			return nil, &Failure{Reason: fmt.Sprintf("cannot parse %q as decimal", raw)}
 		}
-		return v, nil
+		return DecimalValue(v), nil
 	default:
 		return nil, &Failure{Reason: fmt.Sprintf("unsupported scalar kind %v", t.Kind)}
 	}

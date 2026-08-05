@@ -199,24 +199,55 @@ func TestCoerceDateOptionalAbsent(t *testing.T) {
 
 // TestCoerceDecimalParsesExactly is DEC-A's parse half: "19.99" parses
 // to exactly 19.99, not a float64-tainted approximation. Uses .Equal(),
-// not Go's bare ==, since decimal.Decimal is a struct holding a
-// *big.Int (design/decimal.md §2) -- the same reason this file's Date
-// tests never lean on bare == either.
+// not Go's bare ==, since decimal.Decimal (which DecimalValue wraps) is
+// a struct holding a *big.Int (design/decimal.md §2) -- the same reason
+// this file's Date tests never lean on bare == either.
 func TestCoerceDecimalParsesExactly(t *testing.T) {
 	got, fail := Coerce(Type{Kind: Decimal}, "19.99")
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
 	want := decimal.NewFromFloat(19.99)
-	d, ok := got.(decimal.Decimal)
+	d, ok := got.(DecimalValue)
 	if !ok {
-		t.Fatalf("Coerce = %#v (%T), want decimal.Decimal", got, got)
+		t.Fatalf("Coerce = %#v (%T), want DecimalValue", got, got)
 	}
-	if !d.Equal(want) {
+	if !decimal.Decimal(d).Equal(want) {
 		t.Errorf("Coerce(\"19.99\") = %s, want %s", d, want)
 	}
 	if d.String() != "19.99" {
-		t.Errorf("Coerce(\"19.99\").String() = %q, want %q (no trailing-zero normalization)", d.String(), "19.99")
+		t.Errorf("Coerce(\"19.99\").String() = %q, want %q", d.String(), "19.99")
+	}
+}
+
+// TestCoerceDecimalPreservesTrailingZeros is DEC-A's other half, and the
+// one a naive implementation gets wrong: decimal.Decimal's own String()
+// silently strips trailing zeros ("5.00" -> "5", confirmed empirically),
+// even though its internal exponent still remembers the original scale.
+// DecimalValue's own String()/MarshalJSON must render at that remembered
+// scale instead, so "what you parse is what comes back out" (§1) is
+// actually true, not just documented as an intent.
+func TestCoerceDecimalPreservesTrailingZeros(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{"5.00", "5.00"},
+		{"0.00", "0.00"},
+		{"100.00", "100.00"},
+		{"100", "100"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			got, fail := Coerce(Type{Kind: Decimal}, tt.raw)
+			if fail != nil {
+				t.Fatalf("Coerce failed: %+v", fail)
+			}
+			d := got.(DecimalValue)
+			if d.String() != tt.want {
+				t.Errorf("Coerce(%q).String() = %q, want %q", tt.raw, d.String(), tt.want)
+			}
+		})
 	}
 }
 

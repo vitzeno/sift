@@ -199,8 +199,8 @@ func TestEvalDateEqualityUsesTimeEqualNotBareEquals(t *testing.T) {
 // decimal at eval time exactly like the checker allowed it to at
 // compile time (design/decimal.md §2).
 func TestEvalDecimalArithmetic(t *testing.T) {
-	price := decimal.RequireFromString("19.99")
-	discount := decimal.RequireFromString("5.00")
+	price := value.DecimalValue(decimal.RequireFromString("19.99"))
+	discount := value.DecimalValue(decimal.RequireFromString("5.00"))
 	fields := map[string]any{"price": price, "discount": discount}
 
 	tests := []struct {
@@ -236,12 +236,12 @@ func TestEvalDecimalArithmetic(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := Eval(tt.expr, row(fields)).(decimal.Decimal)
+			got, ok := Eval(tt.expr, row(fields)).(value.DecimalValue)
 			if !ok {
-				t.Fatalf("Eval(%s) = %#v, want decimal.Decimal", tt.name, Eval(tt.expr, row(fields)))
+				t.Fatalf("Eval(%s) = %#v, want value.DecimalValue", tt.name, Eval(tt.expr, row(fields)))
 			}
 			want := decimal.RequireFromString(tt.want)
-			if !got.Equal(want) {
+			if !decimal.Decimal(got).Equal(want) {
 				t.Errorf("Eval(%s) = %s, want %s", tt.name, got, want)
 			}
 		})
@@ -249,10 +249,10 @@ func TestEvalDecimalArithmetic(t *testing.T) {
 }
 
 // TestEvalDecimalComparison exercises all six comparison operators on
-// decimal.Decimal via FieldAccess, mirroring TestEvalDateComparison.
+// value.DecimalValue via FieldAccess, mirroring TestEvalDateComparison.
 func TestEvalDecimalComparison(t *testing.T) {
-	smaller := decimal.RequireFromString("5.00")
-	larger := decimal.RequireFromString("19.99")
+	smaller := value.DecimalValue(decimal.RequireFromString("5.00"))
+	larger := value.DecimalValue(decimal.RequireFromString("19.99"))
 	fields := map[string]any{"a": smaller, "b": larger}
 
 	tests := []struct {
@@ -279,15 +279,15 @@ func TestEvalDecimalComparison(t *testing.T) {
 }
 
 // TestEvalDecimalEqualityUsesDecimalEqualNotBareEquals is DEC-E: two
-// decimal.Decimal values that denote the same number but differ in
+// value.DecimalValues that denote the same number but differ in
 // internal representation ("1.50" vs "1.5" -- bare Go == returns false
 // for this pair, confirmed empirically, while decimal.Decimal.Equal
 // returns true) must still compare == true through Sift's == operator.
 // This is the regression a bare `left == right` fallthrough in
 // evalBinaryOp would silently reintroduce.
 func TestEvalDecimalEqualityUsesDecimalEqualNotBareEquals(t *testing.T) {
-	a := decimal.RequireFromString("1.50")
-	b := decimal.RequireFromString("1.5")
+	a := value.DecimalValue(decimal.RequireFromString("1.50"))
+	b := value.DecimalValue(decimal.RequireFromString("1.5"))
 	if a == b {
 		t.Fatal("test setup invalid: a and b must be bare-== unequal despite denoting the same number")
 	}

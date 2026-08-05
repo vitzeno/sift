@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 func TestTypeString(t *testing.T) {
@@ -148,5 +150,48 @@ func TestDateValueMarshalsAsISODateString(t *testing.T) {
 	want := `"2026-01-05"`
 	if string(got) != want {
 		t.Errorf("Marshal(DateValue) = %s, want %s", got, want)
+	}
+}
+
+// TestDecimalValueString confirms DecimalValue renders at its own
+// remembered scale, unlike decimal.Decimal's own String(), which
+// silently strips trailing zeros (confirmed empirically, not assumed --
+// design/decimal.md §2).
+func TestDecimalValueString(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{"19.99", "19.99"},
+		{"5.00", "5.00"},
+		{"0.00", "0.00"},
+		{"100", "100"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			d := DecimalValue(decimal.RequireFromString(tt.raw))
+			if got := d.String(); got != tt.want {
+				t.Errorf("DecimalValue.String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDecimalValueMarshalsAsBareNumericLiteral is DEC-G: the JSON form
+// is a bare numeric literal (no quotes, matching int/double), not
+// decimal.Decimal's own default MarshalJSON (which, without explicitly
+// setting the package-level decimal.MarshalJSONWithoutQuotes, renders as
+// a quoted string -- confirmed empirically). It also preserves the
+// original scale, the same trailing-zero case TestDecimalValueString
+// checks for String().
+func TestDecimalValueMarshalsAsBareNumericLiteral(t *testing.T) {
+	d := DecimalValue(decimal.RequireFromString("5.00"))
+	got, err := json.Marshal(d)
+	if err != nil {
+		t.Fatalf("Marshal(DecimalValue): %v", err)
+	}
+	want := `5.00`
+	if string(got) != want {
+		t.Errorf("Marshal(DecimalValue) = %s, want %s (bare literal, no quotes)", got, want)
 	}
 }
