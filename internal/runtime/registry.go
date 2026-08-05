@@ -44,6 +44,11 @@ type SourceOptions struct {
 }
 
 type SinkOptions struct {
+	// Name is the sink's declared name (e.g. "out"), unused by every
+	// format that only needs Path and Schema. The console format (--print,
+	// cmd/sift) is the one exception: it has no file to write, so Name is
+	// what labels its printed block once a program has more than one sink.
+	Name   string
 	Path   string
 	Schema value.Schema
 }

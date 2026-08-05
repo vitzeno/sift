@@ -81,6 +81,7 @@ func Build(in BuildInput) (top Stream, src Source, sinks []Sink, route []RouteBr
 	sinkIndex := make(map[string]int, len(in.Sinks))
 	for i, sinkDecl := range in.Sinks {
 		sinks[i], err = NewSink(sinkDecl.Format, SinkOptions{
+			Name:   sinkDecl.Name,
 			Path:   sinkDecl.Path,
 			Schema: in.SinkSchema,
 		})

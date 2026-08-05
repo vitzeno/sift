@@ -40,5 +40,5 @@ func envelopeRow(prov value.Provenance, fail *value.Failure) value.Row {
 // schema (design-errors.md §4); the checker never computes or threads
 // one in for it (internal/checker/errorpolicy.go).
 func NewErrorSink(target *ast.SinkDecl) (Sink, error) {
-	return NewSink(target.Format, SinkOptions{Path: target.Path, Schema: envelopeSchema})
+	return NewSink(target.Format, SinkOptions{Name: target.Name, Path: target.Path, Schema: envelopeSchema})
 }
