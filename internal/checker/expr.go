@@ -125,7 +125,7 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 		return value.Type{Kind: left.Kind, Optional: optional, PII: pii}, nil
 
 	case lexer.LT, lexer.GT, lexer.LE, lexer.GE:
-		if left.Kind != right.Kind || !isNumeric(left.Kind) {
+		if left.Kind != right.Kind || !isOrderable(left.Kind) {
 			return value.Type{}, errorf(e.Pos, "cannot compare %s and %s", left, right)
 		}
 		return value.Type{Kind: value.Bool, Optional: optional, PII: pii}, nil
@@ -171,6 +171,13 @@ func (c *checker) checkCoalesce(e *ast.BinaryOp, left, right value.Type) (value.
 
 func isNumeric(k value.Kind) bool {
 	return k == value.Int || k == value.Double
+}
+
+// isOrderable reports whether < > <= >= accept k (design/date.md §3):
+// every numeric Kind, plus Date, which is comparable but deliberately
+// not numeric (no +, -, *, / on it — isNumeric stays unchanged).
+func isOrderable(k value.Kind) bool {
+	return isNumeric(k) || k == value.Date
 }
 
 func isNumericOrString(k value.Kind) bool {

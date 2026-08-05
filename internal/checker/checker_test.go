@@ -654,6 +654,66 @@ func TestCheckBinaryOpTypeErrors(t *testing.T) {
 	}
 }
 
+// TestCheckDateComparison confirms date-date comparisons type-check to
+// bool (design/date.md §3): isOrderable, not isNumeric, is the gate for
+// </>/<=/>=, and ==/!= already accepted any matching Kind pair before
+// this doc existed.
+func TestCheckDateComparison(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "started_on", Type: value.Type{Kind: value.Date}},
+		{Name: "renews_on", Type: value.Type{Kind: value.Date}},
+	}}
+	tests := []string{
+		".started_on < .renews_on",
+		".started_on <= .renews_on",
+		".started_on > .renews_on",
+		".started_on >= .renews_on",
+		".started_on == .renews_on",
+		".started_on != .renews_on",
+	}
+	for _, src := range tests {
+		t.Run(src, func(t *testing.T) {
+			c := &checker{}
+			expr, err := parser.ParseExpr(src)
+			if err != nil {
+				t.Fatalf("ParseExpr(%q): %v", src, err)
+			}
+			typ, err := c.checkExpr(expr, schema)
+			if err != nil {
+				t.Fatalf("checkExpr(%q) error: %v", src, err)
+			}
+			if typ.Kind != value.Bool {
+				t.Errorf("checkExpr(%q) = %s, want bool", src, typ)
+			}
+		})
+	}
+}
+
+// TestCheckDateArithmeticRejected confirms date deliberately isn't
+// numeric (design/date.md §2): no +, -, *, / on it, even though it's
+// comparable.
+func TestCheckDateArithmeticRejected(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "started_on", Type: value.Type{Kind: value.Date}},
+		{Name: "renews_on", Type: value.Type{Kind: value.Date}},
+	}}
+	tests := []struct {
+		src     string
+		wantSub string
+	}{
+		{".started_on + .renews_on", "cannot apply + to date and date"},
+		{".started_on - .renews_on", "cannot apply - to date and date"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			err := checkExprErr(t, tt.src, schema)
+			if err == nil || !strings.Contains(err.Error(), tt.wantSub) {
+				t.Errorf("error = %v, want it to contain %q", err, tt.wantSub)
+			}
+		})
+	}
+}
+
 func TestCheckFunctionErrors(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "age", Type: value.Type{Kind: value.Int}},

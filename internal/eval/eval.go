@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/vitzeno/sift/internal/ast"
 	"github.com/vitzeno/sift/internal/lexer"
@@ -145,6 +146,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l < right.(int)
 		case float64:
 			return l < right.(float64)
+		case value.DateValue:
+			return dateCompare(l, right) < 0
 		}
 	case lexer.GT:
 		switch l := left.(type) {
@@ -152,6 +155,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l > right.(int)
 		case float64:
 			return l > right.(float64)
+		case value.DateValue:
+			return dateCompare(l, right) > 0
 		}
 	case lexer.LE:
 		switch l := left.(type) {
@@ -159,6 +164,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l <= right.(int)
 		case float64:
 			return l <= right.(float64)
+		case value.DateValue:
+			return dateCompare(l, right) <= 0
 		}
 	case lexer.GE:
 		switch l := left.(type) {
@@ -166,10 +173,24 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l >= right.(int)
 		case float64:
 			return l >= right.(float64)
+		case value.DateValue:
+			return dateCompare(l, right) >= 0
 		}
 	case lexer.EQ:
+		// decision: value.DateValue wraps time.Time, a struct whose bare
+		// == compares internal representation (wall/ext fields, a
+		// *Location pointer), not the instant it denotes -- two equal
+		// dates aren't guaranteed == (design/date.md §3). Every other
+		// Kind here is a plain comparable Go primitive, so bare == is
+		// correct for them; only Date needs its own branch.
+		if l, ok := left.(value.DateValue); ok {
+			return time.Time(l).Equal(time.Time(right.(value.DateValue)))
+		}
 		return left == right
 	case lexer.NE:
+		if l, ok := left.(value.DateValue); ok {
+			return !time.Time(l).Equal(time.Time(right.(value.DateValue)))
+		}
 		return left != right
 	case lexer.AND:
 		return left.(bool) && right.(bool)
@@ -177,6 +198,15 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 		return left.(bool) || right.(bool)
 	}
 	panic(fmt.Sprintf("eval: unhandled binary operator %s on %T", e.Op, left))
+}
+
+// dateCompare orders two value.DateValue operands via time.Time.Compare
+// (design/date.md §3), returning -1/0/1: the same instant-aware
+// comparison EQ/NE's Equal() dispatch above uses, not Go's bare struct
+// ordering (which value.DateValue, wrapping time.Time, doesn't even
+// support directly with < > <= >=).
+func dateCompare(l value.DateValue, right any) int {
+	return time.Time(l).Compare(time.Time(right.(value.DateValue)))
 }
 
 // evalCall implements what the checker only typed: the actual behavior

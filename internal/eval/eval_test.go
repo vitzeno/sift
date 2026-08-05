@@ -2,6 +2,7 @@ package eval
 
 import (
 	"testing"
+	"time"
 
 	"github.com/vitzeno/sift/internal/ast"
 	"github.com/vitzeno/sift/internal/lexer"
@@ -130,6 +131,64 @@ func TestEvalBinaryOpArithmeticAndComparison(t *testing.T) {
 				t.Errorf("Eval(%v %s %v) = %#v, want %#v", tt.l, tt.name, tt.r, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestEvalDateComparison exercises all six comparison operators on
+// value.DateValue via FieldAccess (design/date.md §3): there's no
+// ast.DateLit, so a Date value can only reach Eval through a row field,
+// never a literal node.
+func TestEvalDateComparison(t *testing.T) {
+	earlier := value.DateValue(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
+	later := value.DateValue(time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC))
+	fields := map[string]any{"a": earlier, "b": later}
+
+	tests := []struct {
+		name string
+		op   lexer.Kind
+		want bool
+	}{
+		{"a < b", lexer.LT, true},
+		{"a > b", lexer.GT, false},
+		{"a <= b", lexer.LE, true},
+		{"a >= b", lexer.GE, false},
+		{"a == b", lexer.EQ, false},
+		{"a != b", lexer.NE, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expr := &ast.BinaryOp{Op: tt.op, Left: &ast.FieldAccess{Field: "a"}, Right: &ast.FieldAccess{Field: "b"}}
+			got := Eval(expr, row(fields))
+			if got != tt.want {
+				t.Errorf("Eval(a %s b) = %#v, want %#v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEvalDateEqualityUsesTimeEqualNotBareEquals is DATE-E: two
+// value.DateValues that denote the exact same instant but differ in
+// internal representation (time.UTC vs an equivalent FixedZone -- bare
+// Go == returns false for this pair, confirmed empirically, while
+// time.Time.Equal returns true) must still compare == true through
+// Sift's == operator. This is the regression a bare `left == right`
+// fallthrough in evalBinaryOp would silently reintroduce.
+func TestEvalDateEqualityUsesTimeEqualNotBareEquals(t *testing.T) {
+	a := value.DateValue(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
+	b := value.DateValue(time.Date(2026, 1, 5, 0, 0, 0, 0, time.FixedZone("UTC", 0)))
+	if time.Time(a) == time.Time(b) {
+		t.Fatal("test setup invalid: a and b must be bare-== unequal despite denoting the same instant")
+	}
+	fields := map[string]any{"a": a, "b": b}
+
+	eq := &ast.BinaryOp{Op: lexer.EQ, Left: &ast.FieldAccess{Field: "a"}, Right: &ast.FieldAccess{Field: "b"}}
+	if got := Eval(eq, row(fields)); got != true {
+		t.Errorf("Eval(a == b) = %#v, want true (same instant, different representation)", got)
+	}
+
+	ne := &ast.BinaryOp{Op: lexer.NE, Left: &ast.FieldAccess{Field: "a"}, Right: &ast.FieldAccess{Field: "b"}}
+	if got := Eval(ne, row(fields)); got != false {
+		t.Errorf("Eval(a != b) = %#v, want false (same instant, different representation)", got)
 	}
 }
 
