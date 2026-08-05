@@ -1202,4 +1202,7 @@ than one sink (`../design/multisink.md`), named segments with parameters
 optional fields (`../design/optional-fields.md`), conditional routing
 (`../design/routing.md`), column aliases for headers that aren't valid
 identifiers (`../design/column-aliases.md`), the `date` type
-(`../design/date.md`), and the `decimal` type (`../design/decimal.md`).
+(`../design/date.md`), the `decimal` type (`../design/decimal.md`),
+unconditional thousands-comma leniency for `decimal` cells
+(`../design/decimal-leniency.md`), and the `datetime` type
+(`../design/datetime.md`).
