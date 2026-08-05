@@ -68,14 +68,17 @@ func (p *Parser) parseErrorPolicyDecl() *ast.ErrorPolicyDecl {
 }
 
 // parseSourceDecl := "source" IDENT "=" IDENT "(" STRING ("," SourceKwArg)* ")"
-// SourceKwArg      := "schema" ":" SchemaLit | "columns" ":" ColumnsLit | IDENT ":" Literal
+// SourceKwArg      := "schema" ":" SchemaLit | "columns" ":" ColumnsLit
+//
+//	| "formats" ":" FormatsLit | IDENT ":" Literal
 //
 // Exactly one "schema" kwarg is required, in any position among the
-// kwargs. "columns" is optional (design/column-aliases.md §3). Every
-// other kwarg is a format-specific option collected into
-// ast.SourceDecl.Opts and left uninterpreted here (design/xlsx.md §1's
-// "widen the generic kwarg handling", not an xlsx-specific grammar
-// change per CLAUDE.md non-negotiable #2).
+// kwargs. "columns" (design/column-aliases.md §3) and "formats"
+// (design/date.md §3) are both optional. Every other kwarg is a
+// format-specific option collected into ast.SourceDecl.Opts and left
+// uninterpreted here (design/xlsx.md §1's "widen the generic kwarg
+// handling", not an xlsx-specific grammar change per CLAUDE.md
+// non-negotiable #2).
 func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 	pos := p.cur.Pos
 	p.expect(lexer.SOURCE)
@@ -89,6 +92,8 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 	haveSchema := false
 	var columns []ast.ColumnAlias
 	haveColumns := false
+	var formats []ast.FieldFormat
+	haveFormats := false
 	var opts []ast.SourceOpt
 	for p.cur.Kind == lexer.COMMA {
 		p.next()
@@ -110,6 +115,13 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 			columns = p.parseColumnsLit()
 			haveColumns = true
 			continue
+		case "formats":
+			if haveFormats {
+				p.fail(kwPos, "duplicate %q keyword argument", "formats")
+			}
+			formats = p.parseFormatsLit()
+			haveFormats = true
+			continue
 		}
 		opts = append(opts, ast.SourceOpt{Name: kw, Value: p.parseSourceOptValue(), Pos: kwPos})
 	}
@@ -117,7 +129,7 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 	if !haveSchema {
 		p.fail(pos, "source %q: missing required %q keyword argument", name, "schema")
 	}
-	return &ast.SourceDecl{Name: name, Format: format, Path: path, Schema: schema, Columns: columns, Opts: opts, Pos: pos}
+	return &ast.SourceDecl{Name: name, Format: format, Path: path, Schema: schema, Columns: columns, Formats: formats, Opts: opts, Pos: pos}
 }
 
 // parseColumnsLit := "{" (ColumnAlias ("," ColumnAlias)*)? "}"
@@ -147,6 +159,34 @@ func (p *Parser) parseColumnAlias() ast.ColumnAlias {
 	p.expect(lexer.COLON)
 	header := p.expectString()
 	return ast.ColumnAlias{Field: field, Header: header, Pos: pos}
+}
+
+// parseFormatsLit := "{" (FieldFormat ("," FieldFormat)*)? "}"
+//
+// A direct syntactic copy of parseColumnsLit (design/date.md §3): same
+// shape, different purpose — a formats entry names a Go reference-layout
+// string to parse a date field's cells against, not a header to match.
+func (p *Parser) parseFormatsLit() []ast.FieldFormat {
+	p.expect(lexer.LBRACE)
+	var formats []ast.FieldFormat
+	for p.cur.Kind != lexer.RBRACE {
+		formats = append(formats, p.parseFieldFormat())
+		if p.cur.Kind != lexer.COMMA {
+			break
+		}
+		p.next()
+	}
+	p.expect(lexer.RBRACE)
+	return formats
+}
+
+// parseFieldFormat := IDENT ":" STRING
+func (p *Parser) parseFieldFormat() ast.FieldFormat {
+	pos := p.cur.Pos
+	field := p.expectIdent()
+	p.expect(lexer.COLON)
+	format := p.expectString()
+	return ast.FieldFormat{Field: field, Format: format, Pos: pos}
 }
 
 // parseSourceOptValue := INT | DOUBLE | STRING | "true" | "false"

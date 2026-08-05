@@ -65,12 +65,20 @@ type ErrorPolicyDecl struct {
 // is. Like Opts, the checker never interprets it; only the registered
 // Source constructor does, at construction time, against the real file
 // header.
+//
+// Formats carries the optional `formats: { ... }` kwarg
+// (design/date.md §3): a direct syntactic copy of Columns, mapping a
+// `date`-typed schema field to the Go reference-layout string to parse
+// its cells against, instead of the ISO-8601 default. Like Columns, the
+// checker never interprets it; only the registered Source constructor
+// does, at construction time.
 type SourceDecl struct {
 	Name    string
 	Format  string
 	Path    string
 	Schema  SchemaLit
 	Columns []ColumnAlias
+	Formats []FieldFormat
 	Opts    []SourceOpt
 	Pos     lexer.Pos
 }
@@ -96,6 +104,16 @@ type SourceOpt struct {
 type ColumnAlias struct {
 	Field  string
 	Header string
+	Pos    lexer.Pos
+}
+
+// FieldFormat is one `field: "layout string"` pair inside a source's
+// `formats:` kwarg (design/date.md §3): Field names a `date`-typed schema
+// field, Format is the Go reference-layout string to parse its cells
+// against.
+type FieldFormat struct {
+	Field  string
+	Format string
 	Pos    lexer.Pos
 }
 
