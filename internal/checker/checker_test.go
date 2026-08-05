@@ -902,6 +902,135 @@ pipeline main {
 	}
 }
 
+// TestCheckDecimalPIIRejectsUnmaskedSink is design/decimal.md §2's PII
+// propagation half: a decimal @pii field reaches a sink unmasked
+// exactly like any other Kind, with no Decimal-specific carve-out.
+// Regression test, not new behavior.
+func TestCheckDecimalPIIRejectsUnmaskedSink(t *testing.T) {
+	const src = `source in = csv("accounts.csv", schema: { id: int, balance: decimal @pii })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	err := checkErr(t, src)
+	want := `field "balance" is @pii and reaches sink "out" unmasked; declassify with mask/hash/redact`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
+// TestCheckDecimalOptionalRejectsUndischargedSink is design/decimal.md's
+// Optional-interaction half: a decimal? field reaches a sink
+// undischarged exactly like any other Kind. Regression test, not new
+// behavior.
+func TestCheckDecimalOptionalRejectsUndischargedSink(t *testing.T) {
+	const src = `source in = csv("accounts.csv", schema: { id: int, balance: decimal? })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	err := checkErr(t, src)
+	want := `field "balance" is optional and reaches sink "out" undischarged; resolve with ??`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
+// TestCheckDecimalMaskIsACompileError is decimal.md §2's named gap made
+// concrete: mask/hash/redact are string-only, so a decimal @pii field
+// has no in-place declassifier at all -- the exact `mask(.balance)`
+// example the design doc's own worked examples (§9) show as a compile
+// error, not a path forward.
+func TestCheckDecimalMaskIsACompileError(t *testing.T) {
+	const src = `source in = csv("accounts.csv", schema: { id: int, balance: decimal @pii })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> map({ ...row, balance: mask(.balance) }) |> out
+}`
+	err := checkErr(t, src)
+	want := `mask() argument: expected string, got decimal`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
+// TestCheckDecimalOptionalAndPIIStackAtSink mirrors
+// TestCheckDateOptionalAndPIIStackAtSink exactly: a decimal? @pii field
+// needs both tags cleared, but the only way to clear the remaining @pii
+// tag is drop(), since mask/hash/redact can't take a decimal.
+func TestCheckDecimalOptionalAndPIIStackAtSink(t *testing.T) {
+	const schema = `source in = csv("accounts.csv", schema: { id: int, balance: decimal? @pii, fallback: decimal })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+`
+	tests := []struct {
+		name       string
+		pipeline   string
+		wantErrSub string // empty means the program must compile clean
+	}{
+		{
+			"neither discharged",
+			"  in |> out\n}",
+			`field "balance" is optional and reaches sink "out" undischarged; resolve with ??`,
+		},
+		{
+			"optional discharged, PII remains",
+			`  in |> map({ ...row, balance: .balance ?? .fallback }) |> out` + "\n}",
+			`field "balance" is @pii and reaches sink "out" unmasked; declassify with mask/hash/redact`,
+		},
+		{
+			"discharging PII via mask is a compile error, not a path forward",
+			`  in |> map({ ...row, balance: .balance ?? .fallback }) |> mask(balance) |> out` + "\n}",
+			`mask on non-PII column "balance"`,
+		},
+		{
+			"both cleared, balance dropped since mask/hash/redact can't take a decimal",
+			`  in |> drop(balance) |> out` + "\n}",
+			"",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := schema + tt.pipeline
+			if tt.wantErrSub == "" {
+				cp := mustCheck(t, src)
+				wantSchema := "{ id: int, fallback: decimal }"
+				if got := cp.SinkSchema.String(); got != wantSchema {
+					t.Errorf("SinkSchema = %s, want %s", got, wantSchema)
+				}
+				return
+			}
+			err := checkErr(t, src)
+			if !strings.Contains(err.Error(), tt.wantErrSub) {
+				t.Errorf("error = %q, want it to contain %q", err.Error(), tt.wantErrSub)
+			}
+		})
+	}
+}
+
+// TestCheckDecimalCoalesceLiteralDefaultNotPromoted documents a real gap
+// the design doc doesn't mention: the literal-context promotion rule
+// (§2) is scoped to checkBinaryOp's arithmetic/comparison operators
+// only, never extended to checkCoalesce, so `.balance ?? 0` is a
+// compile error today even though `.balance * 0` type-checks fine. A
+// decimal? field's default must be another decimal-typed expression
+// (design/decimal.md is silent on this; not solved here, only pinned
+// down so it's a known, named gap rather than a surprise).
+func TestCheckDecimalCoalesceLiteralDefaultNotPromoted(t *testing.T) {
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "balance", Type: value.Type{Kind: value.Decimal, Optional: true}},
+	}}
+	err := checkExprErr(t, ".balance ?? 0", schema)
+	want := "?? requires both sides to share a type, got decimal? and int"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %v, want it to contain %q", err, want)
+	}
+}
+
 func TestCheckFunctionErrors(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "age", Type: value.Type{Kind: value.Int}},
