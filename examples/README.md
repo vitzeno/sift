@@ -432,17 +432,25 @@ pipeline main {
 $ ./sift run decimal.sift
 $ cat decimal_out.jsonl
 {"id":1,"price":19.99,"discount":5.00,"net":14.99,"tax":1.5992}
-{"id":3,"price":100.00,"discount":0.00,"net":100.00,"tax":8.0000}
+{"id":3,"price":1100.00,"discount":0.00,"net":1100.00,"tax":88.0000}
 ```
 
-Two things worth noticing in that output. First, trailing zeros survive
+Three things worth noticing in that output. First, trailing zeros survive
 exactly: `discount` reads `5.00` from the file and writes back `5.00`,
 not `5`, and `tax` naturally grows to four decimal places
-(`19.99 * 0.08`) without truncating any of them. Second, `0.08` is a
-plain double literal, not a `decimal` value, and it still works: a bare
-number written directly in an expression, standing against a `decimal`
-column, adapts to `decimal` on the spot. That's different from a real
-column of another type:
+(`19.99 * 0.08`) without truncating any of them. Second, row 3's `price`
+column in `decimal.csv` is actually the cell `"1,100.00"` — a comma-
+thousands-formatted number, the shape a bank or accounting export
+typically writes money in. `decimal` strips a qualifying thousands
+separator before parsing, unconditionally, with no keyword argument
+needed: every `decimal` field gets this. The rule only strips a comma
+that comes *before* the cell's last `.`; a comma after it (as in a
+European-formatted `"1.234,56"`, comma-as-decimal-point) is left alone
+and the cell fails to parse instead of silently becoming the wrong
+number. Third, `0.08` is a plain double literal, not a `decimal` value,
+and it still works: a bare number written directly in an expression,
+standing against a `decimal` column, adapts to `decimal` on the spot.
+That's different from a real column of another type:
 
 ```sift
 source in = csv("orders.csv", schema: { price: decimal, rate: double })
@@ -1063,7 +1071,10 @@ workbook it reads.
   column), and `decimal` (exact arithmetic, no `float64` rounding error;
   a bare int/double literal standing against a `decimal` column adapts
   to `decimal`, but two real columns of different Kind never mix, even
-  numeric ones).
+  numeric ones; a comma-thousands-formatted cell like `"2,100.00"`
+  parses unconditionally, no keyword argument needed, unless the comma
+  sits after the cell's last `.`, which fails to parse instead of
+  silently reading as the wrong number).
 - **PII:** `@pii` attaches at the source, is tracked through every
   expression, and is only cleared by `mask`/`hash`/`redact` — which are
   string-only, so a non-string `@pii` field (`date`, `int`, ...) can
