@@ -40,12 +40,18 @@ is put together, see [`../CLAUDE.md`](../CLAUDE.md).
 ```console
 $ go build -o sift ./cmd/sift
 $ ./sift
-usage: sift run <file> | sift --emit-ast <file> | sift --emit-schema <file>
+usage: sift run <file> [--print] | sift --emit-ast <file> | sift --emit-schema <file>
 ```
 
 Everything below assumes a `sift` binary built this way. `make build`
 does the same thing (see [Project layout](#project-layout) for the rest
 of the Makefile).
+
+`sift run <file> --print` replaces every sink with the console: nothing
+is written to disk, and each sink's rows print as one labeled block
+(`=== name ===`) once the run finishes, rather than interleaving row by
+row across multiple sinks. Handy for a quick look at a pipeline's output
+without touching the files it would otherwise write.
 
 ## Your first pipeline
 
