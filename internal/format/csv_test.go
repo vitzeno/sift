@@ -514,6 +514,35 @@ func TestCSVSourceDecimal(t *testing.T) {
 	}
 }
 
+// TestCSVSourceDecimalThousandsSeparator is LENIENT-A: a comma-thousands-
+// formatted cell parses through csv unconditionally, no kwarg needed
+// (design/decimal-leniency.md §2).
+func TestCSVSourceDecimalThousandsSeparator(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "orders.csv")
+	writeFile(t, path, "id,price\n1,\"2,100.00\"\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "id", Type: value.Type{Kind: value.Int}},
+			{Name: "price", Type: value.Type{Kind: value.Decimal}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	if got := row.Fields["price"].(value.DecimalValue).String(); got != "2100.00" {
+		t.Errorf("price = %s, want 2100.00", got)
+	}
+}
+
 // TestCSVSourceDecimalBadCellIsRowFailure is DEC-B: a non-numeric cell
 // is a row failure, same shape as a bad int/double cell, not a panic.
 func TestCSVSourceDecimalBadCellIsRowFailure(t *testing.T) {

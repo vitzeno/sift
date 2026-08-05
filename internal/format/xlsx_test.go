@@ -445,3 +445,32 @@ func TestXLSXSourceDecimal(t *testing.T) {
 		t.Errorf("price = %s, want 5.00 (trailing zeros preserved)", got.String())
 	}
 }
+
+// TestXLSXSourceDecimalThousandsSeparator is LENIENT-D: the same comma-
+// thousands-formatted cell, read from an xlsx fixture, parses identically
+// to the csv case -- no format-specific code needed.
+func TestXLSXSourceDecimalThousandsSeparator(t *testing.T) {
+	path := writeXLSXFixture(t, "Sheet1", [][]string{
+		{"id", "price"},
+		{"1", "2,100.00"},
+	})
+	src, err := NewXLSXSource(runtime.SourceOptions{
+		Name: "in", Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "id", Type: value.Type{Kind: value.Int}},
+			{Name: "price", Type: value.Type{Kind: value.Decimal}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewXLSXSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	got := row.Fields["price"].(value.DecimalValue)
+	if got.String() != "2100.00" {
+		t.Errorf("price = %s, want 2100.00", got.String())
+	}
+}
