@@ -714,6 +714,98 @@ func TestCheckDateArithmeticRejected(t *testing.T) {
 	}
 }
 
+// TestCheckDatePIIRejectsUnmaskedSink is design/date.md §3's PII
+// propagation half: a date @pii field reaches a sink unmasked exactly
+// like any other Kind, with no Date-specific carve-out. Regression
+// test, not new behavior.
+func TestCheckDatePIIRejectsUnmaskedSink(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, dob: date @pii })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	err := checkErr(t, src)
+	want := `field "dob" is @pii and reaches sink "out" unmasked; declassify with mask/hash/redact`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
+// TestCheckDateOptionalRejectsUndischargedSink is design/date.md §3's
+// Optional-interaction half: a date? field reaches a sink undischarged
+// exactly like any other Kind. Regression test, not new behavior.
+func TestCheckDateOptionalRejectsUndischargedSink(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, dob: date? })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	err := checkErr(t, src)
+	want := `field "dob" is optional and reaches sink "out" undischarged; resolve with ??`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), want)
+	}
+}
+
+// TestCheckDateOptionalAndPIIStackAtSink is design/date.md §3's named
+// gap made concrete: a date? @pii field needs both tags cleared like
+// any other Kind, but date has no in-place declassifier (mask/hash/
+// redact are string-only), so unlike email in
+// TestCheckOptionalAndPIIStackAtSink, the only way to clear the
+// remaining @pii tag is drop(), not mask().
+func TestCheckDateOptionalAndPIIStackAtSink(t *testing.T) {
+	const schema = `source in = csv("people.csv", schema: { name: string, dob: date? @pii, fallback: date })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+`
+	tests := []struct {
+		name       string
+		pipeline   string
+		wantErrSub string // empty means the program must compile clean
+	}{
+		{
+			"neither discharged",
+			"  in |> out\n}",
+			`field "dob" is optional and reaches sink "out" undischarged; resolve with ??`,
+		},
+		{
+			"optional discharged, PII remains",
+			`  in |> map({ ...row, dob: .dob ?? .fallback }) |> out` + "\n}",
+			`field "dob" is @pii and reaches sink "out" unmasked; declassify with mask/hash/redact`,
+		},
+		{
+			"discharging PII via mask is a compile error, not a path forward",
+			`  in |> map({ ...row, dob: .dob ?? .fallback }) |> mask(dob) |> out` + "\n}",
+			`mask on non-PII column "dob"`,
+		},
+		{
+			"both cleared, dob dropped since mask/hash/redact can't take a date",
+			`  in |> drop(dob) |> out` + "\n}",
+			"",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := schema + tt.pipeline
+			if tt.wantErrSub == "" {
+				cp := mustCheck(t, src)
+				wantSchema := "{ name: string, fallback: date }"
+				if got := cp.SinkSchema.String(); got != wantSchema {
+					t.Errorf("SinkSchema = %s, want %s", got, wantSchema)
+				}
+				return
+			}
+			err := checkErr(t, src)
+			if !strings.Contains(err.Error(), tt.wantErrSub) {
+				t.Errorf("error = %q, want it to contain %q", err.Error(), tt.wantErrSub)
+			}
+		})
+	}
+}
+
 func TestCheckFunctionErrors(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "age", Type: value.Type{Kind: value.Int}},
