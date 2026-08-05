@@ -8,13 +8,14 @@ import (
 // typeNames resolves a schema literal's raw TypeName text (design.md §4's
 // compilation pipeline puts this resolution in the checker, not the
 // parser) to a value.Kind. v0 had exactly the first four; date was added
-// by design/date.md.
+// by design/date.md, decimal by design/decimal.md.
 var typeNames = map[string]value.Kind{
-	"string": value.String,
-	"int":    value.Int,
-	"double": value.Double,
-	"bool":   value.Bool,
-	"date":   value.Date,
+	"string":  value.String,
+	"int":     value.Int,
+	"double":  value.Double,
+	"bool":    value.Bool,
+	"date":    value.Date,
+	"decimal": value.Decimal,
 }
 
 // resolveSourceSchemas converts every source's ast.SchemaLit into a
@@ -28,7 +29,7 @@ func (c *checker) resolveSourceSchemas() error {
 		for _, f := range s.Schema.Fields {
 			kind, ok := typeNames[f.TypeName]
 			if !ok {
-				return errorf(f.Pos, "unknown type %q (expected string, int, double, bool, or date)", f.TypeName)
+				return errorf(f.Pos, "unknown type %q (expected string, int, double, bool, date, or decimal)", f.TypeName)
 			}
 			if seen[f.Name] {
 				return errorf(f.Pos, "duplicate field %q in schema", f.Name)

@@ -345,7 +345,7 @@ func (c *checker) checkParamList(p *ast.PipelineDecl) error {
 		seen[param.Name] = true
 		if param.Kind == ast.ParamScalar {
 			if _, ok := typeNames[param.TypeName]; !ok {
-				return errorf(param.Pos, "unknown type %q for parameter %q (expected string, int, double, bool, or date)", param.TypeName, param.Name)
+				return errorf(param.Pos, "unknown type %q for parameter %q (expected string, int, double, bool, date, or decimal)", param.TypeName, param.Name)
 			}
 		}
 	}

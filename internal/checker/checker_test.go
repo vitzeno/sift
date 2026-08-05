@@ -654,6 +654,23 @@ func TestCheckBinaryOpTypeErrors(t *testing.T) {
 	}
 }
 
+// TestCheckSourceSchemaDecimal confirms a decimal-typed schema field
+// resolves to value.Decimal, the same shape TestCheckSourceSchemaOptional
+// proves for Optional (design/decimal.md §5's typeNames entry).
+func TestCheckSourceSchemaDecimal(t *testing.T) {
+	const src = `source in = csv("orders.csv", schema: { id: int, price: decimal })
+sink out = jsonl("out.jsonl")
+
+pipeline main {
+  in |> out
+}`
+	cp := mustCheck(t, src)
+	wantSchema := "{ id: int, price: decimal }"
+	if got := cp.SourceSchema.String(); got != wantSchema {
+		t.Errorf("SourceSchema = %s, want %s", got, wantSchema)
+	}
+}
+
 // TestCheckDateComparison confirms date-date comparisons type-check to
 // bool (design/date.md §3): isOrderable, not isNumeric, is the gate for
 // </>/<=/>=, and ==/!= already accepted any matching Kind pair before
