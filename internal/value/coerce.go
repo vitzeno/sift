@@ -35,16 +35,13 @@ const DefaultDateTimeFormat = "2006-01-02T15:04:05"
 // present but garbage still fails, even when the field is Optional.
 //
 // dateFormat is the Go reference-layout to parse a Date- or DateTime-kind
-// cell against; every other Kind ignores it. decision: variadic rather
-// than a plain third parameter, so every existing non-Date call site (and
-// every existing test) is unaffected — only a Date- or DateTime-kind
-// caller needs to pass one (design/date.md §3, §5). DateTime reuses this
-// exact slot rather than adding a second parameter (design/datetime.md
-// §3): the caller already resolves the right layout string and default
-// per field before calling Coerce, so Coerce itself never needs to know
-// which of the two temporal Kinds it's being asked for beyond its own
-// switch case.
-func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
+// cell against; every other Kind ignores it and every non-temporal caller
+// passes "". DateTime reuses this exact parameter rather than adding a
+// second one (design/datetime.md §3): the caller already resolves the
+// right layout string and default per field before calling Coerce, so
+// Coerce itself never needs to know which of the two temporal Kinds it's
+// being asked for beyond its own switch case.
+func Coerce(t Type, raw string, dateFormat string) (any, *Failure) {
 	if t.Optional && strings.TrimSpace(raw) == "" {
 		return Absent{Kind: t.Kind}, nil
 	}
@@ -71,8 +68,8 @@ func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
 		return v, nil
 	case Date:
 		format := DefaultDateFormat
-		if len(dateFormat) > 0 && dateFormat[0] != "" {
-			format = dateFormat[0]
+		if dateFormat != "" {
+			format = dateFormat
 		}
 		v, err := time.Parse(format, raw)
 		if err != nil {
@@ -87,8 +84,8 @@ func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
 		return DecimalValue(v), nil
 	case DateTime:
 		format := DefaultDateTimeFormat
-		if len(dateFormat) > 0 && dateFormat[0] != "" {
-			format = dateFormat[0]
+		if dateFormat != "" {
+			format = dateFormat
 		}
 		v, err := time.Parse(format, raw)
 		if err != nil {
