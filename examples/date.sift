@@ -1,0 +1,14 @@
+// Demonstrates the date type (design/date.md): a plain calendar date,
+// compared chronologically instead of as text. started_on is written
+// as plain ISO-8601, so it needs no formats entry at all. renewed_on is
+// written day-first, so the formats kwarg says so explicitly -- each
+// date field on a source can use its own layout, independently.
+source in = csv("date.csv",
+  schema:  { name: string, started_on: date, renewed_on: date },
+  formats: { renewed_on: "02/01/2006" }
+)
+sink out = jsonl("date_out.jsonl")
+
+pipeline main {
+  in |> filter(.renewed_on >= .started_on) |> out
+}

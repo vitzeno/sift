@@ -423,3 +423,19 @@ func TestExampleColumns(t *testing.T) {
 		t.Errorf("output =\n%s\nwant\n%s", got, want)
 	}
 }
+
+// TestExampleDate drives testdata/date.sift through the real CLI
+// (design/date.md): started_on's default ISO-8601 format and
+// renewed_on's day-first formats entry both parse correctly, and
+// filter(.renewed_on >= .started_on) drops Tom, whose renewal predates
+// his subscription -- a data-quality catch no string comparison could
+// make.
+func TestExampleDate(t *testing.T) {
+	got := runExample(t, "date")
+	want := `{"name":"Ada","started_on":"2026-01-05","renewed_on":"2026-02-10"}
+{"name":"Grace","started_on":"2026-01-01","renewed_on":"2026-01-01"}
+`
+	if string(got) != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+}
