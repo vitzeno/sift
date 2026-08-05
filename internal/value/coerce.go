@@ -69,7 +69,7 @@ func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
 		}
 		return DateValue(v), nil
 	case Decimal:
-		v, err := decimal.NewFromString(raw)
+		v, err := decimal.NewFromString(stripThousands(raw))
 		if err != nil {
 			return nil, &Failure{Reason: fmt.Sprintf("cannot parse %q as decimal", raw)}
 		}
@@ -77,4 +77,26 @@ func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
 	default:
 		return nil, &Failure{Reason: fmt.Sprintf("unsupported scalar kind %v", t.Kind)}
 	}
+}
+
+// stripThousands strips a US/UK-style thousands-separator comma from a
+// decimal cell before Coerce parses it (design/decimal-leniency.md §2),
+// so "2,100.00" and "2,100" parse as 2100.00 and 2100 instead of failing.
+// Applied unconditionally to every decimal field, no opt-in required.
+//
+// Commas are stripped only up to the last '.' in the cell; a comma found
+// after it means this isn't thousands-then-decimal formatting at all
+// (e.g. European "1.234,56"), so the whole cell is left untouched and
+// falls through to decimal.NewFromString exactly as it would otherwise --
+// a loud parse failure instead of a silently wrong number.
+func stripThousands(raw string) string {
+	dot := strings.LastIndexByte(raw, '.')
+	if dot == -1 {
+		return strings.ReplaceAll(raw, ",", "")
+	}
+	before, after := raw[:dot], raw[dot:]
+	if strings.Contains(after, ",") {
+		return raw
+	}
+	return strings.ReplaceAll(before, ",", "") + after
 }

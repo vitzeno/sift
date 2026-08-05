@@ -276,3 +276,44 @@ func TestCoerceDecimalOptionalAbsent(t *testing.T) {
 		t.Errorf("Coerce(\"\") = %#v, want Absent", got)
 	}
 }
+
+// TestCoerceDecimalStripsThousandsSeparator is LENIENT-A: a comma-
+// thousands-formatted cell parses unconditionally, whole or fractional,
+// with no opt-in kwarg required (design/decimal-leniency.md §2).
+func TestCoerceDecimalStripsThousandsSeparator(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{"2,100.00", "2100.00"},
+		{"2,100", "2100"},
+		{"1,234,567.89", "1234567.89"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			got, fail := Coerce(Type{Kind: Decimal}, tt.raw)
+			if fail != nil {
+				t.Fatalf("Coerce(%q) failed: %+v", tt.raw, fail)
+			}
+			d := got.(DecimalValue)
+			if d.String() != tt.want {
+				t.Errorf("Coerce(%q).String() = %q, want %q", tt.raw, d.String(), tt.want)
+			}
+		})
+	}
+}
+
+// TestCoerceDecimalThousandsGuardRule is LENIENT-C: a comma after the
+// last '.' means European decimal-point formatting, not US/UK thousands
+// grouping, so the cell is left untouched and fails loudly instead of
+// silently parsing to the wrong number.
+func TestCoerceDecimalThousandsGuardRule(t *testing.T) {
+	got, fail := Coerce(Type{Kind: Decimal}, "1.234,56")
+	if fail == nil {
+		t.Fatalf("Coerce(%q) = %#v, nil; want a Failure", "1.234,56", got)
+	}
+	want := `cannot parse "1.234,56" as decimal`
+	if fail.Reason != want {
+		t.Errorf("Failure.Reason = %q, want %q", fail.Reason, want)
+	}
+}
