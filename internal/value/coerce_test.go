@@ -317,3 +317,71 @@ func TestCoerceDecimalThousandsGuardRule(t *testing.T) {
 		t.Errorf("Failure.Reason = %q, want %q", fail.Reason, want)
 	}
 }
+
+// TestCoerceDateTimeDefaultFormat is DT-A: with no dateFormat argument at
+// all, Coerce falls back to the ISO-8601-with-time default.
+func TestCoerceDateTimeDefaultFormat(t *testing.T) {
+	got, fail := Coerce(Type{Kind: DateTime}, "2026-07-31T04:10:25")
+	if fail != nil {
+		t.Fatalf("Coerce failed: %+v", fail)
+	}
+	want := time.Date(2026, 7, 31, 4, 10, 25, 0, time.UTC)
+	if !time.Time(got.(DateTimeValue)).Equal(want) {
+		t.Errorf("Coerce = %v, want %v", time.Time(got.(DateTimeValue)), want)
+	}
+}
+
+// TestCoerceDateTimeExplicitFormat is DT-B: a dateFormat argument, when
+// given, drives parsing instead of the default -- the real Tide file's
+// own space-separated shape, the literal case that motivated this doc.
+func TestCoerceDateTimeExplicitFormat(t *testing.T) {
+	got, fail := Coerce(Type{Kind: DateTime}, "2026-07-31 04:10:25", "2006-01-02 15:04:05")
+	if fail != nil {
+		t.Fatalf("Coerce failed: %+v", fail)
+	}
+	want := time.Date(2026, 7, 31, 4, 10, 25, 0, time.UTC)
+	if !time.Time(got.(DateTimeValue)).Equal(want) {
+		t.Errorf("Coerce = %v, want %v", time.Time(got.(DateTimeValue)), want)
+	}
+}
+
+// TestCoerceDateTimeFailure is DT-C: a cell that doesn't match the
+// format, and separately one that matches the format but names an
+// impossible time component (hour 25, minute 70), are both row
+// failures, not panics -- the same shape as an impossible calendar date
+// already is for Date.
+func TestCoerceDateTimeFailure(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{"format mismatch", "not-a-datetime"},
+		{"impossible hour", "2026-07-31T25:10:25"},
+		{"impossible minute", "2026-07-31T04:70:25"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, fail := Coerce(Type{Kind: DateTime}, tt.raw)
+			if fail == nil {
+				t.Fatalf("Coerce(%q) = %#v, nil; want a Failure", tt.raw, got)
+			}
+			want := `cannot parse "` + tt.raw + `" as datetime`
+			if fail.Reason != want {
+				t.Errorf("Failure.Reason = %q, want %q", fail.Reason, want)
+			}
+		})
+	}
+}
+
+// TestCoerceDateTimeOptionalAbsent confirms the Optional blank-cell
+// carve-out applies to DateTime exactly like every other Kind, with no
+// DateTime-specific code needed for it.
+func TestCoerceDateTimeOptionalAbsent(t *testing.T) {
+	got, fail := Coerce(Type{Kind: DateTime, Optional: true}, "")
+	if fail != nil {
+		t.Fatalf("Coerce failed: %+v", fail)
+	}
+	if _, ok := got.(Absent); !ok {
+		t.Errorf("Coerce(\"\") = %#v, want Absent", got)
+	}
+}

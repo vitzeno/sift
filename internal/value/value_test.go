@@ -18,6 +18,7 @@ func TestTypeString(t *testing.T) {
 		{"plain int", Type{Kind: Int}, "int"},
 		{"plain date", Type{Kind: Date}, "date"},
 		{"plain decimal", Type{Kind: Decimal}, "decimal"},
+		{"plain datetime", Type{Kind: DateTime}, "datetime"},
 		{"pii string", Type{Kind: String, PII: true}, "string @pii"},
 		{"optional string", Type{Kind: String, Optional: true}, "string?"},
 		{"optional pii string", Type{Kind: String, Optional: true, PII: true}, "string? @pii"},
@@ -193,5 +194,30 @@ func TestDecimalValueMarshalsAsBareNumericLiteral(t *testing.T) {
 	want := `5.00`
 	if string(got) != want {
 		t.Errorf("Marshal(DecimalValue) = %s, want %s (bare literal, no quotes)", got, want)
+	}
+}
+
+// TestDateTimeValueString confirms DateTimeValue's own textual form is
+// ISO-8601 with a time component and no zone suffix, independent of
+// whatever format the source cell used (design/datetime.md §2).
+func TestDateTimeValueString(t *testing.T) {
+	d := DateTimeValue(time.Date(2026, 7, 31, 4, 10, 25, 0, time.UTC))
+	if got := d.String(); got != "2026-07-31T04:10:25" {
+		t.Errorf("DateTimeValue.String() = %q, want %q", got, "2026-07-31T04:10:25")
+	}
+}
+
+// TestDateTimeValueMarshalsAsISOString is DT-F: the JSON form is a plain
+// string in DateTimeValue's own layout, not time.Time's own RFC 3339
+// (which would imply a "Z" zone this naive value never had).
+func TestDateTimeValueMarshalsAsISOString(t *testing.T) {
+	d := DateTimeValue(time.Date(2026, 7, 31, 4, 10, 25, 0, time.UTC))
+	got, err := json.Marshal(d)
+	if err != nil {
+		t.Fatalf("Marshal(DateTimeValue): %v", err)
+	}
+	want := `"2026-07-31T04:10:25"`
+	if string(got) != want {
+		t.Errorf("Marshal(DateTimeValue) = %s, want %s", got, want)
 	}
 }

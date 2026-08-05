@@ -14,6 +14,12 @@ import (
 // (design/date.md §3): ISO-8601 (YYYY-MM-DD).
 const DefaultDateFormat = "2006-01-02"
 
+// DefaultDateTimeFormat is the Go reference-layout used to parse a
+// DateTime-kind cell when a source's formats: kwarg names no entry for
+// that field (design/datetime.md §2): ISO-8601 with a time component, no
+// zone suffix, since DateTime is naive only.
+const DefaultDateTimeFormat = "2006-01-02T15:04:05"
+
 // Coerce converts a raw cell string into t's scalar kind, or returns a
 // Failure if it doesn't parse (design-errors.md §2.3). Every source
 // (csv, xlsx, ...) shares this one function, so a bad cell is never a
@@ -28,11 +34,16 @@ const DefaultDateFormat = "2006-01-02"
 // required column is caught earlier as its own error. A cell that's
 // present but garbage still fails, even when the field is Optional.
 //
-// dateFormat is the Go reference-layout to parse a Date-kind cell
-// against; every other Kind ignores it. decision: variadic rather than a
-// plain third parameter, so every existing non-Date call site (and every
-// existing test) is unaffected — only a Date-kind caller needs to pass
-// one (design/date.md §3, §5).
+// dateFormat is the Go reference-layout to parse a Date- or DateTime-kind
+// cell against; every other Kind ignores it. decision: variadic rather
+// than a plain third parameter, so every existing non-Date call site (and
+// every existing test) is unaffected — only a Date- or DateTime-kind
+// caller needs to pass one (design/date.md §3, §5). DateTime reuses this
+// exact slot rather than adding a second parameter (design/datetime.md
+// §3): the caller already resolves the right layout string and default
+// per field before calling Coerce, so Coerce itself never needs to know
+// which of the two temporal Kinds it's being asked for beyond its own
+// switch case.
 func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
 	if t.Optional && strings.TrimSpace(raw) == "" {
 		return Absent{}, nil
@@ -74,6 +85,16 @@ func Coerce(t Type, raw string, dateFormat ...string) (any, *Failure) {
 			return nil, &Failure{Reason: fmt.Sprintf("cannot parse %q as decimal", raw)}
 		}
 		return DecimalValue(v), nil
+	case DateTime:
+		format := DefaultDateTimeFormat
+		if len(dateFormat) > 0 && dateFormat[0] != "" {
+			format = dateFormat[0]
+		}
+		v, err := time.Parse(format, raw)
+		if err != nil {
+			return nil, &Failure{Reason: fmt.Sprintf("cannot parse %q as datetime", raw)}
+		}
+		return DateTimeValue(v), nil
 	default:
 		return nil, &Failure{Reason: fmt.Sprintf("unsupported scalar kind %v", t.Kind)}
 	}

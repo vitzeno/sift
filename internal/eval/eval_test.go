@@ -307,6 +307,67 @@ func TestEvalDecimalEqualityUsesDecimalEqualNotBareEquals(t *testing.T) {
 	}
 }
 
+// TestEvalDateTimeComparison is DT-D: two value.DateTimeValues sharing
+// the same calendar date but different times of day order correctly by
+// time-of-day, proving DateTime is genuinely finer-grained than Date, not
+// just Date with extra digits ignored.
+func TestEvalDateTimeComparison(t *testing.T) {
+	earlier := value.DateTimeValue(time.Date(2026, 7, 31, 4, 10, 25, 0, time.UTC))
+	later := value.DateTimeValue(time.Date(2026, 7, 31, 22, 0, 0, 0, time.UTC))
+	fields := map[string]any{"a": earlier, "b": later}
+
+	tests := []struct {
+		name string
+		op   lexer.Kind
+		want bool
+	}{
+		{"a < b", lexer.LT, true},
+		{"a > b", lexer.GT, false},
+		{"a <= b", lexer.LE, true},
+		{"a >= b", lexer.GE, false},
+		{"a == b", lexer.EQ, false},
+		{"a != b", lexer.NE, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expr := &ast.BinaryOp{Op: tt.op, Left: &ast.FieldAccess{Field: "a"}, Right: &ast.FieldAccess{Field: "b"}}
+			got := Eval(expr, row(fields))
+			if got != tt.want {
+				t.Errorf("Eval(a %s b) = %#v, want %#v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEvalDateTimeEqualityUsesTimeEqualNotBareEquals is DT-E: two
+// value.DateTimeValues that denote the exact same instant but differ in
+// internal representation (time.UTC vs an equivalent FixedZone -- bare Go
+// == returns false for this pair, confirmed empirically, while
+// time.Time.Equal returns true) must still compare == true through
+// Sift's == operator, now exercised through the shared OrderedValue path
+// rather than a hand-written branch.
+func TestEvalDateTimeEqualityUsesTimeEqualNotBareEquals(t *testing.T) {
+	a := value.DateTimeValue(time.Date(2026, 7, 31, 4, 10, 25, 0, time.UTC))
+	b := value.DateTimeValue(time.Date(2026, 7, 31, 4, 10, 25, 0, time.FixedZone("UTC", 0)))
+	//nolint:staticcheck // QF1009: the bare == here is the point of this
+	// check, not a mistake -- it confirms the fixture actually diverges
+	// from .Equal() before asserting Sift's own == uses .Equal() below.
+	if time.Time(a) == time.Time(b) {
+		t.Fatal("test setup invalid: a and b must be bare-== unequal despite denoting the same instant")
+	}
+	fields := map[string]any{"a": a, "b": b}
+
+	eq := &ast.BinaryOp{Op: lexer.EQ, Left: &ast.FieldAccess{Field: "a"}, Right: &ast.FieldAccess{Field: "b"}}
+	if got := Eval(eq, row(fields)); got != true {
+		t.Errorf("Eval(a == b) = %#v, want true (same instant, different representation)", got)
+	}
+
+	ne := &ast.BinaryOp{Op: lexer.NE, Left: &ast.FieldAccess{Field: "a"}, Right: &ast.FieldAccess{Field: "b"}}
+	if got := Eval(ne, row(fields)); got != false {
+		t.Errorf("Eval(a != b) = %#v, want false (same instant, different representation)", got)
+	}
+}
+
 // litOf wraps a Go value as the matching ast literal node, so the table
 // above can stay declarative instead of hand-building each case.
 func litOf(v any) ast.Expr {

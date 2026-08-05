@@ -13,7 +13,7 @@ import (
 // Kind is a scalar type. v0 only needs the four primitives design.md's
 // expression grammar produces: string/int/double literals, and bool from
 // comparisons and && / ||. Date was added by design/date.md; Decimal by
-// design/decimal.md.
+// design/decimal.md; DateTime by design/datetime.md.
 type Kind int
 
 const (
@@ -23,6 +23,7 @@ const (
 	Bool
 	Date
 	Decimal
+	DateTime
 )
 
 func (k Kind) String() string {
@@ -39,6 +40,8 @@ func (k Kind) String() string {
 		return "date"
 	case Decimal:
 		return "decimal"
+	case DateTime:
+		return "datetime"
 	default:
 		return "unknown"
 	}
@@ -119,6 +122,36 @@ func (d DateValue) MarshalJSON() ([]byte, error) {
 // datetime.md §2).
 func (d DateValue) CompareValue(other any) int {
 	return time.Time(d).Compare(time.Time(other.(DateValue)))
+}
+
+// DateTimeValue is a naive timestamp: year, month, day, hour, minute,
+// second, with no timezone or offset at all (design/datetime.md §2). It
+// wraps time.Time rather than aliasing it, mirroring DateValue's own
+// reasoning exactly: a custom MarshalJSON (rendering the canonical
+// layout below, not time.Time's own RFC 3339 with a zone suffix a naive
+// value never earned) and keeping every time.Time method (timezone
+// conversion, Now()-adjacent constructors) from leaking in unasked.
+type DateTimeValue time.Time
+
+// String renders a DateTimeValue the same way it's parsed and marshaled:
+// ISO-8601 with a time component, no zone suffix (design/datetime.md §2).
+func (d DateTimeValue) String() string {
+	return time.Time(d).Format("2006-01-02T15:04:05")
+}
+
+// MarshalJSON renders a DateTimeValue as a plain string in String's own
+// layout, not time.Time's own RFC 3339 (which would imply a zone this
+// naive value never had) (design/datetime.md §2).
+func (d DateTimeValue) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
+}
+
+// CompareValue implements OrderedValue via time.Time.Compare, ordering by
+// time-of-day as well as calendar date -- the entire reason DateTime
+// exists rather than reusing Date and discarding the leftover digits
+// (design/datetime.md §2).
+func (d DateTimeValue) CompareValue(other any) int {
+	return time.Time(d).Compare(time.Time(other.(DateTimeValue)))
 }
 
 // DecimalValue is an exact-arithmetic scalar (design/decimal.md §2). It
