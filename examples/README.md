@@ -18,20 +18,21 @@ is put together, see [`../CLAUDE.md`](../CLAUDE.md).
 6. [Fields that may be missing](#fields-that-may-be-missing)
 7. [Naming a column that isn't a valid identifier](#naming-a-column-that-isnt-a-valid-identifier)
 8. [Working with dates](#working-with-dates)
-9. [Reshaping schemas: select, drop, rename](#reshaping-schemas-select-drop-rename)
-10. [Cutting rows: limit and offset](#cutting-rows-limit-and-offset)
-11. [Masking as a stage](#masking-as-a-stage)
-12. [Putting it together](#putting-it-together)
-13. [When a row fails: error policies](#when-a-row-fails-error-policies)
-14. [Writing to more than one sink](#writing-to-more-than-one-sink)
-15. [Routing rows by condition](#routing-rows-by-condition)
-16. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
-17. [Segments with parameters](#segments-with-parameters)
-18. [A full ETL, with error routing](#a-full-etl-with-error-routing)
-19. [Reading xlsx files](#reading-xlsx-files)
-20. [Quick reference](#quick-reference)
-21. [Project layout](#project-layout)
-22. [Status](#status)
+9. [Exact math with decimal](#exact-math-with-decimal)
+10. [Reshaping schemas: select, drop, rename](#reshaping-schemas-select-drop-rename)
+11. [Cutting rows: limit and offset](#cutting-rows-limit-and-offset)
+12. [Masking as a stage](#masking-as-a-stage)
+13. [Putting it together](#putting-it-together)
+14. [When a row fails: error policies](#when-a-row-fails-error-policies)
+15. [Writing to more than one sink](#writing-to-more-than-one-sink)
+16. [Routing rows by condition](#routing-rows-by-condition)
+17. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
+18. [Segments with parameters](#segments-with-parameters)
+19. [A full ETL, with error routing](#a-full-etl-with-error-routing)
+20. [Reading xlsx files](#reading-xlsx-files)
+21. [Quick reference](#quick-reference)
+22. [Project layout](#project-layout)
+23. [Status](#status)
 
 ## Building the CLI
 
@@ -403,6 +404,69 @@ either. Both are real, deliberate gaps, not oversights — see
 `../design/date.md` if you're curious why.
 
 `date.sift` in this folder is this exact program.
+
+## Exact math with decimal
+
+`double` (a `float64` underneath) is inexact: money arithmetic on it
+accumulates representation error, and `19.99` doesn't even round-trip
+through it exactly. `decimal` is a real scalar type for exact
+arithmetic instead: what you parse is what comes back out, and
+`+ - * /` never introduce rounding error `double` would.
+
+```sift
+source in = csv("decimal.csv", schema: { id: int, price: decimal, discount: decimal })
+sink out = jsonl("decimal_out.jsonl")
+
+pipeline main {
+  in
+    |> map({ ...row,
+         net: .price - .discount,
+         tax: .price * 0.08
+       })
+    |> filter(.net > 0)
+    |> out
+}
+```
+
+```console
+$ ./sift run decimal.sift
+$ cat decimal_out.jsonl
+{"id":1,"price":19.99,"discount":5.00,"net":14.99,"tax":1.5992}
+{"id":3,"price":100.00,"discount":0.00,"net":100.00,"tax":8.0000}
+```
+
+Two things worth noticing in that output. First, trailing zeros survive
+exactly: `discount` reads `5.00` from the file and writes back `5.00`,
+not `5`, and `tax` naturally grows to four decimal places
+(`19.99 * 0.08`) without truncating any of them. Second, `0.08` is a
+plain double literal, not a `decimal` value, and it still works: a bare
+number written directly in an expression, standing against a `decimal`
+column, adapts to `decimal` on the spot. That's different from a real
+column of another type:
+
+```sift
+source in = csv("orders.csv", schema: { price: decimal, rate: double })
+sink   out = jsonl("out.jsonl")
+pipeline main { in |> map({ ...row, tax: .price * .rate }) |> out }
+```
+
+```console
+$ ./sift run bad-mix.sift
+bad-mix.sift:3:49: error: cannot apply * to decimal and double
+```
+
+`rate` is a real column, not a literal, so it never silently adapts.
+Two decimal and double columns still can't mix arithmetically, even
+though a literal constant can — that's the whole point: `decimal`
+never quietly absorbs another column's rounding error, only a number
+you actually wrote yourself.
+
+Row 2 (Tom, whose $50 discount exceeds his $42.50 price) never reaches
+the output at all: `filter(.net > 0)` drops it, the same quiet-drop
+behavior `filter` always has, just now backed by exact comparison
+instead of `double`'s.
+
+`decimal.sift` in this folder is this exact program.
 
 ## Reshaping schemas: select, drop, rename
 
@@ -993,10 +1057,13 @@ workbook it reads.
   literals, `+ - * /`, `< > <= >= == !=`, `&& ||`, function calls
   (`upper`, `lower`, `trim`, `mask`, `hash`, `redact`), and record
   literals with a spread (`{ ...row, ... }`).
-- **Types:** `string`, `int`, `double`, `bool`, and `date` (a calendar
-  date only, no time or timezone, comparable but with no arithmetic and
-  no literal syntax of its own — a value only ever comes from a source
-  column).
+- **Types:** `string`, `int`, `double`, `bool`, `date` (a calendar date
+  only, no time or timezone, comparable but with no arithmetic and no
+  literal syntax of its own — a value only ever comes from a source
+  column), and `decimal` (exact arithmetic, no `float64` rounding error;
+  a bare int/double literal standing against a `decimal` column adapts
+  to `decimal`, but two real columns of different Kind never mix, even
+  numeric ones).
 - **PII:** `@pii` attaches at the source, is tracked through every
   expression, and is only cleared by `mask`/`hash`/`redact` — which are
   string-only, so a non-string `@pii` field (`date`, `int`, ...) can
@@ -1060,5 +1127,5 @@ than one sink (`../design/multisink.md`), named segments with parameters
 (`../design/segments.md`), the `xlsx` source (`../design/xlsx.md`),
 optional fields (`../design/optional-fields.md`), conditional routing
 (`../design/routing.md`), column aliases for headers that aren't valid
-identifiers (`../design/column-aliases.md`), and the `date` type
-(`../design/date.md`).
+identifiers (`../design/column-aliases.md`), the `date` type
+(`../design/date.md`), and the `decimal` type (`../design/decimal.md`).
