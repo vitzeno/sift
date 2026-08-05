@@ -477,6 +477,71 @@ func TestCSVSourceDateBadCellIsRowFailure(t *testing.T) {
 	}
 }
 
+// TestCSVSourceDecimal is DEC-A's csv half: parses exactly, with
+// trailing zeros preserved ("5.00" stays "5.00", not "5" --
+// value.DecimalValue's whole reason for existing).
+func TestCSVSourceDecimal(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "orders.csv")
+	writeFile(t, path, "id,price\n1,19.99\n2,5.00\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "id", Type: value.Type{Kind: value.Int}},
+			{Name: "price", Type: value.Type{Kind: value.Decimal}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row1, ok := src.Next()
+	if !ok || row1.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row1, ok)
+	}
+	if got := row1.Fields["price"].(value.DecimalValue).String(); got != "19.99" {
+		t.Errorf("row1 price = %s, want 19.99", got)
+	}
+
+	row2, ok := src.Next()
+	if !ok || row2.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row2, ok)
+	}
+	if got := row2.Fields["price"].(value.DecimalValue).String(); got != "5.00" {
+		t.Errorf("row2 price = %s, want 5.00 (trailing zeros preserved)", got)
+	}
+}
+
+// TestCSVSourceDecimalBadCellIsRowFailure is DEC-B: a non-numeric cell
+// is a row failure, same shape as a bad int/double cell, not a panic.
+func TestCSVSourceDecimalBadCellIsRowFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "orders.csv")
+	writeFile(t, path, "id,price\n1,not-a-number\n")
+
+	src, err := NewCSVSource(runtime.SourceOptions{
+		Name: "in",
+		Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "id", Type: value.Type{Kind: value.Int}},
+			{Name: "price", Type: value.Type{Kind: value.Decimal}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewCSVSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok {
+		t.Fatal("Next() returned ok=false, want the failed row returned normally")
+	}
+	if row.Fail == nil {
+		t.Fatal("Fail is nil, want a coercion failure for a non-numeric decimal cell")
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

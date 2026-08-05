@@ -411,3 +411,37 @@ func TestXLSXSourceDate(t *testing.T) {
 		t.Errorf("dob = %s, want 2026-01-05 (5 January, day-first)", got.String())
 	}
 }
+
+// TestXLSXSourceDecimal is DEC-A's xlsx half: a decimal-typed field
+// reads correctly from an xlsx fixture with no format-specific code
+// path of its own -- regression-shaped, proving design/decimal.md §3's
+// "no source/sink code changes" claim, since excelize's row iterator
+// already delivers cells as strings the same way csv's reader does.
+// "5.00" is deliberately not "5": trailing zeros must round-trip
+// through xlsx exactly like they do through csv (value.DecimalValue's
+// fix isn't csv-specific).
+func TestXLSXSourceDecimal(t *testing.T) {
+	path := writeXLSXFixture(t, "Sheet1", [][]string{
+		{"id", "price"},
+		{"1", "5.00"},
+	})
+	src, err := NewXLSXSource(runtime.SourceOptions{
+		Name: "in", Path: path,
+		Schema: value.Schema{Fields: []value.Field{
+			{Name: "id", Type: value.Type{Kind: value.Int}},
+			{Name: "price", Type: value.Type{Kind: value.Decimal}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewXLSXSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	got := row.Fields["price"].(value.DecimalValue)
+	if got.String() != "5.00" {
+		t.Errorf("price = %s, want 5.00 (trailing zeros preserved)", got.String())
+	}
+}
