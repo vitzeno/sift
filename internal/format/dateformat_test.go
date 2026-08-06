@@ -9,7 +9,7 @@ import (
 // TestResolveDateFormatEntry is DATE-B: a formats entry for the field
 // drives resolution instead of the default.
 func TestResolveDateFormatEntry(t *testing.T) {
-	got := resolveDateFormat(map[string]string{"dob": "02/01/2006"}, "dob", value.DefaultDateFormat)
+	got := ResolveDateFormat(map[string]string{"dob": "02/01/2006"}, "dob", value.DefaultDateFormat)
 	if got != "02/01/2006" {
 		t.Errorf("resolveDateFormat = %q, want %q", got, "02/01/2006")
 	}
@@ -28,7 +28,7 @@ func TestResolveDateFormatDefault(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := resolveDateFormat(tt.formats, "dob", value.DefaultDateFormat)
+			got := ResolveDateFormat(tt.formats, "dob", value.DefaultDateFormat)
 			if got != value.DefaultDateFormat {
 				t.Errorf("resolveDateFormat = %q, want %q", got, value.DefaultDateFormat)
 			}
@@ -43,11 +43,11 @@ func TestResolveDateFormatPerField(t *testing.T) {
 		"dob":        "02/01/2006",
 		"last_login": "2006-01-02T15:04:05Z",
 	}
-	if got := resolveDateFormat(formats, "dob", value.DefaultDateFormat); got != "02/01/2006" {
-		t.Errorf("resolveDateFormat(dob) = %q, want %q", got, "02/01/2006")
+	if got := ResolveDateFormat(formats, "dob", value.DefaultDateFormat); got != "02/01/2006" {
+		t.Errorf("ResolveDateFormat(dob) = %q, want %q", got, "02/01/2006")
 	}
-	if got := resolveDateFormat(formats, "last_login", value.DefaultDateFormat); got != "2006-01-02T15:04:05Z" {
-		t.Errorf("resolveDateFormat(last_login) = %q, want %q", got, "2006-01-02T15:04:05Z")
+	if got := ResolveDateFormat(formats, "last_login", value.DefaultDateFormat); got != "2006-01-02T15:04:05Z" {
+		t.Errorf("ResolveDateFormat(last_login) = %q, want %q", got, "2006-01-02T15:04:05Z")
 	}
 }
 
@@ -58,21 +58,21 @@ func TestResolveDateFormatPerField(t *testing.T) {
 // proving the two temporal Kinds don't share one hardcoded fallback
 // (design/datetime.md §3).
 func TestResolveDateFormatDefaultIsPerField(t *testing.T) {
-	if got := resolveDateFormat(nil, "dob", defaultDateFormat(value.Date)); got != value.DefaultDateFormat {
-		t.Errorf("resolveDateFormat(date) = %q, want %q", got, value.DefaultDateFormat)
+	if got := ResolveDateFormat(nil, "dob", DefaultFormatForKind(value.Date)); got != value.DefaultDateFormat {
+		t.Errorf("ResolveDateFormat(date) = %q, want %q", got, value.DefaultDateFormat)
 	}
-	if got := resolveDateFormat(nil, "signup_time", defaultDateFormat(value.DateTime)); got != value.DefaultDateTimeFormat {
-		t.Errorf("resolveDateFormat(datetime) = %q, want %q", got, value.DefaultDateTimeFormat)
+	if got := ResolveDateFormat(nil, "signup_time", DefaultFormatForKind(value.DateTime)); got != value.DefaultDateTimeFormat {
+		t.Errorf("ResolveDateFormat(datetime) = %q, want %q", got, value.DefaultDateTimeFormat)
 	}
 }
 
-// TestDefaultDateFormat confirms defaultDateFormat picks the right
+// TestDefaultDateFormat confirms DefaultFormatForKind picks the right
 // zero-config layout per Kind.
 func TestDefaultDateFormat(t *testing.T) {
-	if got := defaultDateFormat(value.Date); got != value.DefaultDateFormat {
-		t.Errorf("defaultDateFormat(Date) = %q, want %q", got, value.DefaultDateFormat)
+	if got := DefaultFormatForKind(value.Date); got != value.DefaultDateFormat {
+		t.Errorf("DefaultFormatForKind(Date) = %q, want %q", got, value.DefaultDateFormat)
 	}
-	if got := defaultDateFormat(value.DateTime); got != value.DefaultDateTimeFormat {
-		t.Errorf("defaultDateFormat(DateTime) = %q, want %q", got, value.DefaultDateTimeFormat)
+	if got := DefaultFormatForKind(value.DateTime); got != value.DefaultDateTimeFormat {
+		t.Errorf("DefaultFormatForKind(DateTime) = %q, want %q", got, value.DefaultDateTimeFormat)
 	}
 }

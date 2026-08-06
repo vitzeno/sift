@@ -63,7 +63,7 @@ func NewCSVSource(opts runtime.SourceOptions) (runtime.Source, error) {
 		return nil, fmt.Errorf("csv source %q: reading header: %w", opts.Name, err)
 	}
 
-	col, missing, ok := resolveColumns(opts.Schema, header, opts.Columns)
+	col, missing, ok := ResolveColumns(opts.Schema, header, opts.Columns)
 	if !ok {
 		f.Close()
 		return nil, fmt.Errorf("csv source %q: required column %q not found in header %s", opts.Name, missing, strings.Join(header, ", "))
@@ -120,7 +120,7 @@ func (s *csvSource) Next() (value.Row, bool) {
 		if idx, ok := s.col[field.Name]; ok {
 			raw = record[idx]
 		}
-		v, fail := value.Coerce(field.Type, raw, resolveDateFormat(s.dateFormats, field.Name, defaultDateFormat(field.Type.Kind)))
+		v, fail := value.Coerce(field.Type, raw, ResolveDateFormat(s.dateFormats, field.Name, DefaultFormatForKind(field.Type.Kind)))
 		if fail != nil {
 			// One failure per row (design-errors.md §9): the first bad
 			// cell marks the row and short-circuits. The rest of the

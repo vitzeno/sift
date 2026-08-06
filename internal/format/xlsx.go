@@ -125,7 +125,7 @@ func NewXLSXSource(opts runtime.SourceOptions) (runtime.Source, error) {
 		seenHeader[h] = true
 	}
 
-	col, missing, ok := resolveColumns(opts.Schema, header, opts.Columns)
+	col, missing, ok := ResolveColumns(opts.Schema, header, opts.Columns)
 	if !ok {
 		f.Close()
 		return nil, fmt.Errorf("source %q: required column %q not found in header row %d of sheet %q\n       header columns: %s",
@@ -194,7 +194,7 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 				idx = -1
 			}
 			raw := cellAt(cells, idx)
-			v, fail := value.Coerce(field.Type, raw, resolveDateFormat(s.dateFormats, field.Name, defaultDateFormat(field.Type.Kind)))
+			v, fail := value.Coerce(field.Type, raw, ResolveDateFormat(s.dateFormats, field.Name, DefaultFormatForKind(field.Type.Kind)))
 			if fail != nil {
 				fail.Stage = fmt.Sprintf("xlsx:%s", field.Name)
 				return value.Row{Fail: fail, Prov: prov}, true

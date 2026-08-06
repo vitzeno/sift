@@ -19,7 +19,7 @@ func TestResolveColumnsAlias(t *testing.T) {
 	headers := []string{"Transaction ID", "Date"}
 	aliases := map[string]string{"txn_id": "Transaction ID", "txn_date": "Date"}
 
-	got, missing, ok := resolveColumns(txnSchema(false), headers, aliases)
+	got, missing, ok := ResolveColumns(txnSchema(false), headers, aliases)
 	if !ok {
 		t.Fatalf("ok = false, missing %q, want ok", missing)
 	}
@@ -34,7 +34,7 @@ func TestResolveColumnsAlias(t *testing.T) {
 func TestResolveColumnsBareIdentifierFallback(t *testing.T) {
 	headers := []string{"txn_id", "txn_date"}
 
-	got, missing, ok := resolveColumns(txnSchema(false), headers, nil)
+	got, missing, ok := ResolveColumns(txnSchema(false), headers, nil)
 	if !ok {
 		t.Fatalf("ok = false, missing %q, want ok", missing)
 	}
@@ -50,7 +50,7 @@ func TestResolveColumnsCaseSensitive(t *testing.T) {
 	headers := []string{"Transaction ID", "TXN_DATE"}
 	aliases := map[string]string{"txn_id": "Transaction ID"}
 
-	_, missing, ok := resolveColumns(txnSchema(false), headers, aliases)
+	_, missing, ok := ResolveColumns(txnSchema(false), headers, aliases)
 	if ok {
 		t.Fatal("ok = true, want txn_date to fail: TXN_DATE != txn_date by exact match")
 	}
@@ -64,7 +64,7 @@ func TestResolveColumnsCaseSensitive(t *testing.T) {
 func TestResolveColumnsRequiredMissingFails(t *testing.T) {
 	headers := []string{"Date"}
 
-	_, missing, ok := resolveColumns(txnSchema(false), headers, nil)
+	_, missing, ok := ResolveColumns(txnSchema(false), headers, nil)
 	if ok {
 		t.Fatal("ok = true, want txn_id to fail: no alias, no matching header")
 	}
@@ -81,7 +81,7 @@ func TestResolveColumnsOptionalMissingSucceeds(t *testing.T) {
 	headers := []string{"Transaction ID"}
 	aliases := map[string]string{"txn_id": "Transaction ID", "txn_date": "Date"}
 
-	got, missing, ok := resolveColumns(txnSchema(true), headers, aliases)
+	got, missing, ok := ResolveColumns(txnSchema(true), headers, aliases)
 	if !ok {
 		t.Fatalf("ok = false, missing %q, want ok (txn_date is Optional)", missing)
 	}
@@ -100,7 +100,7 @@ func TestResolveColumnsBlankHeaderNeverMatches(t *testing.T) {
 	headers := []string{"Transaction ID", ""}
 	aliases := map[string]string{"txn_id": "Transaction ID", "txn_date": ""}
 
-	_, missing, ok := resolveColumns(txnSchema(false), headers, aliases)
+	_, missing, ok := ResolveColumns(txnSchema(false), headers, aliases)
 	if ok {
 		t.Fatal("ok = true, want txn_date to fail: a blank header cell must never match")
 	}
@@ -121,7 +121,7 @@ func TestResolveColumnsUnclaimedAliasEntryIgnored(t *testing.T) {
 		"nonexistent": "Some Other Column",
 	}
 
-	got, missing, ok := resolveColumns(txnSchema(false), headers, aliases)
+	got, missing, ok := ResolveColumns(txnSchema(false), headers, aliases)
 	if !ok {
 		t.Fatalf("ok = false, missing %q, want ok", missing)
 	}
