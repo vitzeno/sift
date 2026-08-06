@@ -1,4 +1,4 @@
-package format_test
+package jsonl_test
 
 import (
 	"os"
@@ -11,15 +11,16 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
-// TestAdultsFilterEndToEnd predates the parser (it wires
-// csv.Source |> Filter |> jsonl.Sink by hand, design.md §7 Case A), but
-// stays load-bearing rather than becoming a stale v0 artifact: it's the
-// only non-CLI test that drives the real csv and jsonl formats together
-// through the driver loop, and jsonl has no dedicated test file of its
-// own -- this is jsonlSink.Write/Close's only unit-level coverage.
-// cmd/sift's TestExampleFilter proves the same scenario through the real
-// CLI; the two are different failure-isolation layers, not duplicates
-// (CLAUDE.md's own unit-plus-CLI-acceptance convention).
+// TestAdultsFilterEndToEnd is jsonlSink.Write/Close's only unit-level
+// coverage -- jsonl has no other test file, so this drives it with real
+// rows from a real csv.Source through the driver loop and Filter, rather
+// than a synthetic Row built by hand (design.md §7 Case A, which this
+// predates the parser for). cmd/sift's TestExampleFilter proves the same
+// scenario through the real CLI; the two are different failure-isolation
+// layers, not duplicates (CLAUDE.md's own unit-plus-CLI-acceptance
+// convention). package jsonl_test, not jsonl, since nothing here needs
+// jsonl's unexported internals -- only NewCSVSource and NewJSONLSink,
+// both already exported.
 func TestAdultsFilterEndToEnd(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "name", Type: value.Type{Kind: value.String}},
@@ -28,7 +29,7 @@ func TestAdultsFilterEndToEnd(t *testing.T) {
 
 	src, err := csv.NewCSVSource(runtime.SourceOptions{
 		Name:   "in",
-		Path:   "../../testdata/people.csv",
+		Path:   "../../../testdata/people.csv",
 		Schema: schema,
 	})
 	if err != nil {
