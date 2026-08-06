@@ -11,10 +11,15 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
-// TestAdultsFilterEndToEnd is design.md §7 Case A, wired by hand (no
-// lexer/parser yet): csv.Source |> Filter |> jsonl.Sink, driven by the
-// one driver loop. It asserts on the exact output bytes, matching
-// CLAUDE.md's "Definition of done" for v0.
+// TestAdultsFilterEndToEnd predates the parser (it wires
+// csv.Source |> Filter |> jsonl.Sink by hand, design.md §7 Case A), but
+// stays load-bearing rather than becoming a stale v0 artifact: it's the
+// only non-CLI test that drives the real csv and jsonl formats together
+// through the driver loop, and jsonl has no dedicated test file of its
+// own -- this is jsonlSink.Write/Close's only unit-level coverage.
+// cmd/sift's TestExampleFilter proves the same scenario through the real
+// CLI; the two are different failure-isolation layers, not duplicates
+// (CLAUDE.md's own unit-plus-CLI-acceptance convention).
 func TestAdultsFilterEndToEnd(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "name", Type: value.Type{Kind: value.String}},
