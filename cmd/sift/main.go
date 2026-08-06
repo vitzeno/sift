@@ -7,7 +7,9 @@ import (
 	"os"
 
 	"github.com/vitzeno/sift/internal/checker"
-	_ "github.com/vitzeno/sift/internal/format" // registers "csv"/"jsonl" via init()
+	_ "github.com/vitzeno/sift/internal/format/csv"   // registers "csv" via init()
+	_ "github.com/vitzeno/sift/internal/format/jsonl" // registers "jsonl" via init()
+	_ "github.com/vitzeno/sift/internal/format/xlsx"  // registers "xlsx" via init()
 	"github.com/vitzeno/sift/internal/parser"
 )
 

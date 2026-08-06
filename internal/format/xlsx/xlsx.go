@@ -1,4 +1,9 @@
-package format
+// Package xlsx registers a Source that reads one worksheet of an .xlsx
+// workbook against a declared schema (design/xlsx.md §1). Per CLAUDE.md's
+// format-registry convention, this is the only place that knows the
+// string "xlsx"; the registry itself, and everything above it, is
+// format-agnostic.
+package xlsx
 
 import (
 	"fmt"
@@ -6,6 +11,7 @@ import (
 
 	"github.com/xuri/excelize/v2"
 
+	"github.com/vitzeno/sift/internal/format"
 	"github.com/vitzeno/sift/internal/runtime"
 	"github.com/vitzeno/sift/internal/value"
 )
@@ -125,7 +131,7 @@ func NewXLSXSource(opts runtime.SourceOptions) (runtime.Source, error) {
 		seenHeader[h] = true
 	}
 
-	col, missing, ok := ResolveColumns(opts.Schema, header, opts.Columns)
+	col, missing, ok := format.ResolveColumns(opts.Schema, header, opts.Columns)
 	if !ok {
 		f.Close()
 		return nil, fmt.Errorf("source %q: required column %q not found in header row %d of sheet %q\n       header columns: %s",
@@ -194,7 +200,7 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 				idx = -1
 			}
 			raw := cellAt(cells, idx)
-			v, fail := value.Coerce(field.Type, raw, ResolveDateFormat(s.dateFormats, field.Name, DefaultFormatForKind(field.Type.Kind)))
+			v, fail := value.Coerce(field.Type, raw, format.ResolveDateFormat(s.dateFormats, field.Name, format.DefaultFormatForKind(field.Type.Kind)))
 			if fail != nil {
 				fail.Stage = fmt.Sprintf("xlsx:%s", field.Name)
 				return value.Row{Fail: fail, Prov: prov}, true

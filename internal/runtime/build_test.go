@@ -1,8 +1,8 @@
-// This file is package runtime_test, not runtime: internal/format
-// imports internal/runtime to register with it, so a build_test.go
-// inside package runtime importing internal/format for its init() side
-// effect would be a real import cycle. An external test package is a
-// separate compilation unit that can import both sides.
+// This file is package runtime_test, not runtime: internal/format's
+// subpackages import internal/runtime to register with it, so a
+// build_test.go inside package runtime importing one of them for its
+// init() side effect would be a real import cycle. An external test
+// package is a separate compilation unit that can import both sides.
 package runtime_test
 
 import (
@@ -13,7 +13,9 @@ import (
 
 	"github.com/vitzeno/sift/internal/checker"
 	"github.com/vitzeno/sift/internal/eval"
-	_ "github.com/vitzeno/sift/internal/format" // registers "csv"/"jsonl" via init()
+	_ "github.com/vitzeno/sift/internal/format/csv"   // registers "csv" via init()
+	_ "github.com/vitzeno/sift/internal/format/jsonl" // registers "jsonl" via init()
+	_ "github.com/vitzeno/sift/internal/format/xlsx"  // registers "xlsx" via init()
 	"github.com/vitzeno/sift/internal/parser"
 	"github.com/vitzeno/sift/internal/runtime"
 )

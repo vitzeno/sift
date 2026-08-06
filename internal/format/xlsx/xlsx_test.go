@@ -1,4 +1,4 @@
-package format
+package xlsx
 
 import (
 	"path/filepath"
@@ -10,6 +10,26 @@ import (
 	"github.com/vitzeno/sift/internal/runtime"
 	"github.com/vitzeno/sift/internal/value"
 )
+
+// peopleSchema is name/age, the fixture schema most xlsx source tests
+// share -- a copy of the csv package's own test helper of the same name,
+// since the two packages no longer share test-only code once split.
+func peopleSchema() value.Schema {
+	return value.Schema{Fields: []value.Field{
+		{Name: "name", Type: value.Type{Kind: value.String}},
+		{Name: "age", Type: value.Type{Kind: value.Int}},
+	}}
+}
+
+// optionalPhoneSchema is name/phone where phone is Optional: the
+// fixture schema for design/optional-fields.md's OF-A/OF-C/OF-D cases,
+// mirroring the csv package's own copy.
+func optionalPhoneSchema() value.Schema {
+	return value.Schema{Fields: []value.Field{
+		{Name: "name", Type: value.Type{Kind: value.String}},
+		{Name: "phone", Type: value.Type{Kind: value.String, Optional: true}},
+	}}
+}
 
 // writeXLSXFixture builds a single-sheet workbook from rows (each a
 // row of raw cell strings, in order) and saves it under t.TempDir().

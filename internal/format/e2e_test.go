@@ -1,22 +1,27 @@
-package format
+package format_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/vitzeno/sift/internal/format/csv"
+	"github.com/vitzeno/sift/internal/format/jsonl"
 	"github.com/vitzeno/sift/internal/runtime"
 	"github.com/vitzeno/sift/internal/value"
 )
 
 // TestAdultsFilterEndToEnd is design.md §7 Case A, wired by hand (no
-// lexer/parser yet): csvSource |> Filter |> jsonlSink, driven by the one
-// driver loop. It asserts on the exact output bytes, matching
+// lexer/parser yet): csv.Source |> Filter |> jsonl.Sink, driven by the
+// one driver loop. It asserts on the exact output bytes, matching
 // CLAUDE.md's "Definition of done" for v0.
 func TestAdultsFilterEndToEnd(t *testing.T) {
-	schema := peopleSchema()
+	schema := value.Schema{Fields: []value.Field{
+		{Name: "name", Type: value.Type{Kind: value.String}},
+		{Name: "age", Type: value.Type{Kind: value.Int}},
+	}}
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := csv.NewCSVSource(runtime.SourceOptions{
 		Name:   "in",
 		Path:   "../../testdata/people.csv",
 		Schema: schema,
@@ -26,7 +31,7 @@ func TestAdultsFilterEndToEnd(t *testing.T) {
 	}
 
 	outPath := filepath.Join(t.TempDir(), "adults.jsonl")
-	sink, err := NewJSONLSink(runtime.SinkOptions{
+	sink, err := jsonl.NewJSONLSink(runtime.SinkOptions{
 		Path:   outPath,
 		Schema: schema,
 	})

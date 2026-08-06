@@ -1,8 +1,8 @@
-// Package format holds concrete Source/Sink implementations and registers
-// them with the runtime registry. Per design.md §4, this is the *only*
-// place that knows the string "csv" or "jsonl". The registry itself, and
-// everything above it, is format-agnostic.
-package format
+// Package csv registers a Source that reads CSV files against a declared
+// schema (design.md §4). Per CLAUDE.md's format-registry convention,
+// this is the only place that knows the string "csv"; the registry
+// itself, and everything above it, is format-agnostic.
+package csv
 
 import (
 	"encoding/csv"
@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/vitzeno/sift/internal/format"
 	"github.com/vitzeno/sift/internal/runtime"
 	"github.com/vitzeno/sift/internal/value"
 )
@@ -63,7 +64,7 @@ func NewCSVSource(opts runtime.SourceOptions) (runtime.Source, error) {
 		return nil, fmt.Errorf("csv source %q: reading header: %w", opts.Name, err)
 	}
 
-	col, missing, ok := ResolveColumns(opts.Schema, header, opts.Columns)
+	col, missing, ok := format.ResolveColumns(opts.Schema, header, opts.Columns)
 	if !ok {
 		f.Close()
 		return nil, fmt.Errorf("csv source %q: required column %q not found in header %s", opts.Name, missing, strings.Join(header, ", "))
@@ -120,7 +121,7 @@ func (s *csvSource) Next() (value.Row, bool) {
 		if idx, ok := s.col[field.Name]; ok {
 			raw = record[idx]
 		}
-		v, fail := value.Coerce(field.Type, raw, ResolveDateFormat(s.dateFormats, field.Name, DefaultFormatForKind(field.Type.Kind)))
+		v, fail := value.Coerce(field.Type, raw, format.ResolveDateFormat(s.dateFormats, field.Name, format.DefaultFormatForKind(field.Type.Kind)))
 		if fail != nil {
 			// One failure per row (design-errors.md §9): the first bad
 			// cell marks the row and short-circuits. The rest of the

@@ -1,4 +1,6 @@
-package format
+// Package jsonl registers a Sink that writes one JSON object per line,
+// each row's fields in the sink's declared schema order.
+package jsonl
 
 import (
 	"bufio"
