@@ -72,6 +72,14 @@ type ErrorPolicyDecl struct {
 // its cells against, instead of the ISO-8601 default. Like Columns, the
 // checker never interprets it; only the registered Source constructor
 // does, at construction time.
+//
+// Key carries the optional `key: env("NAME")` kwarg (design/deidentify.md
+// §2), nil for a source with no key kwarg. Its own EnvRef.Var isn't
+// resolved against the environment until the registered Source
+// constructor runs (design/deidentify.md §6): the checker only checks
+// that key is present when the schema has a @deidentify field, never the
+// environment itself, so --emit-ast/--emit-schema work on a machine that
+// doesn't hold the key at all.
 type SourceDecl struct {
 	Name    string
 	Format  string
@@ -79,8 +87,18 @@ type SourceDecl struct {
 	Schema  SchemaLit
 	Columns []ColumnAlias
 	Formats []FieldFormat
+	Key     *EnvRef
 	Opts    []SourceOpt
 	Pos     lexer.Pos
+}
+
+// EnvRef is `env("NAME")`, the only form the key: kwarg accepts in v0
+// (design/deidentify.md §2). It is not a general expression -- there is
+// no other function call syntax anywhere in a source declaration -- so
+// it gets its own narrow AST node instead of reusing Call.
+type EnvRef struct {
+	Var string
+	Pos lexer.Pos
 }
 
 // SourceOpt is one keyword argument in a source declaration beyond
@@ -170,19 +188,23 @@ type Param struct {
 	Pos      lexer.Pos
 }
 
-// SchemaField is one `name: TypeName ["?"] [@pii]` pair in a schema
-// literal. TypeName is left as the raw identifier text (e.g. "string",
-// "int"); resolving it to a value.Kind happens in the checker, not the
-// parser, per design.md §4's compilation pipeline (lexer -> parser -> AST
-// -> checker -> ...). Optional marks a `?` suffix (design/optional-fields.md
-// §2): the field may be absent, independent of the PII tag
-// (design/optional-fields.md §4).
+// SchemaField is one `name: TypeName ["?"] [@pii] [@deidentify]` pair in
+// a schema literal. TypeName is left as the raw identifier text (e.g.
+// "string", "int"); resolving it to a value.Kind happens in the checker,
+// not the parser, per design.md §4's compilation pipeline (lexer ->
+// parser -> AST -> checker -> ...). Optional marks a `?` suffix
+// (design/optional-fields.md §2): the field may be absent, independent
+// of the PII tag (design/optional-fields.md §4). Deidentify marks
+// @deidentify (design/deidentify.md §2); the checker rejects @pii and
+// @deidentify together, since the parser doesn't resolve either tag's
+// meaning.
 type SchemaField struct {
-	Name     string
-	TypeName string
-	Optional bool
-	PII      bool
-	Pos      lexer.Pos
+	Name       string
+	TypeName   string
+	Optional   bool
+	PII        bool
+	Deidentify bool
+	Pos        lexer.Pos
 }
 
 // SchemaLit is the `{ name: string, age: int }` type literal that

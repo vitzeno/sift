@@ -94,6 +94,8 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 	haveColumns := false
 	var formats []ast.FieldFormat
 	haveFormats := false
+	var key *ast.EnvRef
+	haveKey := false
 	var opts []ast.SourceOpt
 	for p.cur.Kind == lexer.COMMA {
 		p.next()
@@ -122,6 +124,13 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 			formats = p.parseFormatsLit()
 			haveFormats = true
 			continue
+		case "key":
+			if haveKey {
+				p.fail(kwPos, "duplicate %q keyword argument", "key")
+			}
+			key = p.parseEnvRef()
+			haveKey = true
+			continue
 		}
 		opts = append(opts, ast.SourceOpt{Name: kw, Value: p.parseSourceOptValue(), Pos: kwPos})
 	}
@@ -129,7 +138,22 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 	if !haveSchema {
 		p.fail(pos, "source %q: missing required %q keyword argument", name, "schema")
 	}
-	return &ast.SourceDecl{Name: name, Format: format, Path: path, Schema: schema, Columns: columns, Formats: formats, Opts: opts, Pos: pos}
+	return &ast.SourceDecl{Name: name, Format: format, Path: path, Schema: schema, Columns: columns, Formats: formats, Key: key, Opts: opts, Pos: pos}
+}
+
+// parseEnvRef := "env" "(" STRING ")"
+//
+// The only value the key: kwarg accepts in v0 (design/deidentify.md §2).
+func (p *Parser) parseEnvRef() *ast.EnvRef {
+	pos := p.cur.Pos
+	fn := p.expectIdent()
+	if fn != "env" {
+		p.fail(pos, "key: only accepts env(\"NAME\"), got %q", fn)
+	}
+	p.expect(lexer.LPAREN)
+	varName := p.expectString()
+	p.expect(lexer.RPAREN)
+	return &ast.EnvRef{Var: varName, Pos: pos}
 }
 
 // parseColumnsLit := "{" (ColumnAlias ("," ColumnAlias)*)? "}"
@@ -239,12 +263,13 @@ func (p *Parser) parseSchemaLit() ast.SchemaLit {
 	return ast.SchemaLit{Fields: fields, Pos: pos}
 }
 
-// parseSchemaField := IDENT ":" IDENT "?"? ("@" IDENT)?
+// parseSchemaField := IDENT ":" IDENT "?"? ("@" IDENT)*
 //
-// decision: @pii is the only tag v0 recognizes. Rather than build a
-// general attribute grammar for one case, the parser accepts `@`
-// followed by any identifier and rejects anything but "pii". Simpler,
-// and the error message is just as useful either way.
+// decision: @pii and @deidentify are the only two tags v0 recognizes.
+// Rather than build a general attribute grammar for two cases, the
+// parser accepts any number of `@` IDENT tags and rejects anything but
+// those two; whether a field can carry both is a semantic question
+// (design/deidentify.md §5) the checker answers, not the parser.
 func (p *Parser) parseSchemaField() ast.SchemaField {
 	pos := p.cur.Pos
 	name := p.expectIdent()
@@ -256,16 +281,21 @@ func (p *Parser) parseSchemaField() ast.SchemaField {
 		optional = true
 	}
 	pii := false
-	if p.cur.Kind == lexer.AT {
+	deidentify := false
+	for p.cur.Kind == lexer.AT {
 		p.next()
 		tagPos := p.cur.Pos
 		tag := p.expectIdent()
-		if tag != "pii" {
-			p.fail(tagPos, "unknown type tag %q (only @pii is supported)", tag)
+		switch tag {
+		case "pii":
+			pii = true
+		case "deidentify":
+			deidentify = true
+		default:
+			p.fail(tagPos, "unknown type tag %q (expected pii or deidentify)", tag)
 		}
-		pii = true
 	}
-	return ast.SchemaField{Name: name, TypeName: typeName, Optional: optional, PII: pii, Pos: pos}
+	return ast.SchemaField{Name: name, TypeName: typeName, Optional: optional, PII: pii, Deidentify: deidentify, Pos: pos}
 }
 
 // parsePipelineDecl := "pipeline" IDENT ( "(" ParamList ")" )?
