@@ -329,6 +329,43 @@ pipeline main {
 	}
 }
 
+// TestParseDeidentifySchemaFieldAndKeyKwarg covers design/deidentify.md
+// §2's grammar: a @deidentify schema field tag and a source's key:
+// env("NAME") kwarg. Also parses @pii and @deidentify stacked on one
+// field -- the parser accepts any combination of the two recognized
+// tags (this decl.go's own decision comment); rejecting that
+// combination is the checker's job, exercised separately in
+// internal/checker.
+func TestParseDeidentifySchemaFieldAndKeyKwarg(t *testing.T) {
+	const src = `source in = csv("people.csv", schema: { name: string, email: string @deidentify, both: string @pii @deidentify }, key: env("SIFT_DEIDENTIFY_KEY"))`
+
+	prog, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	fields := prog.Sources[0].Schema.Fields
+	nameField, emailField, bothField := fields[0], fields[1], fields[2]
+
+	if nameField.Deidentify {
+		t.Errorf("name.Deidentify = true, want false")
+	}
+	if !emailField.Deidentify || emailField.PII {
+		t.Errorf("email = %+v, want Deidentify: true, PII: false", emailField)
+	}
+	if !bothField.Deidentify || !bothField.PII {
+		t.Errorf("both = %+v, want Deidentify: true, PII: true", bothField)
+	}
+
+	key := prog.Sources[0].Key
+	if key == nil {
+		t.Fatal("Key is nil, want an *ast.EnvRef")
+	}
+	if key.Var != "SIFT_DEIDENTIFY_KEY" {
+		t.Errorf("Key.Var = %q, want %q", key.Var, "SIFT_DEIDENTIFY_KEY")
+	}
+}
+
 // TestParseOptionalSchemaField covers design/optional-fields.md's `T?`
 // schema syntax, alone and combined with @pii (§4: the two tags coexist,
 // and `?` always comes first after the type name).
@@ -455,6 +492,8 @@ func TestParseErrors(t *testing.T) {
 		{"garbage at top level", `42`, "expected a source, sink, pipeline, or error-policy declaration"},
 		{"missing comma before schema", `source in = csv("x.csv" schema: {})`, "expected RPAREN"},
 		{"unknown tag", `source in = csv("x.csv", schema: { name: string @xyz })`, `expected pii or deidentify`},
+		{"key kwarg not env(...)", `source in = csv("x.csv", schema: { name: string }, key: literal("x"))`, `key: only accepts env`},
+		{"duplicate key kwarg", `source in = csv("x.csv", schema: { name: string }, key: env("A"), key: env("B"))`, `duplicate "key" keyword argument`},
 		{"unterminated string", `source in = csv("x.csv`, "unterminated string literal"},
 		{"bad pipeline separator", `pipeline main : in`, "expected '(', '{', or '='"},
 		{"comma before any pipe", `pipeline main { in, out }`, "expected RBRACE, got COMMA"},
