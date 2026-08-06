@@ -65,8 +65,8 @@ var (
 )
 
 // RegisterSource makes a format available under name. Formats call this
-// from an init() in internal/format; the registry itself has no built-in
-// knowledge of "csv" or "jsonl".
+// from an init() in their own internal/format subpackage; the registry
+// itself has no built-in knowledge of "csv" or "jsonl".
 func RegisterSource(name string, ctor SourceCtor) {
 	sourceRegistry[name] = ctor
 }

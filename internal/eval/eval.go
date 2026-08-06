@@ -8,8 +8,8 @@
 // invariant violation, not a user-facing data error, and CLAUDE.md
 // reserves panic for exactly that case. A genuine per-row data problem
 // (a malformed CSV cell) is already caught earlier, in the source
-// (internal/format/csvSource), so by the time a row reaches eval its
-// shape is guaranteed.
+// (internal/format/csv's csvSource), so by the time a row reaches eval
+// its shape is guaranteed.
 package eval
 
 import (
@@ -25,9 +25,10 @@ import (
 )
 
 // Eval computes expr's value against row. The Go type returned for each
-// value.Kind matches what internal/format's csvSource already produces
-// for that kind (int for Int, float64 for Double, string for String,
-// bool for Bool): one consistent runtime representation used everywhere
+// value.Kind matches what internal/format/csv's csvSource already
+// produces for that kind (int for Int, float64 for Double, string for
+// String, bool for Bool): one consistent runtime representation used
+// everywhere
 // a Row.Fields value is read or written.
 func Eval(expr ast.Expr, row value.Row) any {
 	switch e := expr.(type) {

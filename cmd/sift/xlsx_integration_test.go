@@ -2,7 +2,7 @@
 // XLSX-G), driving the xlsx source through runFile like every other
 // phase's integration tests. Fixture workbooks are generated with
 // excelize at test time, not checked in as binaries, matching
-// internal/format/xlsx_test.go's convention: a fixture's shape is
+// internal/format/xlsx/xlsx_test.go's convention: a fixture's shape is
 // readable straight from the Go code that builds it.
 package main
 
