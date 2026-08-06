@@ -525,3 +525,61 @@ func TestXLSXSourceDecimalThousandsSeparator(t *testing.T) {
 		t.Errorf("price = %s, want 2100.00", got.String())
 	}
 }
+
+// deidentifySchema is name/email where email is @deidentify, shared by
+// this package's design/deidentify.md tests.
+func deidentifySchema() value.Schema {
+	return value.Schema{Fields: []value.Field{
+		{Name: "name", Type: value.Type{Kind: value.String}},
+		{Name: "email", Type: value.Type{Kind: value.Deidentified, Inner: &value.Type{Kind: value.String}}},
+	}}
+}
+
+// TestXLSXSourceDeidentify confirms xlsx gets @deidentify for free from
+// Coerce's own shared parse path (design/deidentify.md §10), the same
+// way it already gets date/decimal/datetime with no format-specific
+// code: encrypted output is opaque base64, never the plaintext cell.
+func TestXLSXSourceDeidentify(t *testing.T) {
+	t.Setenv("SIFT_TEST_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	path := writeXLSXFixture(t, "Sheet1", [][]string{
+		{"name", "email"},
+		{"Ada", "ada@example.com"},
+	})
+	src, err := NewXLSXSource(runtime.SourceOptions{
+		Name: "in", Path: path,
+		Schema:              deidentifySchema(),
+		DeidentifyKeyEnvVar: "SIFT_TEST_KEY",
+	})
+	if err != nil {
+		t.Fatalf("NewXLSXSource: %v", err)
+	}
+
+	row, ok := src.Next()
+	if !ok || row.Fail != nil {
+		t.Fatalf("row = %+v, ok=%v, want a healthy row", row, ok)
+	}
+	got := row.Fields["email"].(string)
+	if got == "ada@example.com" {
+		t.Error("email field is the plaintext cell, want ciphertext")
+	}
+}
+
+// TestXLSXSourceDeidentifyMissingKeyIsConstructionError mirrors csv's
+// own "before any row is read" rule: a schema with a @deidentify field
+// but no key kwarg fails NewXLSXSource itself.
+func TestXLSXSourceDeidentifyMissingKeyIsConstructionError(t *testing.T) {
+	path := writeXLSXFixture(t, "Sheet1", [][]string{
+		{"name", "email"},
+		{"Ada", "ada@example.com"},
+	})
+	_, err := NewXLSXSource(runtime.SourceOptions{
+		Name: "in", Path: path,
+		Schema: deidentifySchema(),
+	})
+	if err == nil {
+		t.Fatal("NewXLSXSource succeeded, want a construction error")
+	}
+	if !strings.Contains(err.Error(), `schema declares @deidentify field "email" but no key: kwarg was given`) {
+		t.Errorf("error = %v", err)
+	}
+}
