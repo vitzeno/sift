@@ -15,25 +15,26 @@ is put together, see [`../CLAUDE.md`](../CLAUDE.md).
 3. [Changing rows with map](#changing-rows-with-map)
 4. [Keeping or failing rows: filter and check](#keeping-or-failing-rows-filter-and-check)
 5. [The PII tag](#the-pii-tag)
-6. [Fields that may be missing](#fields-that-may-be-missing)
-7. [Naming a column that isn't a valid identifier](#naming-a-column-that-isnt-a-valid-identifier)
-8. [Working with dates](#working-with-dates)
-9. [Working with datetime](#working-with-datetime)
-10. [Exact math with decimal](#exact-math-with-decimal)
-11. [Reshaping schemas: select, drop, rename](#reshaping-schemas-select-drop-rename)
-12. [Cutting rows: limit and offset](#cutting-rows-limit-and-offset)
-13. [Masking as a stage](#masking-as-a-stage)
-14. [Putting it together](#putting-it-together)
-15. [When a row fails: error policies](#when-a-row-fails-error-policies)
-16. [Writing to more than one sink](#writing-to-more-than-one-sink)
-17. [Routing rows by condition](#routing-rows-by-condition)
-18. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
-19. [Segments with parameters](#segments-with-parameters)
-20. [A full ETL, with error routing](#a-full-etl-with-error-routing)
-21. [Reading xlsx files](#reading-xlsx-files)
-22. [Quick reference](#quick-reference)
-23. [Project layout](#project-layout)
-24. [Status](#status)
+6. [Encrypting a column: @deidentify](#encrypting-a-column-deidentify)
+7. [Fields that may be missing](#fields-that-may-be-missing)
+8. [Naming a column that isn't a valid identifier](#naming-a-column-that-isnt-a-valid-identifier)
+9. [Working with dates](#working-with-dates)
+10. [Working with datetime](#working-with-datetime)
+11. [Exact math with decimal](#exact-math-with-decimal)
+12. [Reshaping schemas: select, drop, rename](#reshaping-schemas-select-drop-rename)
+13. [Cutting rows: limit and offset](#cutting-rows-limit-and-offset)
+14. [Masking as a stage](#masking-as-a-stage)
+15. [Putting it together](#putting-it-together)
+16. [When a row fails: error policies](#when-a-row-fails-error-policies)
+17. [Writing to more than one sink](#writing-to-more-than-one-sink)
+18. [Routing rows by condition](#routing-rows-by-condition)
+19. [Reusable pipelines: named segments](#reusable-pipelines-named-segments)
+20. [Segments with parameters](#segments-with-parameters)
+21. [A full ETL, with error routing](#a-full-etl-with-error-routing)
+22. [Reading xlsx files](#reading-xlsx-files)
+23. [Quick reference](#quick-reference)
+24. [Project layout](#project-layout)
+25. [Status](#status)
 
 ## Building the CLI
 
@@ -242,6 +243,60 @@ the tag over** to its result. `upper(.email)` is still `@pii`. There's
 no way to accidentally launder personal data by transforming it: only
 `mask`/`hash`/`redact` clear the tag, because the checker only trusts
 those three. `pii.sift` in this folder shows the same rule.
+
+## Encrypting a column: @deidentify
+
+`@pii` still lets the pipeline compute with the plaintext — it just has
+to clear the tag before a sink. Sometimes that's too much trust: the
+pipeline shouldn't hold the plaintext at all. Tag a field `@deidentify`
+instead and the cell is encrypted **inside the source**, before any
+stage runs. Nothing downstream ever sees the original value — there is
+no `reveal()`, and no way back inside Sift:
+
+```sift
+source in = csv("deidentify.csv",
+  schema: { id: int, name: string, email: string @deidentify },
+  key:    env("SIFT_DEIDENTIFY_KEY")
+)
+sink out = jsonl("deidentify_out.jsonl")
+
+pipeline main {
+  in |> out
+}
+```
+
+```console
+$ export SIFT_DEIDENTIFY_KEY=$(openssl rand -hex 32)
+$ ./sift run deidentify.sift
+$ cat deidentify_out.jsonl
+{"id":1,"name":"Ada","email":"GwUgAJ8Y5BKn0QXss9DTygtoslouybv9izPequg1A5+Vkg3+sQJivcGOK/g="}
+{"id":2,"name":"Tom","email":"JTpyO28Gxqa/vyZWbecqeH0G2XgEkXwfEZ6/E3yzf2npsPcPIikcwjWyijg="}
+```
+
+`email`'s ciphertext will look different every time you run this: the
+encryption (AES-256-GCM) uses a fresh random nonce per cell, so the same
+input never produces the same output twice, even for two identical
+emails in the same file. That's deliberate — a stable ciphertext would
+leak which rows share a value. It also means a deidentified column can
+never be a join key or a dedupe key; if you need one of those, `hash`
+(above) already gives you a stable one, at the cost of it being
+recoverable-by-comparison rather than encrypted.
+
+`key:` accepts `env("NAME")` and nothing else — the key itself never
+appears in the `.sift` file, only the name of the environment variable
+that holds it, so the program stays safe to commit. It's read as hex or
+base64 and must decode to exactly 32 bytes; a missing or malformed key
+fails immediately, before any row is read, the same way a missing
+required column does.
+
+Once a field is `deidentified<T>` (see it with `--emit-schema`), the
+checker rejects every operation on it: reading it in a `filter` or
+`map`, comparing it to anything (even another deidentified column),
+`mask`/`hash`/`redact` (there's nothing to declassify), and `??` (there's
+no optionality left to discharge — an absent cell is encrypted too, so
+even *that* isn't visible without the key). The only things you can do
+with it are `select`, `drop`, `rename`, and passing it through — `deidentify.sift`
+in this folder shows the whole round trip.
 
 ## Fields that may be missing
 
@@ -1113,8 +1168,9 @@ workbook it reads.
   sources) and a path. A source also declares its schema, since neither
   CSV nor xlsx carries reliable types of its own. `xlsx` also takes
   `sheet:` and `header_row:`. Either format also takes `columns:`, to
-  name a column whose real header isn't a valid identifier, and
-  `formats:`, to give a `date` field its own parsing layout.
+  name a column whose real header isn't a valid identifier, `formats:`,
+  to give a `date`/`datetime` field its own parsing layout, and `key:
+  env("NAME")`, required when the schema has a `@deidentify` field.
 - **Pipelines** are a plain `in |> stage |> ... |> out` chain. The last
   step can be a comma separated list of sinks to broadcast to, or
   `route { <bool> => sink, ..., else => sink|discard }` to send each row
@@ -1148,6 +1204,12 @@ workbook it reads.
   expression, and is only cleared by `mask`/`hash`/`redact` — which are
   string-only, so a non-string `@pii` field (`date`, `int`, ...) can
   only be dropped, not masked in place.
+- **`@deidentify`:** encrypts a field at the source (AES-256-GCM, a fresh
+  nonce per cell, keyed by `key: env("NAME")`) and replaces its type with
+  `deidentified<T>`. No operation accepts that type — not even `==`
+  against another deidentified field, or `??` — so the only things left
+  to do with it are `select`/`drop`/`rename`/passthrough. Mutually
+  exclusive with `@pii`; there is no in-program decryption.
 - **Optional fields:** `T?` in a source schema attaches at the source. A
   missing or blank cell reads as absent, that state is tracked through
   every expression, and only `??` clears it, by giving a default. A
@@ -1165,19 +1227,23 @@ its own design doc under [`../design/`](../design/); see
 ## Project layout
 
 ```
-cmd/sift/            CLI: run, --emit-ast, --emit-schema
-internal/value/       Row, Provenance, Type (+ @pii, Optional), Schema, Coerce, Absent
-internal/lexer/       source text -> tokens
-internal/ast/         AST node types
-internal/parser/      recursive descent + Pratt expression parsing
-internal/checker/     name resolution, schema recompute, PII + error-policy enforcement
-internal/eval/        eval(expr, row) any
-internal/runtime/     Stream/Source/Sink, driver loop, error policy, format registry, build
-internal/format/      csv source, jsonl sink, xlsx source
-examples/             one .sift + fixture pair per language feature or error policy,
-                       for this tutorial; never read by a test
-testdata/             a copy of every examples/ fixture an actual Go test reads
-design/               language spec + one design doc per build phase
+cmd/sift/                CLI: run, --emit-ast, --emit-schema, --print
+internal/value/           Row, Provenance, Type (+ @pii, Optional, Deidentified), Schema, Coerce, Absent
+internal/lexer/           source text -> tokens
+internal/ast/             AST node types
+internal/parser/          recursive descent + Pratt expression parsing
+internal/checker/         name resolution, schema recompute, PII + error-policy enforcement
+internal/eval/            eval(expr, row) any
+internal/runtime/         Stream/Source/Sink, driver loop, error policy, format registry, build
+internal/format/          ResolveColumns/ResolveDateFormat, shared by the subpackages below
+internal/format/csv/      csv source
+internal/format/jsonl/    jsonl sink
+internal/format/xlsx/     xlsx source
+internal/format/console/  console sink (--print)
+examples/                 one .sift + fixture pair per language feature or error policy,
+                          for this tutorial; never read by a test
+testdata/                 a copy of every examples/ fixture an actual Go test reads
+design/                   language spec + one design doc per build phase
 ```
 
 ```console
@@ -1210,5 +1276,6 @@ optional fields (`../design/optional-fields.md`), conditional routing
 identifiers (`../design/column-aliases.md`), the `date` type
 (`../design/date.md`), the `decimal` type (`../design/decimal.md`),
 unconditional thousands-comma leniency for `decimal` cells
-(`../design/decimal-leniency.md`), and the `datetime` type
-(`../design/datetime.md`).
+(`../design/decimal-leniency.md`), the `datetime` type
+(`../design/datetime.md`), and `@deidentify`, which encrypts a column at
+the source instead of tagging it (`../design/deidentify.md`).

@@ -1,0 +1,13 @@
+// Demonstrates @deidentify (design/deidentify.md §2): email is encrypted
+// inside the source, before any stage runs, and never decrypted by Sift
+// itself. Unlike @pii there is no declassifier — the column can only be
+// passed through, selected, dropped, or renamed once it's read.
+source in = csv("deidentify.csv",
+  schema: { id: int, name: string, email: string @deidentify },
+  key:    env("SIFT_DEIDENTIFY_KEY")
+)
+sink out = jsonl("deidentify_out.jsonl")
+
+pipeline main {
+  in |> out
+}
