@@ -1,4 +1,7 @@
-package format
+// Package console registers a Sink used by --print (cmd/sift): it
+// buffers every row instead of writing them to a file, and prints the
+// whole block, labeled by name, on Close.
+package console
 
 import (
 	"bytes"
