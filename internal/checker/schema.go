@@ -22,7 +22,11 @@ var typeNames = map[string]value.Kind{
 
 // resolveSourceSchemas converts every source's ast.SchemaLit into a
 // value.Schema, attaching the @pii tag exactly as declared (design.md
-// §3, rule 1: "attach at the source").
+// §3, rule 1: "attach at the source"). A @deidentify field resolves to
+// value.Deidentified instead (design/deidentify.md §3): the wrapping
+// type, not another tag alongside Kind, with Optional discharged here
+// and folded into Inner -- the field never reaches a stage as an
+// optional, only Coerce needs to know it once was one.
 func (c *checker) resolveSourceSchemas() error {
 	c.sourceSchemas = map[string]value.Schema{}
 	for _, s := range c.prog.Sources {
@@ -37,10 +41,16 @@ func (c *checker) resolveSourceSchemas() error {
 				return errorf(f.Pos, "duplicate field %q in schema", f.Name)
 			}
 			seen[f.Name] = true
-			fields = append(fields, value.Field{
-				Name: f.Name,
-				Type: value.Type{Kind: kind, Optional: f.Optional, PII: f.PII},
-			})
+			if f.PII && f.Deidentify {
+				return errorf(f.Pos, "field %q cannot be both @pii and @deidentify; @pii tracks plaintext to a declassifier, @deidentify encrypts at the source and permits no operations", f.Name)
+			}
+			var typ value.Type
+			if f.Deidentify {
+				typ = value.Type{Kind: value.Deidentified, Inner: &value.Type{Kind: kind, Optional: f.Optional}}
+			} else {
+				typ = value.Type{Kind: kind, Optional: f.Optional, PII: f.PII}
+			}
+			fields = append(fields, value.Field{Name: f.Name, Type: typ})
 		}
 		c.sourceSchemas[s.Name] = value.Schema{Fields: fields}
 	}
@@ -71,6 +81,17 @@ func (c *checker) checkMapRecord(rec *ast.RecordExpr, inputSchema value.Schema) 
 	}
 
 	for _, rf := range rec.Fields {
+		// A @deidentify column may only be passed through (the ...row
+		// spread above), never reassigned -- even to a value that never
+		// reads the column back (design/deidentify.md §4: overwriting it
+		// with a plaintext constant would leave a column encrypted for
+		// some rows and not others). Checked before checkExpr so the
+		// diagnostic names the real problem instead of whatever the RHS
+		// happens to be.
+		if existing, ok := inputSchema.Lookup(rf.Name); ok && existing.Type.Kind == value.Deidentified {
+			return value.Schema{}, errorf(rf.Pos, "cannot assign to %q: field is @deidentify and may not be modified; a @deidentify column can only be passed through, selected, dropped, or renamed", rf.Name)
+		}
+
 		t, err := c.checkExpr(rf.Value, inputSchema)
 		if err != nil {
 			return value.Schema{}, err

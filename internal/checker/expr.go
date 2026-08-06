@@ -42,6 +42,15 @@ func (c *checker) checkExpr(e ast.Expr, schema value.Schema) (value.Type, error)
 		if !ok {
 			return value.Type{}, errorf(e.Pos, "field %q not in schema %s", e.Field, schema)
 		}
+		// Every rejection design/deidentify.md §4 lists -- a filter
+		// predicate, a comparison, a function argument, a segment
+		// parameter's substituted body -- reads the column first, so
+		// blocking that read here is the one place that covers all of
+		// them (design/deidentify.md §10): nothing downstream ever sees
+		// a Deidentified value to reject a second time.
+		if f.Type.Kind == value.Deidentified {
+			return value.Type{}, errorf(e.Pos, "field %q is @deidentify and cannot be used in an expression; it can only be passed through, selected, dropped, or renamed", e.Field)
+		}
 		return f.Type, nil
 
 	case *ast.ParamRef:
