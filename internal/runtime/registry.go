@@ -41,6 +41,11 @@ type SourceOptions struct {
 	// nil map, for a source with no formats kwarg at all) uses
 	// value.DefaultDateFormat. Only csv and xlsx look here.
 	DateFormats map[string]string
+	// DeidentifyKeyEnvVar holds the optional key kwarg's environment
+	// variable name (design/deidentify.md §2), e.g. "SIFT_DEIDENTIFY_KEY"
+	// for key: env("SIFT_DEIDENTIFY_KEY"). Empty for a source with no key
+	// kwarg at all. Only csv and xlsx look here.
+	DeidentifyKeyEnvVar string
 }
 
 type SinkOptions struct {

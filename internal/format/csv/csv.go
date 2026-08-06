@@ -33,8 +33,12 @@ type csvSource struct {
 	// dateFormats holds the source's formats kwarg (design/date.md §3):
 	// a date-typed field name to the layout string to parse it against.
 	dateFormats map[string]string
-	schema      value.Schema
-	ordinal     int
+	// deidentifyKey is the 32-byte AES-256 key resolved from the source's
+	// key kwarg (design/deidentify.md §6), nil for a schema with no
+	// @deidentify field.
+	deidentifyKey []byte
+	schema        value.Schema
+	ordinal       int
 	// err holds an infra-fatal error from the underlying reader (a
 	// malformed record it couldn't tokenize at all, an I/O error mid-
 	// read). It's infra-fatal, not a per-row Failure, since there's no
@@ -70,13 +74,20 @@ func NewCSVSource(opts runtime.SourceOptions) (runtime.Source, error) {
 		return nil, fmt.Errorf("csv source %q: required column %q not found in header %s", opts.Name, missing, strings.Join(header, ", "))
 	}
 
+	key, err := format.RequireDeidentifyKey(opts.Schema, opts.DeidentifyKeyEnvVar)
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("csv source %q: %w", opts.Name, err)
+	}
+
 	return &csvSource{
-		f:           f,
-		r:           r,
-		name:        opts.Name,
-		col:         col,
-		dateFormats: opts.DateFormats,
-		schema:      opts.Schema,
+		f:             f,
+		r:             r,
+		name:          opts.Name,
+		col:           col,
+		dateFormats:   opts.DateFormats,
+		deidentifyKey: key,
+		schema:        opts.Schema,
 	}, nil
 }
 
@@ -121,7 +132,7 @@ func (s *csvSource) Next() (value.Row, bool) {
 		if idx, ok := s.col[field.Name]; ok {
 			raw = record[idx]
 		}
-		v, fail := value.Coerce(field.Type, raw, format.ResolveDateFormat(s.dateFormats, field.Name, format.DefaultFormatForKind(field.Type.Kind)))
+		v, fail := value.Coerce(field.Type, raw, format.ResolveDateFormat(s.dateFormats, field.Name, format.DefaultFormatForKind(field.Type.Kind)), s.deidentifyKey)
 		if fail != nil {
 			// One failure per row (design-errors.md §9): the first bad
 			// cell marks the row and short-circuits. The rest of the

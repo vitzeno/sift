@@ -66,12 +66,13 @@ type RouteBranch struct {
 // since only Build knows which position each sink landed at.
 func Build(in BuildInput) (top Stream, src Source, sinks []Sink, route []RouteBranch, err error) {
 	src, err = NewSource(in.Source.Format, SourceOptions{
-		Name:        in.Source.Name,
-		Path:        in.Source.Path,
-		Schema:      in.SourceSchema,
-		Opts:        sourceOptValues(in.Source.Opts),
-		Columns:     columnAliases(in.Source.Columns),
-		DateFormats: dateFormats(in.Source.Formats),
+		Name:                in.Source.Name,
+		Path:                in.Source.Path,
+		Schema:              in.SourceSchema,
+		Opts:                sourceOptValues(in.Source.Opts),
+		Columns:             columnAliases(in.Source.Columns),
+		DateFormats:         dateFormats(in.Source.Formats),
+		DeidentifyKeyEnvVar: deidentifyKeyEnvVar(in.Source.Key),
 	})
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -186,6 +187,17 @@ func columnAliases(aliases []ast.ColumnAlias) map[string]string {
 		m[a.Field] = a.Header
 	}
 	return m
+}
+
+// deidentifyKeyEnvVar unwraps a source's optional key kwarg
+// (design/deidentify.md §2) into the plain env-var-name string
+// SourceOptions.DeidentifyKeyEnvVar exposes to a format constructor.
+// Empty for a source with no key kwarg at all.
+func deidentifyKeyEnvVar(key *ast.EnvRef) string {
+	if key == nil {
+		return ""
+	}
+	return key.Var
 }
 
 // dateFormats flattens a source's formats kwarg (design/date.md §3) into

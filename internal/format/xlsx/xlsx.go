@@ -43,8 +43,12 @@ type xlsxSource struct {
 	// dateFormats holds the source's formats kwarg (design/date.md §3):
 	// a date-typed field name to the layout string to parse it against.
 	dateFormats map[string]string
-	schema      value.Schema
-	ordinal     int
+	// deidentifyKey is the 32-byte AES-256 key resolved from the source's
+	// key kwarg (design/deidentify.md §6), nil for a schema with no
+	// @deidentify field. Mirrors csvSource.deidentifyKey.
+	deidentifyKey []byte
+	schema        value.Schema
+	ordinal       int
 	// sheetRow is the 1-based spreadsheet row number of the last row
 	// pulled from rows. Becomes each emitted Row's Provenance.Offset
 	// (design/xlsx.md §2: "the one a user can act on"), distinct from
@@ -138,14 +142,21 @@ func NewXLSXSource(opts runtime.SourceOptions) (runtime.Source, error) {
 			opts.Name, missing, headerRow, sheet, strings.Join(header, ", "))
 	}
 
+	key, err := format.RequireDeidentifyKey(opts.Schema, opts.DeidentifyKeyEnvVar)
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("source %q: %w", opts.Name, err)
+	}
+
 	return &xlsxSource{
-		f:           f,
-		rows:        rows,
-		name:        opts.Name,
-		col:         col,
-		dateFormats: opts.DateFormats,
-		schema:      opts.Schema,
-		sheetRow:    headerRow,
+		f:             f,
+		rows:          rows,
+		name:          opts.Name,
+		col:           col,
+		dateFormats:   opts.DateFormats,
+		deidentifyKey: key,
+		schema:        opts.Schema,
+		sheetRow:      headerRow,
 	}, nil
 }
 
@@ -200,7 +211,7 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 				idx = -1
 			}
 			raw := cellAt(cells, idx)
-			v, fail := value.Coerce(field.Type, raw, format.ResolveDateFormat(s.dateFormats, field.Name, format.DefaultFormatForKind(field.Type.Kind)))
+			v, fail := value.Coerce(field.Type, raw, format.ResolveDateFormat(s.dateFormats, field.Name, format.DefaultFormatForKind(field.Type.Kind)), s.deidentifyKey)
 			if fail != nil {
 				fail.Stage = fmt.Sprintf("xlsx:%s", field.Name)
 				return value.Row{Fail: fail, Prov: prov}, true
