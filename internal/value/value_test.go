@@ -22,6 +22,9 @@ func TestTypeString(t *testing.T) {
 		{"pii string", Type{Kind: String, PII: true}, "string @pii"},
 		{"optional string", Type{Kind: String, Optional: true}, "string?"},
 		{"optional pii string", Type{Kind: String, Optional: true, PII: true}, "string? @pii"},
+		{"deidentified string", Type{Kind: Deidentified, Inner: &Type{Kind: String}}, "deidentified<string>"},
+		{"deidentified int", Type{Kind: Deidentified, Inner: &Type{Kind: Int}}, "deidentified<int>"},
+		{"deidentified optional string", Type{Kind: Deidentified, Inner: &Type{Kind: String, Optional: true}}, "deidentified<string?>"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -84,6 +87,24 @@ func TestSchemaFirstPII(t *testing.T) {
 	f, ok := tagged.FirstPII()
 	if !ok || f.Name != "email" {
 		t.Errorf("FirstPII() = %+v, %v; want the first PII field, \"email\"", f, ok)
+	}
+}
+
+func TestSchemaFirstDeidentified(t *testing.T) {
+	clean := Schema{Fields: []Field{
+		{Name: "name", Type: Type{Kind: String}},
+	}}
+	if _, ok := clean.FirstDeidentified(); ok {
+		t.Error("FirstDeidentified found a deidentified field in a schema with none")
+	}
+
+	tagged := Schema{Fields: []Field{
+		{Name: "name", Type: Type{Kind: String}},
+		{Name: "email", Type: Type{Kind: Deidentified, Inner: &Type{Kind: String}}},
+	}}
+	f, ok := tagged.FirstDeidentified()
+	if !ok || f.Name != "email" {
+		t.Errorf("FirstDeidentified() = %+v, %v; want the first deidentified field, \"email\"", f, ok)
 	}
 }
 

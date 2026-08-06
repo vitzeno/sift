@@ -13,7 +13,8 @@ import (
 // Kind is a scalar type. v0 only needs the four primitives design.md's
 // expression grammar produces: string/int/double literals, and bool from
 // comparisons and && / ||. Date was added by design/date.md; Decimal by
-// design/decimal.md; DateTime by design/datetime.md.
+// design/decimal.md; DateTime by design/datetime.md; Deidentified by
+// design/deidentify.md.
 type Kind int
 
 const (
@@ -24,6 +25,7 @@ const (
 	Date
 	Decimal
 	DateTime
+	Deidentified
 )
 
 func (k Kind) String() string {
@@ -42,6 +44,8 @@ func (k Kind) String() string {
 		return "decimal"
 	case DateTime:
 		return "datetime"
+	case Deidentified:
+		return "deidentified"
 	default:
 		return "unknown"
 	}
@@ -51,13 +55,25 @@ func (k Kind) String() string {
 // (design/optional-fields.md §4): both propagate and both must be cleared
 // separately before a sink. `mask(x)` clears PII; `??` clears Optional;
 // everything else preserves both.
+//
+// Deidentified is different: it replaces Kind rather than tagging it
+// (design/deidentify.md §3). Inner holds the cell's declared type before
+// encryption and is set only when Kind == Deidentified; a Deidentified
+// Type's own Optional and PII are always false, since the checker
+// discharges optionality at ingest and @pii/@deidentify are mutually
+// exclusive. Inner is a pointer so Type stays a fixed-size, comparable
+// value for every other Kind, which never sets it.
 type Type struct {
 	Kind     Kind
 	Optional bool
 	PII      bool
+	Inner    *Type
 }
 
 func (t Type) String() string {
+	if t.Kind == Deidentified {
+		return "deidentified<" + t.Inner.String() + ">"
+	}
 	s := t.Kind.String()
 	if t.Optional {
 		s += "?"
@@ -244,6 +260,20 @@ func (s Schema) FirstPII() (Field, bool) {
 func (s Schema) FirstOptional() (Field, bool) {
 	for _, f := range s.Fields {
 		if f.Type.Optional {
+			return f, true
+		}
+	}
+	return Field{}, false
+}
+
+// FirstDeidentified returns the first @deidentify field, in declared
+// order, and whether one was found. A source constructor calls this
+// once to require the key: kwarg (design/deidentify.md §2) before
+// reading any row -- the same shape as a missing required column,
+// unlike FirstPII/FirstOptional which a sink calls instead.
+func (s Schema) FirstDeidentified() (Field, bool) {
+	for _, f := range s.Fields {
+		if f.Type.Kind == Deidentified {
 			return f, true
 		}
 	}
