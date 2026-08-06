@@ -41,7 +41,11 @@ const DefaultDateTimeFormat = "2006-01-02T15:04:05"
 // right layout string and default per field before calling Coerce, so
 // Coerce itself never needs to know which of the two temporal Kinds it's
 // being asked for beyond its own switch case.
-func Coerce(t Type, raw string, dateFormat string) (any, *Failure) {
+//
+// key is the 32-byte AES-256 key to encrypt a Deidentified cell's
+// plaintext under (design/deidentify.md §6); every other Kind ignores it
+// and every non-deidentify caller passes nil.
+func Coerce(t Type, raw string, dateFormat string, key []byte) (any, *Failure) {
 	if t.Optional && strings.TrimSpace(raw) == "" {
 		return Absent{Kind: t.Kind}, nil
 	}
@@ -92,6 +96,8 @@ func Coerce(t Type, raw string, dateFormat string) (any, *Failure) {
 			return nil, &Failure{Reason: fmt.Sprintf("cannot parse %q as datetime", raw)}
 		}
 		return DateTimeValue(v), nil
+	case Deidentified:
+		return coerceDeidentified(*t.Inner, raw, dateFormat, key)
 	default:
 		return nil, &Failure{Reason: fmt.Sprintf("unsupported scalar kind %v", t.Kind)}
 	}

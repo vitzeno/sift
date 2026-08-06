@@ -24,7 +24,7 @@ func TestCoerceSuccess(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, fail := Coerce(Type{Kind: tt.kind}, tt.raw, "")
+			got, fail := Coerce(Type{Kind: tt.kind}, tt.raw, "", nil)
 			if fail != nil {
 				t.Fatalf("Coerce(%q) failed: %+v", tt.raw, fail)
 			}
@@ -49,7 +49,7 @@ func TestCoerceFailure(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, fail := Coerce(Type{Kind: tt.kind}, tt.raw, "")
+			got, fail := Coerce(Type{Kind: tt.kind}, tt.raw, "", nil)
 			if fail == nil {
 				t.Fatalf("Coerce(%q) = %#v, nil; want a Failure", tt.raw, got)
 			}
@@ -69,7 +69,7 @@ func TestCoerceFailure(t *testing.T) {
 // @pii string coerces exactly like a plain one, since the tag has
 // nothing to do with parsing.
 func TestCoerceIgnoresPII(t *testing.T) {
-	got, fail := Coerce(Type{Kind: String, PII: true}, "secret", "")
+	got, fail := Coerce(Type{Kind: String, PII: true}, "secret", "", nil)
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
@@ -94,7 +94,7 @@ func TestCoerceOptionalAbsent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, fail := Coerce(Type{Kind: tt.kind, Optional: true}, tt.raw, "")
+			got, fail := Coerce(Type{Kind: tt.kind, Optional: true}, tt.raw, "", nil)
 			if fail != nil {
 				t.Fatalf("Coerce(%q) failed: %+v", tt.raw, fail)
 			}
@@ -109,7 +109,7 @@ func TestCoerceOptionalAbsent(t *testing.T) {
 // coerces exactly like a required one: optionality only changes the
 // blank-cell case, not parsing.
 func TestCoerceOptionalPresent(t *testing.T) {
-	got, fail := Coerce(Type{Kind: Int, Optional: true}, "42", "")
+	got, fail := Coerce(Type{Kind: Int, Optional: true}, "42", "", nil)
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
@@ -122,7 +122,7 @@ func TestCoerceOptionalPresent(t *testing.T) {
 // §2 notes): optionality excuses absence, never malformed presence. A
 // present-but-garbage cell in an optional field is still a row Failure.
 func TestCoerceOptionalUnparseableIsFailure(t *testing.T) {
-	got, fail := Coerce(Type{Kind: Int, Optional: true}, "not-a-number", "")
+	got, fail := Coerce(Type{Kind: Int, Optional: true}, "not-a-number", "", nil)
 	if fail == nil {
 		t.Fatalf("Coerce = %#v, nil; want a Failure for garbage in an optional field", got)
 	}
@@ -134,7 +134,7 @@ func TestCoerceOptionalUnparseableIsFailure(t *testing.T) {
 // TestCoerceDateDefaultFormat is DATE-A: with no dateFormat argument at
 // all, Coerce falls back to the ISO-8601 default.
 func TestCoerceDateDefaultFormat(t *testing.T) {
-	got, fail := Coerce(Type{Kind: Date}, "2026-01-05", "")
+	got, fail := Coerce(Type{Kind: Date}, "2026-01-05", "", nil)
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
@@ -148,7 +148,7 @@ func TestCoerceDateDefaultFormat(t *testing.T) {
 // given, drives parsing instead of the default, proving day/month order
 // is actually read from it rather than assumed.
 func TestCoerceDateExplicitFormat(t *testing.T) {
-	got, fail := Coerce(Type{Kind: Date}, "05/01/2026", "02/01/2006")
+	got, fail := Coerce(Type{Kind: Date}, "05/01/2026", "02/01/2006", nil)
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
@@ -172,7 +172,7 @@ func TestCoerceDateFailure(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, fail := Coerce(Type{Kind: Date}, tt.raw, "")
+			got, fail := Coerce(Type{Kind: Date}, tt.raw, "", nil)
 			if fail == nil {
 				t.Fatalf("Coerce(%q) = %#v, nil; want a Failure", tt.raw, got)
 			}
@@ -188,7 +188,7 @@ func TestCoerceDateFailure(t *testing.T) {
 // (design/optional-fields.md §2) applies to Date exactly like every other
 // Kind, with no Date-specific code needed for it.
 func TestCoerceDateOptionalAbsent(t *testing.T) {
-	got, fail := Coerce(Type{Kind: Date, Optional: true}, "", "")
+	got, fail := Coerce(Type{Kind: Date, Optional: true}, "", "", nil)
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
@@ -203,7 +203,7 @@ func TestCoerceDateOptionalAbsent(t *testing.T) {
 // a struct holding a *big.Int (design/decimal.md §2) -- the same reason
 // this file's Date tests never lean on bare == either.
 func TestCoerceDecimalParsesExactly(t *testing.T) {
-	got, fail := Coerce(Type{Kind: Decimal}, "19.99", "")
+	got, fail := Coerce(Type{Kind: Decimal}, "19.99", "", nil)
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
@@ -239,7 +239,7 @@ func TestCoerceDecimalPreservesTrailingZeros(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.raw, func(t *testing.T) {
-			got, fail := Coerce(Type{Kind: Decimal}, tt.raw, "")
+			got, fail := Coerce(Type{Kind: Decimal}, tt.raw, "", nil)
 			if fail != nil {
 				t.Fatalf("Coerce failed: %+v", fail)
 			}
@@ -254,7 +254,7 @@ func TestCoerceDecimalPreservesTrailingZeros(t *testing.T) {
 // TestCoerceDecimalFailure is DEC-B: a non-numeric cell is a row
 // failure, same shape as a bad int/double cell, not a panic.
 func TestCoerceDecimalFailure(t *testing.T) {
-	got, fail := Coerce(Type{Kind: Decimal}, "not-a-number", "")
+	got, fail := Coerce(Type{Kind: Decimal}, "not-a-number", "", nil)
 	if fail == nil {
 		t.Fatalf("Coerce(%q) = %#v, nil; want a Failure", "not-a-number", got)
 	}
@@ -268,7 +268,7 @@ func TestCoerceDecimalFailure(t *testing.T) {
 // carve-out applies to Decimal exactly like every other Kind, with no
 // Decimal-specific code needed for it.
 func TestCoerceDecimalOptionalAbsent(t *testing.T) {
-	got, fail := Coerce(Type{Kind: Decimal, Optional: true}, "", "")
+	got, fail := Coerce(Type{Kind: Decimal, Optional: true}, "", "", nil)
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
@@ -295,7 +295,7 @@ func TestCoerceDecimalStripsThousandsSeparator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.raw, func(t *testing.T) {
-			got, fail := Coerce(Type{Kind: Decimal}, tt.raw, "")
+			got, fail := Coerce(Type{Kind: Decimal}, tt.raw, "", nil)
 			if fail != nil {
 				t.Fatalf("Coerce(%q) failed: %+v", tt.raw, fail)
 			}
@@ -312,7 +312,7 @@ func TestCoerceDecimalStripsThousandsSeparator(t *testing.T) {
 // grouping, so the cell is left untouched and fails loudly instead of
 // silently parsing to the wrong number.
 func TestCoerceDecimalThousandsGuardRule(t *testing.T) {
-	got, fail := Coerce(Type{Kind: Decimal}, "1.234,56", "")
+	got, fail := Coerce(Type{Kind: Decimal}, "1.234,56", "", nil)
 	if fail == nil {
 		t.Fatalf("Coerce(%q) = %#v, nil; want a Failure", "1.234,56", got)
 	}
@@ -325,7 +325,7 @@ func TestCoerceDecimalThousandsGuardRule(t *testing.T) {
 // TestCoerceDateTimeDefaultFormat is DT-A: with no dateFormat argument at
 // all, Coerce falls back to the ISO-8601-with-time default.
 func TestCoerceDateTimeDefaultFormat(t *testing.T) {
-	got, fail := Coerce(Type{Kind: DateTime}, "2026-07-31T04:10:25", "")
+	got, fail := Coerce(Type{Kind: DateTime}, "2026-07-31T04:10:25", "", nil)
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
@@ -339,7 +339,7 @@ func TestCoerceDateTimeDefaultFormat(t *testing.T) {
 // given, drives parsing instead of the default -- the real Tide file's
 // own space-separated shape, the literal case that motivated this doc.
 func TestCoerceDateTimeExplicitFormat(t *testing.T) {
-	got, fail := Coerce(Type{Kind: DateTime}, "2026-07-31 04:10:25", "2006-01-02 15:04:05")
+	got, fail := Coerce(Type{Kind: DateTime}, "2026-07-31 04:10:25", "2006-01-02 15:04:05", nil)
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
@@ -365,7 +365,7 @@ func TestCoerceDateTimeFailure(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, fail := Coerce(Type{Kind: DateTime}, tt.raw, "")
+			got, fail := Coerce(Type{Kind: DateTime}, tt.raw, "", nil)
 			if fail == nil {
 				t.Fatalf("Coerce(%q) = %#v, nil; want a Failure", tt.raw, got)
 			}
@@ -381,7 +381,7 @@ func TestCoerceDateTimeFailure(t *testing.T) {
 // carve-out applies to DateTime exactly like every other Kind, with no
 // DateTime-specific code needed for it.
 func TestCoerceDateTimeOptionalAbsent(t *testing.T) {
-	got, fail := Coerce(Type{Kind: DateTime, Optional: true}, "", "")
+	got, fail := Coerce(Type{Kind: DateTime, Optional: true}, "", "", nil)
 	if fail != nil {
 		t.Fatalf("Coerce failed: %+v", fail)
 	}
