@@ -78,10 +78,9 @@ func TestCoerceIgnoresPII(t *testing.T) {
 	}
 }
 
-// TestCoerceOptionalAbsent is OF-A/OF-C's unit-level half
-// (design/optional-fields.md §2): a blank or whitespace-only cell against
-// an Optional Type yields Absent, whether the blank came from an empty
-// cell or, by the caller's convention, a column missing entirely.
+// TestCoerceOptionalAbsent checks that a blank or whitespace-only cell
+// against an Optional Type yields Absent, whether the blank came from an
+// empty cell or, by the caller's convention, a column missing entirely.
 func TestCoerceOptionalAbsent(t *testing.T) {
 	tests := []struct {
 		name string
@@ -118,9 +117,9 @@ func TestCoerceOptionalPresent(t *testing.T) {
 	}
 }
 
-// TestCoerceOptionalUnparseableIsFailure is OF-D (design/optional-fields.md
-// §2 notes): optionality excuses absence, never malformed presence. A
-// present-but-garbage cell in an optional field is still a row Failure.
+// TestCoerceOptionalUnparseableIsFailure checks that optionality excuses
+// absence, never malformed presence: a present-but-garbage cell in an
+// optional field is still a row Failure.
 func TestCoerceOptionalUnparseableIsFailure(t *testing.T) {
 	got, fail := Coerce(Type{Kind: Int, Optional: true}, "not-a-number", "", nil)
 	if fail == nil {
@@ -185,8 +184,8 @@ func TestCoerceDateFailure(t *testing.T) {
 }
 
 // TestCoerceDateOptionalAbsent confirms the Optional blank-cell carve-out
-// (design/optional-fields.md §2) applies to Date exactly like every other
-// Kind, with no Date-specific code needed for it.
+// applies to Date exactly like every other Kind, with no Date-specific
+// code needed for it.
 func TestCoerceDateOptionalAbsent(t *testing.T) {
 	got, fail := Coerce(Type{Kind: Date, Optional: true}, "", "", nil)
 	if fail != nil {
@@ -197,11 +196,11 @@ func TestCoerceDateOptionalAbsent(t *testing.T) {
 	}
 }
 
-// TestCoerceDecimalParsesExactly is DEC-A's parse half: "19.99" parses
-// to exactly 19.99, not a float64-tainted approximation. Uses .Equal(),
-// not Go's bare ==, since decimal.Decimal (which DecimalValue wraps) is
-// a struct holding a *big.Int (design/decimal.md §2) -- the same reason
-// this file's Date tests never lean on bare == either.
+// TestCoerceDecimalParsesExactly confirms "19.99" parses to exactly
+// 19.99, not a float64-tainted approximation. It uses .Equal(), not Go's
+// bare ==, since decimal.Decimal (which DecimalValue wraps) is a struct
+// holding a *big.Int -- the same reason this file's Date tests never
+// lean on bare == either.
 func TestCoerceDecimalParsesExactly(t *testing.T) {
 	got, fail := Coerce(Type{Kind: Decimal}, "19.99", "", nil)
 	if fail != nil {
@@ -220,13 +219,12 @@ func TestCoerceDecimalParsesExactly(t *testing.T) {
 	}
 }
 
-// TestCoerceDecimalPreservesTrailingZeros is DEC-A's other half, and the
-// one a naive implementation gets wrong: decimal.Decimal's own String()
-// silently strips trailing zeros ("5.00" -> "5", confirmed empirically),
-// even though its internal exponent still remembers the original scale.
-// DecimalValue's own String()/MarshalJSON must render at that remembered
-// scale instead, so "what you parse is what comes back out" (§1) is
-// actually true, not just documented as an intent.
+// TestCoerceDecimalPreservesTrailingZeros covers the case a naive
+// implementation gets wrong: decimal.Decimal's own String() silently
+// strips trailing zeros ("5.00" -> "5") even though its internal
+// exponent still remembers the original scale. DecimalValue's own
+// String()/MarshalJSON must render at that remembered scale instead, so
+// that what you parse is what comes back out.
 func TestCoerceDecimalPreservesTrailingZeros(t *testing.T) {
 	tests := []struct {
 		raw  string
@@ -281,9 +279,9 @@ func TestCoerceDecimalOptionalAbsent(t *testing.T) {
 	}
 }
 
-// TestCoerceDecimalStripsThousandsSeparator is LENIENT-A: a comma-
-// thousands-formatted cell parses unconditionally, whole or fractional,
-// with no opt-in kwarg required (design/decimal-leniency.md §2).
+// TestCoerceDecimalStripsThousandsSeparator confirms a comma-thousands-
+// formatted cell parses unconditionally, whole or fractional, with no
+// opt-in kwarg required.
 func TestCoerceDecimalStripsThousandsSeparator(t *testing.T) {
 	tests := []struct {
 		raw  string

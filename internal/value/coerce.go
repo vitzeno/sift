@@ -10,41 +10,40 @@ import (
 )
 
 // DefaultDateFormat is the Go reference-layout used to parse a Date-kind
-// cell when a source's formats: kwarg names no entry for that field
-// (design/date.md §3): ISO-8601 (YYYY-MM-DD).
+// cell when a source's formats: kwarg names no entry for that field:
+// ISO-8601 (YYYY-MM-DD).
 const DefaultDateFormat = "2006-01-02"
 
 // DefaultDateTimeFormat is the Go reference-layout used to parse a
 // DateTime-kind cell when a source's formats: kwarg names no entry for
-// that field (design/datetime.md §2): ISO-8601 with a time component, no
-// zone suffix, since DateTime is naive only.
+// that field: ISO-8601 with a time component and no zone suffix, since
+// DateTime is naive only.
 const DefaultDateTimeFormat = "2006-01-02T15:04:05"
 
 // Coerce converts a raw cell string into t's scalar kind, or returns a
-// Failure if it doesn't parse (design-errors.md §2.3). Every source
-// (csv, xlsx, ...) shares this one function, so a bad cell is never a
-// panic.
+// Failure if it doesn't parse. Every source (csv, xlsx, ...) shares this
+// one function, so a bad cell is never a panic.
 //
 // Coerce never sets Failure.Stage. The caller does that, since only it
 // knows which format and column it's called for.
 //
-// An Optional field with a blank cell returns Absent instead of parsing
-// (design/optional-fields.md §2). A missing column looks the same as a
-// blank cell here: the caller passes raw = "" for both, and a missing
+// An Optional field with a blank cell returns Absent instead of parsing.
+// A missing column looks the same as a blank cell here: the caller
+// passes raw = "" for both, and a missing
 // required column is caught earlier as its own error. A cell that's
 // present but garbage still fails, even when the field is Optional.
 //
 // dateFormat is the Go reference-layout to parse a Date- or DateTime-kind
 // cell against; every other Kind ignores it and every non-temporal caller
 // passes "". DateTime reuses this exact parameter rather than adding a
-// second one (design/datetime.md §3): the caller already resolves the
-// right layout string and default per field before calling Coerce, so
-// Coerce itself never needs to know which of the two temporal Kinds it's
-// being asked for beyond its own switch case.
+// second one: the caller already resolves the right layout string and
+// default per field before calling Coerce, so Coerce itself never needs
+// to know which of the two temporal Kinds it's being asked for beyond
+// its own switch case.
 //
 // key is the 32-byte AES-256 key to encrypt a Deidentified cell's
-// plaintext under (design/deidentify.md §6); every other Kind ignores it
-// and every non-deidentify caller passes nil.
+// plaintext under; every other Kind ignores it and every non-deidentify
+// caller passes nil.
 func Coerce(t Type, raw string, dateFormat string, key []byte) (any, *Failure) {
 	if t.Optional && strings.TrimSpace(raw) == "" {
 		return Absent{Kind: t.Kind}, nil
@@ -104,8 +103,8 @@ func Coerce(t Type, raw string, dateFormat string, key []byte) (any, *Failure) {
 }
 
 // stripThousands strips a US/UK-style thousands-separator comma from a
-// decimal cell before Coerce parses it (design/decimal-leniency.md §2),
-// so "2,100.00" and "2,100" parse as 2100.00 and 2100 instead of failing.
+// decimal cell before Coerce parses it, so "2,100.00" and "2,100" parse
+// as 2100.00 and 2100 instead of failing.
 // Applied unconditionally to every decimal field, no opt-in required.
 //
 // Commas are stripped only up to the last '.' in the cell; a comma found

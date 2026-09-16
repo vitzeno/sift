@@ -32,8 +32,8 @@ var (
 	_ Stage = (*Declassify)(nil)
 )
 
-// TestAdultsFilterShape hand-builds design.md §7 Case A's adults.sift as
-// a tree, the way module 5's parser will eventually produce it. It's
+// TestAdultsFilterShape hand-builds adults.sift as a tree, the way the
+// parser produces it. It's
 // less "test the AST does something" (it doesn't; these are inert
 // structs) and more proof that the node types actually compose into the
 // shape the language needs, with positions intact for diagnostics.
@@ -107,7 +107,7 @@ func TestAdultsFilterShape(t *testing.T) {
 	}
 }
 
-// TestPIIDeclassifyShape covers design.md §7 Case B's shape: a @pii
+// TestPIIDeclassifyShape covers a @pii
 // schema field, and a map stage that declassifies it with mask() before
 // it can reach a sink.
 func TestPIIDeclassifyShape(t *testing.T) {
@@ -145,9 +145,8 @@ func TestPIIDeclassifyShape(t *testing.T) {
 	}
 }
 
-// TestCheckStageShape covers `check(<bool expr>, "<reason>")`, v0's
-// third built-in stage, which neither acceptance case exercises but
-// CLAUDE.md's Definition of Done requires as a v0 stage.
+// TestCheckStageShape covers `check(<bool expr>, "<reason>")`, the
+// third of the original built-in stages.
 func TestCheckStageShape(t *testing.T) {
 	c := &Check{
 		Cond: &BinaryOp{

@@ -109,8 +109,8 @@ func TestSchemaFirstDeidentified(t *testing.T) {
 }
 
 // TestRowFailNilByDefault confirms a healthy Row's zero value carries no
-// Failure. design-errors.md §2.1 defines nil as "healthy", and every Row
-// literal already in the codebase must keep meaning exactly that.
+// Failure: nil means healthy, and every Row literal in the codebase must
+// keep meaning exactly that.
 func TestRowFailNilByDefault(t *testing.T) {
 	row := Row{Fields: map[string]any{"name": "Ada"}}
 	if row.Fail != nil {
@@ -131,15 +131,15 @@ func TestRowFailCarriesReasonAndStage(t *testing.T) {
 		t.Errorf("Fail.Stage = %q, want %q", row.Fail.Stage, "check")
 	}
 	// A Failure never duplicates provenance: it rides on the Row that
-	// already carries it (design-errors.md §2.1).
+	// already carries it.
 	if row.Prov.Ordinal != 3 {
 		t.Errorf("Prov.Ordinal = %d, want 3", row.Prov.Ordinal)
 	}
 }
 
-// TestAbsentMarshalsAsJSONNull checks Absent's sink-format representation
-// (design/optional-fields.md §6: no null at the language level, but a
-// sink still needs some way to render "no value").
+// TestAbsentMarshalsAsJSONNull checks Absent's sink-format
+// representation. Sift has no null at the language level, but a sink
+// still needs some way to render "no value".
 func TestAbsentMarshalsAsJSONNull(t *testing.T) {
 	got, err := json.Marshal(Absent{})
 	if err != nil {
@@ -150,9 +150,8 @@ func TestAbsentMarshalsAsJSONNull(t *testing.T) {
 	}
 }
 
-// TestDateValueString confirms DateValue's own textual form is
-// ISO-8601, independent of whatever format the source cell used
-// (design/date.md §3).
+// TestDateValueString confirms DateValue's own textual form is ISO-8601,
+// independent of whatever format the source cell used.
 func TestDateValueString(t *testing.T) {
 	d := DateValue(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
 	if got := d.String(); got != "2026-01-05" {
@@ -177,8 +176,7 @@ func TestDateValueMarshalsAsISODateString(t *testing.T) {
 
 // TestDecimalValueString confirms DecimalValue renders at its own
 // remembered scale, unlike decimal.Decimal's own String(), which
-// silently strips trailing zeros (confirmed empirically, not assumed --
-// design/decimal.md §2).
+// silently strips trailing zeros.
 func TestDecimalValueString(t *testing.T) {
 	tests := []struct {
 		raw  string
@@ -220,7 +218,7 @@ func TestDecimalValueMarshalsAsBareNumericLiteral(t *testing.T) {
 
 // TestDateTimeValueString confirms DateTimeValue's own textual form is
 // ISO-8601 with a time component and no zone suffix, independent of
-// whatever format the source cell used (design/datetime.md §2).
+// whatever format the source cell used.
 func TestDateTimeValueString(t *testing.T) {
 	d := DateTimeValue(time.Date(2026, 7, 31, 4, 10, 25, 0, time.UTC))
 	if got := d.String(); got != "2026-07-31T04:10:25" {

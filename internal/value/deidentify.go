@@ -10,25 +10,24 @@ import (
 	"strconv"
 )
 
-// deidentifyPresent and deidentifyAbsent are design/deidentify.md §6's
-// presence byte, prefixed to every plaintext before encryption so an
-// absent cell and a genuinely empty one both produce full-length
-// ciphertext -- neither is visible without the key.
+// deidentifyPresent and deidentifyAbsent are the presence byte prefixed
+// to every plaintext before encryption, so that an absent cell and a
+// genuinely empty one both produce full-length ciphertext -- neither is
+// visible without the key.
 const (
 	deidentifyPresent byte = 0x01
 	deidentifyAbsent  byte = 0x00
 )
 
-// coerceDeidentified implements design/deidentify.md §6: parse the cell
-// as its declared inner type first (so bad data still fails, and fails
-// before encryption), then encrypt its presence-byte-prefixed canonical
-// form. inner is never itself Deidentified -- Coerce's own Deidentified
-// case is the only caller.
+// coerceDeidentified parses the cell as its declared inner type first
+// (so bad data still fails, and fails before encryption), then encrypts
+// its presence-byte-prefixed canonical form. inner is never itself
+// Deidentified -- Coerce's own Deidentified case is the only caller.
 //
-// A failure from the inner parse is rebuilt without raw (design/
-// deidentify.md §5: a @deidentify field's reason must not embed the
-// offending cell value), which is why this doesn't just return the
-// recursive call's own Failure unchanged.
+// A failure from the inner parse is rebuilt without raw, since a
+// @deidentify field's reason must not embed the offending cell value.
+// That's why this doesn't just return the recursive call's own Failure
+// unchanged.
 func coerceDeidentified(inner Type, raw, dateFormat string, key []byte) (any, *Failure) {
 	v, fail := Coerce(inner, raw, dateFormat, nil)
 	if fail != nil {
@@ -50,11 +49,10 @@ func coerceDeidentified(inner Type, raw, dateFormat string, key []byte) (any, *F
 }
 
 // canonicalString renders one of Coerce's own successful return values
-// back to the string design/deidentify.md §6 encrypts. Every struct-
-// backed Kind (Date, Decimal, DateTime) already implements String() for
-// exactly this "Go's default doesn't match Sift's semantics" reason
-// (value.go's DateValue doc comment), so a single fmt.Stringer case
-// covers all three uniformly.
+// back to the string that gets encrypted. Every struct-backed Kind
+// (Date, Decimal, DateTime) already implements String() for exactly this
+// "Go's default doesn't match Sift's semantics" reason, so a single
+// fmt.Stringer case covers all three uniformly.
 func canonicalString(v any) string {
 	switch v := v.(type) {
 	case string:
@@ -72,8 +70,8 @@ func canonicalString(v any) string {
 	}
 }
 
-// encryptDeidentifiedCell implements design/deidentify.md §6's cipher:
-// AES-256-GCM, a fresh random 96-bit nonce per value, encoded as
+// encryptDeidentifiedCell applies the cipher: AES-256-GCM with a fresh
+// random 96-bit nonce per value, encoded as
 // base64(nonce ‖ ciphertext ‖ auth tag). key is validated to be exactly
 // 32 bytes before any row is read (format.ResolveDeidentifyKey), so a
 // failure here only ever means crypto/rand couldn't supply a nonce.

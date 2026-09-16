@@ -14,8 +14,8 @@ import (
 var testKey = []byte("0123456789abcdef0123456789abcdef")
 
 // decryptForTest is the test suite's own out-of-band decrypt, deliberately
-// never exposed by the value package itself (design/deidentify.md §8: "no
-// reveal(), no in-program decryption"). It undoes exactly what
+// never exposed by the value package itself: Sift offers no reveal() and
+// no in-program decryption. It undoes exactly what
 // encryptDeidentifiedCell does, so a round-trip test can assert on the
 // plaintext without Sift ever offering a way to do so.
 func decryptForTest(t *testing.T, ciphertext string, key []byte) []byte {

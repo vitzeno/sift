@@ -11,7 +11,7 @@ type Expr interface {
 }
 
 // FieldAccess reads a field off the current row: `.age`, `.email`.
-// There is no chained access in v0 (no `.a.b`, no indexing): every
+// There is no chained access (no `.a.b`, no indexing): every
 // field access is relative to the one implicit row in scope, so a bare
 // field name is all this node needs.
 type FieldAccess struct {
@@ -23,7 +23,7 @@ func (*FieldAccess) exprNode() {}
 
 // ParamRef is a bare identifier in expression position with no call
 // parens following it: a reference to an enclosing parameterized
-// segment's scalar parameter (design/segments.md §2.2), e.g. "min" in
+// segment's scalar parameter, e.g. "min" in
 // `filter(.age >= min)`. The parser can't tell a genuine parameter
 // reference from a typo, since that needs the enclosing segment's
 // parameter list, which is checker business. So it always produces this
@@ -65,7 +65,7 @@ type BoolLit struct {
 
 func (*BoolLit) exprNode() {}
 
-// BinaryOp is one of design.md §2's binary operators. Op reuses
+// BinaryOp is one of the language's binary operators. Op reuses
 // lexer.Kind directly (PLUS, LT, EQ, AND, ...) instead of a parallel
 // operator enum: the token kind already names the operator, so a
 // second enum would just copy it with no added meaning.
@@ -81,8 +81,8 @@ func (*BinaryOp) exprNode() {}
 // Call is a function call: a declassifier (mask/hash/redact), a built-in
 // scalar function (upper/lower/trim), or a user-defined one. Fn is left
 // as a bare name. Like SourceDecl.Format, which function it resolves to
-// is decided later (the checker's function-lookup table, design.md §4),
-// not baked in here.
+// is decided later, by the checker's function-lookup table, not baked in
+// here.
 type Call struct {
 	Fn   string
 	Args []Expr
@@ -100,7 +100,7 @@ type RecordField struct {
 
 // RecordExpr is a record literal, `{ ...row, field: expr, ... }`, the
 // sole argument to map. Spread holds the identifier named after `...`
-// ("row" in every design.md example, the implicit current-row binding);
+// ("row" by convention, the implicit current-row binding);
 // it's the empty string when the literal has no spread at all.
 type RecordExpr struct {
 	Spread string
