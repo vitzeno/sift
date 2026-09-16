@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// TestCheckDeclassifyStageClearsePII is S4-A: |> hash(email) |> out
-// compiles and runs; the output column is present and clean (string, no
-// tag), design-improvements.md §9.
+// TestCheckDeclassifyStageClearsPII confirms |> hash(email) |> out
+// compiles and runs, and that the output column is present and clean
+// (string, no tag).
 func TestCheckDeclassifyStageClearsPII(t *testing.T) {
 	cp := mustCheck(t, `source in = csv("people.csv", schema: { name: string, email: string @pii })
 sink out = jsonl("out.jsonl")
@@ -41,9 +41,8 @@ pipeline main {
 	}
 }
 
-// TestCheckDeclassifyNonPIITargetRejected is S4-B: redact(age) where age
-// is int is a compile error with a clear message
-// (design-improvements.md §9).
+// TestCheckDeclassifyNonPIITargetRejected confirms redact(age) where age
+// is int is a compile error with a clear message.
 func TestCheckDeclassifyNonPIITargetRejected(t *testing.T) {
 	err := checkErr(t, `source in = csv("people.csv", schema: { name: string, age: int })
 sink out = jsonl("out.jsonl")

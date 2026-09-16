@@ -5,9 +5,8 @@ import (
 	"testing"
 )
 
-// TestCheckRenamePreservesPositionAndType is S2-A: rename(dob:
-// birth_date) renames in place, preserving type and position
-// (design-improvements.md §9).
+// TestCheckRenamePreservesPositionAndType confirms rename(dob:
+// birth_date) renames in place, preserving type and position.
 func TestCheckRenamePreservesPositionAndType(t *testing.T) {
 	cp := mustCheck(t, `source in = csv("people.csv", schema: { name: string, dob: string, age: int })
 sink out = jsonl("out.jsonl")
@@ -28,9 +27,9 @@ pipeline main {
 	}
 }
 
-// TestCheckRenamePreservesPII is S2-B: renaming a @pii column and
+// TestCheckRenamePreservesPII confirms renaming a @pii column and
 // writing it unmasked is still a compile error, since the tag survived
-// the rename (design-improvements.md §9).
+// the rename.
 func TestCheckRenamePreservesPII(t *testing.T) {
 	err := checkErr(t, `source in = csv("people.csv", schema: { name: string, email: string @pii })
 sink out = jsonl("out.jsonl")

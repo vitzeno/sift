@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// TestCheckRouteTerminal is design-routing.md §1's own example end to
-// end: two predicate branches plus a mandatory else, each resolved to a
-// distinct sink, all sharing the one terminal schema.
+// TestCheckRouteTerminal runs a route terminal end to end: two predicate
+// branches plus a mandatory else, each resolved to a distinct sink, all
+// sharing the one terminal schema.
 func TestCheckRouteTerminal(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, region: string })
 sink eu_sink = jsonl("eu.jsonl")
@@ -102,10 +102,10 @@ pipeline main {
 	}
 }
 
-// TestCheckRoutePIIRejectedOnce is RT-G: an unmasked @pii field reaching
+// TestCheckRoutePIIRejectedOnce confirms an unmasked @pii field reaching
 // any branch sink is a single compile error naming every distinct target
-// sink, checked once against the shared terminal schema. Exactly
-// design-multisink.md §4's rule, reused verbatim for route.
+// sink, checked once against the shared terminal schema -- exactly
+// broadcast's rule, reused verbatim for route.
 func TestCheckRoutePIIRejectedOnce(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, region: string, email: string @pii })
 sink eu_sink = jsonl("eu.jsonl")
@@ -144,8 +144,8 @@ pipeline main {
 }
 
 // TestCheckRouteOptionalRejectedOnce mirrors TestCheckRoutePIIRejectedOnce
-// for design/optional-fields.md's discharge rule (design-routing.md §5's
-// "shared terminal schema" note applies to both tags, not just PII).
+// for the Optional discharge rule: the shared terminal schema covers
+// both tags, not just PII.
 func TestCheckRouteOptionalRejectedOnce(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, region: string, phone: string? })
 sink eu_sink = jsonl("eu.jsonl")
@@ -185,8 +185,8 @@ pipeline main {
 
 // TestCheckRouteNonBoolPredicate rejects a branch predicate that isn't
 // bool, and TestCheckRouteOptionalBoolPredicate rejects one that's an
-// undischarged bool?. design/optional-fields.md §3's third discharge
-// rule applies to a route branch exactly like it does to filter/check.
+// undischarged bool?. The third discharge rule applies to a route branch
+// exactly like it does to filter/check.
 func TestCheckRouteNonBoolPredicate(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, region: string })
 sink out = jsonl("out.jsonl")
@@ -237,9 +237,9 @@ pipeline main {
 	}
 }
 
-// TestCheckRouteReservedAgainstNamedSegment covers design-routing.md
-// §7/§11: "route" is reserved the same way select/drop/... are, so a
-// named segment can never shadow the terminal keyword.
+// TestCheckRouteReservedAgainstNamedSegment confirms "route" is reserved
+// the same way select/drop/... are, so a named segment can never shadow
+// the terminal keyword.
 func TestCheckRouteReservedAgainstNamedSegment(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string })
 sink out = jsonl("out.jsonl")

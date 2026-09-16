@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestCheckSelectOrder is S1-B: select(email, name) yields output with
-// columns in that order (design-improvements.md §9).
+// TestCheckSelectOrder confirms select(email, name) yields output with
+// columns in that order.
 func TestCheckSelectOrder(t *testing.T) {
 	cp := mustCheck(t, `source in = csv("people.csv", schema: { name: string, age: int })
 sink out = jsonl("out.jsonl")
@@ -113,9 +113,8 @@ pipeline main {
 	}
 }
 
-// TestCheckPipelineNamedAfterBuiltinStageRejected covers
-// design-improvements.md §7: a named segment can't shadow a built-in
-// stage name.
+// TestCheckPipelineNamedAfterBuiltinStageRejected confirms a named
+// segment can't shadow a built-in stage name.
 func TestCheckPipelineNamedAfterBuiltinStageRejected(t *testing.T) {
 	for _, name := range []string{"filter", "map", "check", "select", "drop"} {
 		src := `pipeline ` + name + ` = filter(.x)

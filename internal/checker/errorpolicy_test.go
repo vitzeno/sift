@@ -14,10 +14,8 @@ pipeline main {
   in |> filter(.age >= 18) |> out
 }`
 
-// TestCheckErrorPolicyDefaultsToAbort confirms design.md §2's default
-// holds when a program declares no `on error` at all: the regression
-// guard design-errors.md §7 asks for, since every v0 program (none of
-// which ever wrote `on error`) must keep behaving exactly as before.
+// TestCheckErrorPolicyDefaultsToAbort confirms the default holds when a
+// program declares no `on error` at all.
 func TestCheckErrorPolicyDefaultsToAbort(t *testing.T) {
 	cp := mustCheck(t, errPolicyBaseSrc)
 	if cp.ErrorPolicy != ast.ErrorAbort {
@@ -47,8 +45,7 @@ func TestCheckErrorPolicySkip(t *testing.T) {
 
 // TestCheckErrorPolicyRouteResolvesSink confirms a route target
 // resolves to the actual declared sink, with no schema attached (the
-// checker never threads a pipeline schema into it, design-errors.md
-// §5).
+// checker never threads a pipeline schema into it).
 func TestCheckErrorPolicyRouteResolvesSink(t *testing.T) {
 	const src = `on error |> errs
 source in = csv("people.csv", schema: { name: string, age: int })

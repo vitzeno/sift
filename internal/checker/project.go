@@ -6,8 +6,8 @@ import (
 )
 
 // checkSelect computes select's output schema: exactly the named
-// columns, in the order named (design-improvements.md §1). Each name
-// must exist in the input schema; a duplicate name is rejected.
+// columns, in the order named. Each name must exist in the input schema;
+// a duplicate name is rejected.
 func (c *checker) checkSelect(st *ast.Select, schema value.Schema) (value.Schema, error) {
 	seen := map[string]bool{}
 	fields := make([]value.Field, 0, len(st.Columns))
@@ -27,9 +27,9 @@ func (c *checker) checkSelect(st *ast.Select, schema value.Schema) (value.Schema
 }
 
 // checkDrop computes drop's output schema: the input schema minus the
-// named columns, with every surviving column keeping its original order
-// (design-improvements.md §1). Each name must exist in the input schema;
-// dropping every column (an empty result schema) is rejected.
+// named columns, with every surviving column keeping its original
+// order. Each name must exist in the input schema; dropping every
+// column (an empty result schema) is rejected.
 func (c *checker) checkDrop(st *ast.Drop, schema value.Schema) (value.Schema, error) {
 	toDrop := map[string]bool{}
 	for _, col := range st.Columns {

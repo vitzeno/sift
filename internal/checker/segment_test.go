@@ -8,7 +8,7 @@ import (
 	"github.com/vitzeno/sift/internal/ast"
 )
 
-// TestCheckScalarParamReuseAcrossPrograms is design/segments.md PS-A: one
+// TestCheckScalarParamReuseAcrossPrograms covers one
 // `adults(min: int)` definition, instantiated with two different literals
 // in two separate programs, each producing the correctly substituted
 // filter predicate. Proof that monomorphization doesn't leak state
@@ -106,17 +106,17 @@ pipeline main {
 	}
 }
 
-// TestCheckDeclassifyingSegmentOnNonPIIColumnRejected is PS-E: applying a
-// declassifying segment to a non-PII column is the same compile error
+// TestCheckDeclassifyingSegmentOnNonPIIColumnRejected confirms applying
+// a declassifying segment to a non-PII column is the same compile error
 // the declassifier stage raises directly, with dual-site context.
 //
-// decision: scrub is defined with the *stage*-form declassifier
+// scrub is defined with the *stage*-form declassifier
 // (`mask(col)`), not the expression form (`mask(.col)`). Only
 // checkDeclassify (the stage) enforces "the target must already be
 // @pii"; checkCall's expression-form mask has no such precondition (it
 // just clears PII on whatever string it's given). Using the stage form
-// is what makes this scenario an actual compile error to reuse, per §5's
-// "no new PII rule here, reuses the existing ones."
+// is what makes this scenario an actual compile error to reuse, with no
+// new PII rule of its own.
 func TestCheckDeclassifyingSegmentOnNonPIIColumnRejected(t *testing.T) {
 	const src = `pipeline scrub(col) = mask(col)
 
@@ -138,9 +138,9 @@ pipeline main {
 	}
 }
 
-// TestCheckBadColumnArgumentDualSiteDiagnostic is PS-F, and design/segments.md
-// §4's own worked example: a misspelled column argument errors against
-// the real schema, naming the segment, its bindings, and the call site,
+// TestCheckBadColumnArgumentDualSiteDiagnostic confirms a misspelled
+// column argument errors against the real schema, naming the segment,
+// its bindings, and the call site,
 // not just "field not in schema" pointing at synthesized AST.
 func TestCheckBadColumnArgumentDualSiteDiagnostic(t *testing.T) {
 	const src = `pipeline scrub(col) = map({ ...row, col: mask(.col) })

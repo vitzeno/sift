@@ -5,11 +5,9 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
-// typeNames resolves a schema literal's raw TypeName text (design.md §4's
-// compilation pipeline puts this resolution in the checker, not the
-// parser) to a value.Kind. v0 had exactly the first four; date was added
-// by design/date.md, decimal by design/decimal.md, datetime by
-// design/datetime.md.
+// typeNames resolves a schema literal's raw TypeName text to a
+// value.Kind. The parser leaves type names as text; this resolution
+// belongs to the checker.
 var typeNames = map[string]value.Kind{
 	"string":   value.String,
 	"int":      value.Int,
@@ -21,10 +19,10 @@ var typeNames = map[string]value.Kind{
 }
 
 // resolveSourceSchemas converts every source's ast.SchemaLit into a
-// value.Schema, attaching the @pii tag exactly as declared (design.md
-// §3, rule 1: "attach at the source"). A @deidentify field resolves to
-// value.Deidentified instead (design/deidentify.md §3): the wrapping
-// type, not another tag alongside Kind, with Optional discharged here
+// value.Schema, attaching the @pii tag exactly as declared -- the tag
+// attaches at the source. A @deidentify field resolves to
+// value.Deidentified instead: the wrapping type, not another tag
+// alongside Kind, with Optional discharged here
 // and folded into Inner -- the field never reaches a stage as an
 // optional, only Coerce needs to know it once was one.
 func (c *checker) resolveSourceSchemas() error {
@@ -57,12 +55,12 @@ func (c *checker) resolveSourceSchemas() error {
 	return nil
 }
 
-// checkMapRecord computes map's output schema from its record literal
-// (design.md §3): with a spread, start from the input schema's fields in
-// their original order and position; each explicit field either
-// overrides an existing field in place or is appended as a new one. This
-// ordering is why the jsonlSink module 2 built can rely on schema field
-// order matching what a reader would expect: map never reorders a field
+// checkMapRecord computes map's output schema from its record literal:
+// with a spread, start from the input schema's fields in their original
+// order and position; each explicit field either overrides an existing
+// field in place or is appended as a new one. This ordering is why a
+// sink can rely on schema field order matching what a reader would
+// expect: map never reorders a field
 // it doesn't touch.
 //
 // Field values are checked against inputSchema, not the schema under
@@ -83,8 +81,8 @@ func (c *checker) checkMapRecord(rec *ast.RecordExpr, inputSchema value.Schema) 
 	for _, rf := range rec.Fields {
 		// A @deidentify column may only be passed through (the ...row
 		// spread above), never reassigned -- even to a value that never
-		// reads the column back (design/deidentify.md §4: overwriting it
-		// with a plaintext constant would leave a column encrypted for
+		// reads the column back: overwriting it with a plaintext
+		// constant would leave a column encrypted for
 		// some rows and not others). Checked before checkExpr so the
 		// diagnostic names the real problem instead of whatever the RHS
 		// happens to be.

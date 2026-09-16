@@ -2,15 +2,14 @@ package checker
 
 import "github.com/vitzeno/sift/internal/ast"
 
-// resolveErrorPolicy resolves the program's `on error` declaration
-// (design-errors.md §5): absent means Abort (design.md §2's default;
-// only "skip" is required to be explicit, not the default itself). A
-// route target must resolve to an existing sink; naming a source,
-// pipeline segment, or an undeclared name is a compile error.
+// resolveErrorPolicy resolves the program's `on error` declaration.
+// Absent means Abort, the default; only "skip" has to be written
+// explicitly. A route target must resolve to an existing sink; naming a
+// source, pipeline segment, or an undeclared name is a compile error.
 //
-// The error sink's inbound "schema" is the fixed envelope
-// (design-errors.md §4), so unlike the main sink, its *ast.SinkDecl is
-// carried forward as-is: no PII check, no schema recomputation. The
+// The error sink's inbound "schema" is the fixed envelope, so unlike the
+// main sink, its *ast.SinkDecl is carried forward as-is: no PII check,
+// no schema recomputation. The
 // checker never threads a pipeline schema into it.
 func (c *checker) resolveErrorPolicy() (ast.ErrorPolicyKind, *ast.SinkDecl, error) {
 	decl := c.prog.ErrorPolicy

@@ -5,20 +5,20 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
-// checkRouteTerminal validates a route {...} terminal (design-routing.md
-// §6): each branch's predicate must be bool (like a filter predicate,
-// including the Optional-bool rule from design/optional-fields.md §3),
-// else is required (§2), and each target must be a declared sink.
+// checkRouteTerminal validates a route {...} terminal: each branch's
+// predicate must be bool (like a filter predicate, including the
+// Optional-bool rule), else is required, and each target must be a
+// declared sink.
 //
-// decision: "else required" means "at least one branch has IsElse", not
-// "the last branch is else". An else branch anywhere already makes every
-// row match something; branches after it are just unreachable, which
-// design-routing.md §8 says not to warn about.
+// "else required" means "at least one branch has IsElse", not "the last
+// branch is else". An else branch anywhere already makes every row match
+// something; branches after it are just unreachable, which is not warned
+// about.
 //
 // Returns the branches (Target is a name, see RouteBranch) plus every
 // distinct sink they target, in first-seen order, for
 // CheckedProgram.Sinks. Unlike broadcast, the same sink can appear in
-// more than one branch (§6), so this dedups instead of rejecting repeats.
+// more than one branch, so this dedups instead of rejecting repeats.
 func (c *checker) checkRouteTerminal(rt *ast.RouteTerminal, schema value.Schema) ([]RouteBranch, []*ast.SinkDecl, error) {
 	branches := make([]RouteBranch, len(rt.Branches))
 	var sinks []*ast.SinkDecl

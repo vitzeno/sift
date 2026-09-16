@@ -8,20 +8,19 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
-// funcSig is a built-in scalar function's signature. v0's function table
+// funcSig is a built-in scalar function's signature. The function table
 // is closed and every entry takes exactly one string and returns a
-// string, so one shape covers all of it. Declassify marks the three
-// that clear @pii (design.md §3, rule 4).
+// string, so one shape covers all of it. Declassify marks the three that
+// clear @pii.
 type funcSig struct {
 	Param      value.Kind
 	Return     value.Kind
 	Declassify bool
 }
 
-// builtinFuncs is the complete v0 function table. Custom scalar
-// functions (design.md §4) are optional for v0 and unused by either
-// acceptance case (see ast.Program's decision comment); this table can
-// grow a lookup for them later without changing checkCall's shape.
+// builtinFuncs is the complete function table. User-defined scalar
+// functions don't exist yet; this table can grow a lookup for them later
+// without changing checkCall's shape.
 var builtinFuncs = map[string]funcSig{
 	"mask":   {Param: value.String, Return: value.String, Declassify: true},
 	"hash":   {Param: value.String, Return: value.String, Declassify: true},
@@ -32,9 +31,9 @@ var builtinFuncs = map[string]funcSig{
 }
 
 // checkExpr computes an expression's value.Type against schema,
-// propagating @pii per design.md §3 rule 2 as it goes: any expression
-// that consumes a @pii value yields a @pii result, uniformly across
-// every operator and function (except the three declassifiers).
+// propagating @pii as it goes: any expression that consumes a @pii value
+// yields a @pii result, uniformly across every operator and function
+// (except the three declassifiers).
 func (c *checker) checkExpr(e ast.Expr, schema value.Schema) (value.Type, error) {
 	switch e := e.(type) {
 	case *ast.FieldAccess:
@@ -42,12 +41,12 @@ func (c *checker) checkExpr(e ast.Expr, schema value.Schema) (value.Type, error)
 		if !ok {
 			return value.Type{}, errorf(e.Pos, "field %q not in schema %s", e.Field, schema)
 		}
-		// Every rejection design/deidentify.md §4 lists -- a filter
+		// Every way a @deidentify column could be consumed -- a filter
 		// predicate, a comparison, a function argument, a segment
 		// parameter's substituted body -- reads the column first, so
 		// blocking that read here is the one place that covers all of
-		// them (design/deidentify.md §10): nothing downstream ever sees
-		// a Deidentified value to reject a second time.
+		// them: nothing downstream ever sees a Deidentified value to
+		// reject a second time.
 		if f.Type.Kind == value.Deidentified {
 			return value.Type{}, errorf(e.Pos, "field %q is @deidentify and cannot be used in an expression; it can only be passed through, selected, dropped, or renamed", e.Field)
 		}
@@ -55,8 +54,8 @@ func (c *checker) checkExpr(e ast.Expr, schema value.Schema) (value.Type, error)
 
 	case *ast.ParamRef:
 		// A bare identifier that survived to ordinary checking was never
-		// substituted for a scalar parameter's argument (design/segments.md
-		// §2.2): either it's outside any parameterized segment body, or
+		// substituted for a scalar parameter's argument: either it's
+		// outside any parameterized segment body, or
 		// it doesn't name one of the enclosing segment's own parameters.
 		// Either way it's an undefined name, the same diagnostic an
 		// unresolvable stage NameRef gets.
@@ -81,8 +80,8 @@ func (c *checker) checkExpr(e ast.Expr, schema value.Schema) (value.Type, error)
 		return c.checkCall(e, schema)
 
 	case *ast.RecordExpr:
-		// A record literal has no scalar type in v0 (value.Kind has no
-		// record variant). It's only meaningful as map's direct
+		// A record literal has no scalar type (value.Kind has no record
+		// variant). It's only meaningful as map's direct
 		// argument, handled by checkMapRecord, never as a general
 		// sub-expression.
 		return value.Type{}, errorf(e.Pos, "record literal is only valid as map's argument")
@@ -92,13 +91,12 @@ func (c *checker) checkExpr(e ast.Expr, schema value.Schema) (value.Type, error)
 	}
 }
 
-// checkBinaryOp types design.md §2's binary operators.
+// checkBinaryOp types the binary operators.
 //
-// decision: no implicit int<->double promotion. + - * / require both
-// operands to already share the same Kind; design.md shows no example
-// mixing them, and adding a coercion matrix now would be unused surface
-// area (CLAUDE.md non-negotiable #2). A future `1 + 1.5` can be
-// supported by loosening this one function later.
+// There is no implicit int<->double promotion: + - * / require both
+// operands to already share the same Kind. A coercion matrix would be
+// unused surface area; a future `1 + 1.5` can be supported by loosening
+// this one function later.
 func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Type, error) {
 	left, err := c.checkExpr(e.Left, schema)
 	if err != nil {
@@ -109,9 +107,9 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 		return value.Type{}, err
 	}
 
-	// decision: a bare int/double literal standing directly against a
-	// decimal operand adapts to decimal in that position only
-	// (design/decimal.md §2) -- mirrors Go's own untyped-constant model.
+	// A bare int/double literal standing directly against a decimal
+	// operand adapts to decimal in that position only, mirroring Go's own
+	// untyped-constant model.
 	// Checked before every operator dispatch below, ?? included: a real
 	// column of a different Kind never mixes this way, only a literal
 	// constant does. Mutating the local left/right copies is enough --
@@ -131,8 +129,8 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 	}
 
 	pii := left.PII || right.PII
-	// Optional propagates exactly like PII (design/optional-fields.md §3):
-	// any operator consuming a T? yields a U? until ?? explicitly
+	// Optional propagates exactly like PII: any operator consuming a T?
+	// yields a U? until ?? explicitly
 	// discharges it, above. Kind mismatches below are unaffected, since
 	// optionality never changes what Kinds an operator accepts.
 	optional := left.Optional || right.Optional
@@ -173,15 +171,12 @@ func (c *checker) checkBinaryOp(e *ast.BinaryOp, schema value.Schema) (value.Typ
 	}
 }
 
-// checkCoalesce types design/optional-fields.md §3's `??` discharge
-// operator: left ?? right always yields a non-Optional result. right
-// supplies the value for left's absent case, so after ?? there is no
-// absent case left to track.
+// checkCoalesce types the `??` discharge operator: left ?? right always
+// yields a non-Optional result. right supplies the value for left's
+// absent case, so after ?? there is no absent case left to track.
 //
-// decision: right (the default) must share left's Kind and must not
-// itself be Optional. Every acceptance example (§8) supplies a concrete
-// default (a literal or an already-resolved expression), never another
-// optional field. Requiring that keeps "?? always discharges" a hard
+// right (the default) must share left's Kind and must not itself be
+// Optional. Requiring that keeps "?? always discharges" a hard
 // guarantee rather than a maybe; chained optional defaults (`.a ?? .b`
 // where .b is itself optional) can be added later if a real program
 // needs it.
@@ -195,8 +190,8 @@ func (c *checker) checkCoalesce(e *ast.BinaryOp, left, right value.Type) (value.
 	return value.Type{Kind: left.Kind, PII: left.PII || right.PII}, nil
 }
 
-// isNumeric includes Decimal (design/decimal.md §3): + - * / and the
-// comparison operators all accept it on equal footing with int/double.
+// isNumeric includes Decimal: + - * / and the comparison operators all
+// accept it on equal footing with int/double.
 func isNumeric(k value.Kind) bool {
 	return k == value.Int || k == value.Double || k == value.Decimal
 }
@@ -204,9 +199,9 @@ func isNumeric(k value.Kind) bool {
 // literalKind reports e's Kind and true if e is a bare numeric literal
 // node (ast.IntLit or ast.DoubleLit) -- never a field access or a
 // computed expression, even one that happens to be int/double-typed.
-// The only caller is checkBinaryOp's decimal literal-context exception
-// (design/decimal.md §2); an int/double column must never silently
-// adapt to decimal, only a literal constant written at the call site.
+// The only caller is checkBinaryOp's decimal literal-context exception:
+// an int/double column must never silently adapt to decimal, only a
+// literal constant written at the call site.
 func literalKind(e ast.Expr) (value.Kind, bool) {
 	switch e.(type) {
 	case *ast.IntLit:
@@ -218,14 +213,13 @@ func literalKind(e ast.Expr) (value.Kind, bool) {
 	}
 }
 
-// isOrderable reports whether < > <= >= accept k (design/date.md §3,
-// widened by design/datetime.md §3): every numeric Kind, plus Date and
-// DateTime, both comparable but deliberately not numeric (no +, -, *, /
-// on either — isNumeric stays unchanged). Date and DateTime never mix
-// with each other here: this only says k itself is orderable, and
-// checkBinaryOp's separate left.Kind != right.Kind rejection is what
-// actually keeps the two temporal Kinds from comparing against one
-// another (design/datetime.md §2).
+// isOrderable reports whether < > <= >= accept k: every numeric Kind,
+// plus Date and DateTime, both comparable but deliberately not numeric
+// (no +, -, *, / on either — isNumeric stays unchanged). Date and
+// DateTime never mix with each other here: this only says k itself is
+// orderable, and checkBinaryOp's separate left.Kind != right.Kind
+// rejection is what actually keeps the two temporal Kinds from comparing
+// against one another.
 func isOrderable(k value.Kind) bool {
 	return isNumeric(k) || k == value.Date || k == value.DateTime
 }
@@ -235,8 +229,8 @@ func isNumericOrString(k value.Kind) bool {
 }
 
 // checkCall types a function call against builtinFuncs. An unrecognized
-// name is a compile error, not a silent no-op: v0's function set is
-// closed, same as its stage set (design.md §4).
+// name is a compile error, not a silent no-op: the function set is
+// closed, same as the stage set.
 func (c *checker) checkCall(e *ast.Call, schema value.Schema) (value.Type, error) {
 	sig, ok := builtinFuncs[e.Fn]
 	if !ok {
@@ -257,7 +251,6 @@ func (c *checker) checkCall(e *ast.Call, schema value.Schema) (value.Type, error
 	pii := argType.PII && !sig.Declassify
 	// Unlike PII, no builtin function discharges Optional (only ??
 	// does, in checkCoalesce). Every function call propagates it
-	// unconditionally (design/optional-fields.md §3's upper(.phone) is
-	// string? example).
+	// unconditionally: upper(.phone) on a string? is itself a string?.
 	return value.Type{Kind: sig.Return, Optional: argType.Optional, PII: pii}, nil
 }

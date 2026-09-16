@@ -7,8 +7,7 @@ import (
 
 // checkRename computes rename's output schema: each pair's Old column
 // becomes New in place, keeping its exact type, including the @pii tag
-// (design-improvements.md §2). This matters: renaming a PII column must
-// never launder it.
+// This matters: renaming a PII column must never launder it.
 //
 // Every New must avoid two collisions: a surviving column (one not
 // itself being renamed) already using that name, and another pair's New

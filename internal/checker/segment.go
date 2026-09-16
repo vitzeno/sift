@@ -11,8 +11,7 @@ import (
 
 // binding pairs one of a segment's declared parameters with the actual
 // argument bound to it at one call site: what substitution needs to
-// rewrite the body (design/segments.md §3), and what dual-site
-// diagnostics need to print (§4).
+// rewrite the body, and what dual-site diagnostics need to print.
 type binding struct {
 	param  ast.Param
 	colArg string   // valid when param.Kind == ast.ParamColumn
@@ -20,16 +19,16 @@ type binding struct {
 }
 
 // expandSegmentCall resolves a *ast.SegmentCall (scrub(email),
-// adults(18)) against schema: monomorphize at the call site
-// (design/segments.md §3), "C++ template" style, not row polymorphism.
+// adults(18)) against schema by monomorphizing at the call site, "C++
+// template" style, not row polymorphism.
 // It copies the target segment's body, substitutes each parameter for
 // its bound argument, and checks the copy with the ordinary stage rules
 // (expandStages) against the real schema at this point in the pipeline.
 // PII propagation, field existence, and predicate typing all fall out
 // of that reuse unchanged, no new rule needed. Any error surfacing from
 // inside the substituted body is wrapped with dual-site context before
-// it propagates further (§4): which segment, which bindings, and where
-// it was instantiated from.
+// it propagates further: which segment, which bindings, and where it was
+// instantiated from.
 func (c *checker) expandSegmentCall(call *ast.SegmentCall, schema value.Schema, visiting map[string]bool, callerName string) ([]ast.Stage, value.Schema, error) {
 	kind, exists := c.namespace[call.Name]
 	if !exists {
@@ -73,8 +72,8 @@ func (c *checker) expandSegmentCall(call *ast.SegmentCall, schema value.Schema, 
 
 // bindParam matches one call argument against the parameter it fills,
 // enforcing that a column parameter gets a column-name argument and a
-// scalar parameter gets a literal of its declared type (design/segments.md
-// §9's PS-G: arity and type mismatches are compile errors with position).
+// scalar parameter gets a literal of its declared type. Arity and type
+// mismatches are compile errors carrying a position.
 func bindParam(segName string, param ast.Param, arg ast.CallArg) (binding, error) {
 	switch param.Kind {
 	case ast.ParamColumn:
@@ -120,8 +119,8 @@ func scalarLitKind(e ast.Expr) value.Kind {
 }
 
 // wrapSegmentError prepends dual-site context to an error surfacing from
-// inside a substituted segment body (design/segments.md §4): the
-// segment's name and bindings, and where it was instantiated from. The
+// inside a substituted segment body: the segment's name and bindings,
+// and where it was instantiated from. The
 // wrapped error keeps the original Pos untouched, since monomorphization
 // copies AST nodes without changing their position, so that Pos already
 // points at the real location in the segment's own definition; only the
@@ -175,7 +174,7 @@ func formatLiteral(e ast.Expr) string {
 
 // substituteStages copies stages, replacing every occurrence of a bound
 // parameter's name with its call-site argument: monomorphization's
-// "copy the body" step (design/segments.md §3). Positions are preserved
+// "copy the body" step. Positions are preserved
 // node-for-node from the segment's own definition; only the text of a
 // column/parameter reference changes. That's what makes dual-site
 // diagnostics work almost for free: a substituted node's Pos still

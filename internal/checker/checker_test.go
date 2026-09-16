@@ -37,8 +37,8 @@ func checkErr(t *testing.T, src string) error {
 	return err
 }
 
-// TestCheckAdultsFilter is design.md §7 Case A end to end: parse, check,
-// and confirm the checked program is exactly what module 7 will need to
+// TestCheckAdultsFilter runs an adults filter end to end: parse, check,
+// and confirm the checked program is exactly what the runtime needs to
 // build source |> filter |> sink from.
 func TestCheckAdultsFilter(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, age: int })
@@ -67,12 +67,11 @@ pipeline main {
 	}
 }
 
-// TestCheckSourceSchemaOptional is OF1's checker-level slice of
-// design/optional-fields.md: a `?` suffix on a schema field resolves into
-// value.Type.Optional on that field only, leaving a plain field
-// untouched. phone is dropped before the sink so this test stays about
-// schema resolution, not the sink's discharge rule (OF2, tested
-// separately); PII and optional coexistence (§4) is OF3, also separate.
+// TestCheckSourceSchemaOptional confirms a `?` suffix on a schema field
+// resolves into value.Type.Optional on that field only, leaving a plain
+// field untouched. phone is dropped before the sink so this test stays
+// about schema resolution, not the sink's discharge rule; PII and
+// optional coexistence is covered separately.
 func TestCheckSourceSchemaOptional(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, phone: string? })
 sink out = jsonl("out.jsonl")
@@ -164,9 +163,9 @@ func TestCheckCoalesceDischargesOptional(t *testing.T) {
 	}
 }
 
-// TestCheckOptionalPropagatesThroughComparison is design/optional-fields.md
-// §3's other named example: `.phone == "x"` against a non-Optional string
-// literal type-checks fine and just propagates to bool?. The comparison
+// TestCheckOptionalPropagatesThroughComparison confirms `.phone == "x"`
+// against a non-Optional string literal type-checks fine and just
+// propagates to bool?. The comparison
 // itself never errors, exactly like an Optional binary operand never
 // blocks + or -. The error only surfaces later, wherever that bool? is
 // used as a predicate (TestCheckFilterRejectsOptionalBoolPredicate) or
@@ -264,9 +263,9 @@ pipeline main {
 }
 
 // TestCheckFilterRejectsOptionalBoolPredicate and its check-stage
-// sibling below are design/optional-fields.md §3's third discharge
-// rule: an Optional bool can't be used as a predicate directly, even
-// though its Kind is already Bool.
+// sibling below cover the third discharge rule: an Optional bool can't
+// be used as a predicate directly, even though its Kind is already
+// Bool.
 func TestCheckFilterRejectsOptionalBoolPredicate(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, active: bool? })
 sink out = jsonl("out.jsonl")
@@ -293,9 +292,8 @@ pipeline main {
 	}
 }
 
-// TestCheckMultiSinkBroadcast is design-multisink.md MS-A/§5: a terminal
-// list resolves to every named sink, in declared order, all sharing the
-// one computed schema.
+// TestCheckMultiSinkBroadcast confirms a terminal list resolves to every
+// named sink, in declared order, all sharing the one computed schema.
 func TestCheckMultiSinkBroadcast(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, age: int })
 sink out = jsonl("out.jsonl")
@@ -314,9 +312,9 @@ pipeline main {
 	}
 }
 
-// TestCheckDuplicateSinkInBroadcastList is design-multisink.md MS-C: the
-// same sink listed twice is a compile error, since it's always a literal
-// double-write of the same row.
+// TestCheckDuplicateSinkInBroadcastList confirms the same sink listed
+// twice is a compile error, since it's always a literal double-write of
+// the same row.
 func TestCheckDuplicateSinkInBroadcastList(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string })
 sink out = jsonl("out.jsonl")
@@ -330,9 +328,9 @@ pipeline main {
 	}
 }
 
-// TestCheckPIIRejectsUnmaskedMultiSink is design-multisink.md MS-D: an
-// unmasked @pii field reaching a broadcast list is a single compile
-// error naming every sink it applies to, not one error per sink.
+// TestCheckPIIRejectsUnmaskedMultiSink confirms an unmasked @pii field
+// reaching a broadcast list is a single compile error naming every sink
+// it applies to, not one error per sink.
 func TestCheckPIIRejectsUnmaskedMultiSink(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, email: string @pii })
 sink out = jsonl("out.jsonl")
@@ -364,9 +362,8 @@ pipeline main {
 	}
 }
 
-// TestCheckPIIRejectsUnmaskedSink is design.md §7 Case B's failure mode:
-// an unmasked @pii field reaching the sink must fail to compile with the
-// message design.md §3 spells out almost verbatim.
+// TestCheckPIIRejectsUnmaskedSink covers the headline failure mode: an
+// unmasked @pii field reaching the sink must fail to compile.
 func TestCheckPIIRejectsUnmaskedSink(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, email: string @pii })
 sink out = jsonl("out.jsonl")
@@ -400,8 +397,8 @@ pipeline main {
 	}
 }
 
-// TestCheckFieldNotInSchema matches CLAUDE.md's example diagnostic
-// almost exactly: a typo'd field name reported against the real schema.
+// TestCheckFieldNotInSchema covers the headline diagnostic: a typo'd
+// field name reported against the real schema.
 func TestCheckFieldNotInSchema(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, age: int })
 sink out = jsonl("out.jsonl")
@@ -484,8 +481,8 @@ func TestCheckMapRecordUnknownSpread(t *testing.T) {
 	}
 }
 
-// TestCheckNamedSegmentInlining covers design.md §2's reusable-segment
-// syntax: `clean`'s two stages must appear directly in the checked
+// TestCheckNamedSegmentInlining covers the reusable-segment syntax:
+// `clean`'s two stages must appear directly in the checked
 // program's Stages, with no NameRef indirection left over.
 func TestCheckNamedSegmentInlining(t *testing.T) {
 	const src = `pipeline clean =
@@ -656,7 +653,7 @@ func TestCheckBinaryOpTypeErrors(t *testing.T) {
 
 // TestCheckSourceSchemaDecimal confirms a decimal-typed schema field
 // resolves to value.Decimal, the same shape TestCheckSourceSchemaOptional
-// proves for Optional (design/decimal.md §5's typeNames entry).
+// proves for Optional.
 func TestCheckSourceSchemaDecimal(t *testing.T) {
 	const src = `source in = csv("orders.csv", schema: { id: int, price: decimal })
 sink out = jsonl("out.jsonl")
@@ -671,10 +668,9 @@ pipeline main {
 	}
 }
 
-// TestCheckDecimalLiteralPromotion is DEC-C: a bare int or double
-// literal standing directly against a decimal operand adapts to
-// decimal, on either side of the operator, for both arithmetic and
-// comparison (design/decimal.md §2).
+// TestCheckDecimalLiteralPromotion confirms a bare int or double literal
+// standing directly against a decimal operand adapts to decimal, on
+// either side of the operator, for both arithmetic and comparison.
 func TestCheckDecimalLiteralPromotion(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "price", Type: value.Type{Kind: value.Decimal}},
@@ -751,9 +747,8 @@ func TestCheckDecimalPromotionRequiresADecimalOperand(t *testing.T) {
 }
 
 // TestCheckDateComparison confirms date-date comparisons type-check to
-// bool (design/date.md §3): isOrderable, not isNumeric, is the gate for
-// </>/<=/>=, and ==/!= already accepted any matching Kind pair before
-// this doc existed.
+// bool: isOrderable, not isNumeric, is the gate for </>/<=/>=, and ==/!=
+// accept any matching Kind pair.
 func TestCheckDateComparison(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "started_on", Type: value.Type{Kind: value.Date}},
@@ -786,8 +781,7 @@ func TestCheckDateComparison(t *testing.T) {
 }
 
 // TestCheckDateArithmeticRejected confirms date deliberately isn't
-// numeric (design/date.md §2): no +, -, *, / on it, even though it's
-// comparable.
+// numeric: no +, -, *, / on it, even though it's comparable.
 func TestCheckDateArithmeticRejected(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "started_on", Type: value.Type{Kind: value.Date}},
@@ -810,10 +804,9 @@ func TestCheckDateArithmeticRejected(t *testing.T) {
 	}
 }
 
-// TestCheckDatePIIRejectsUnmaskedSink is design/date.md §3's PII
-// propagation half: a date @pii field reaches a sink unmasked exactly
-// like any other Kind, with no Date-specific carve-out. Regression
-// test, not new behavior.
+// TestCheckDatePIIRejectsUnmaskedSink confirms a date @pii field reaches
+// a sink unmasked exactly like any other Kind, with no Date-specific
+// carve-out.
 func TestCheckDatePIIRejectsUnmaskedSink(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, dob: date @pii })
 sink out = jsonl("out.jsonl")
@@ -828,9 +821,8 @@ pipeline main {
 	}
 }
 
-// TestCheckDateOptionalRejectsUndischargedSink is design/date.md §3's
-// Optional-interaction half: a date? field reaches a sink undischarged
-// exactly like any other Kind. Regression test, not new behavior.
+// TestCheckDateOptionalRejectsUndischargedSink confirms a date? field
+// reaches a sink undischarged exactly like any other Kind.
 func TestCheckDateOptionalRejectsUndischargedSink(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, dob: date? })
 sink out = jsonl("out.jsonl")
@@ -845,8 +837,8 @@ pipeline main {
 	}
 }
 
-// TestCheckDateOptionalAndPIIStackAtSink is design/date.md §3's named
-// gap made concrete: a date? @pii field needs both tags cleared like
+// TestCheckDateOptionalAndPIIStackAtSink covers a known gap: a date?
+// @pii field needs both tags cleared like
 // any other Kind, but date has no in-place declassifier (mask/hash/
 // redact are string-only), so unlike email in
 // TestCheckOptionalAndPIIStackAtSink, the only way to clear the
@@ -902,10 +894,9 @@ pipeline main {
 	}
 }
 
-// TestCheckDecimalPIIRejectsUnmaskedSink is design/decimal.md §2's PII
-// propagation half: a decimal @pii field reaches a sink unmasked
-// exactly like any other Kind, with no Decimal-specific carve-out.
-// Regression test, not new behavior.
+// TestCheckDecimalPIIRejectsUnmaskedSink confirms a decimal @pii field
+// reaches a sink unmasked exactly like any other Kind, with no
+// Decimal-specific carve-out.
 func TestCheckDecimalPIIRejectsUnmaskedSink(t *testing.T) {
 	const src = `source in = csv("accounts.csv", schema: { id: int, balance: decimal @pii })
 sink out = jsonl("out.jsonl")
@@ -920,10 +911,8 @@ pipeline main {
 	}
 }
 
-// TestCheckDecimalOptionalRejectsUndischargedSink is design/decimal.md's
-// Optional-interaction half: a decimal? field reaches a sink
-// undischarged exactly like any other Kind. Regression test, not new
-// behavior.
+// TestCheckDecimalOptionalRejectsUndischargedSink confirms a decimal?
+// field reaches a sink undischarged exactly like any other Kind.
 func TestCheckDecimalOptionalRejectsUndischargedSink(t *testing.T) {
 	const src = `source in = csv("accounts.csv", schema: { id: int, balance: decimal? })
 sink out = jsonl("out.jsonl")
@@ -938,11 +927,10 @@ pipeline main {
 	}
 }
 
-// TestCheckDecimalMaskIsACompileError is decimal.md §2's named gap made
-// concrete: mask/hash/redact are string-only, so a decimal @pii field
-// has no in-place declassifier at all -- the exact `mask(.balance)`
-// example the design doc's own worked examples (§9) show as a compile
-// error, not a path forward.
+// TestCheckDecimalMaskIsACompileError covers a known gap: mask/hash/
+// redact are string-only, so a decimal @pii field has no in-place
+// declassifier at all. `mask(.balance)` is a compile error, not a path
+// forward.
 func TestCheckDecimalMaskIsACompileError(t *testing.T) {
 	const src = `source in = csv("accounts.csv", schema: { id: int, balance: decimal @pii })
 sink out = jsonl("out.jsonl")
@@ -1013,7 +1001,7 @@ pipeline main {
 }
 
 // TestCheckDecimalCoalesceLiteralPromotion confirms the literal-context
-// promotion rule (§2) now applies to ?? too: `.balance ?? 0` and
+// promotion rule applies to ?? too: `.balance ?? 0` and
 // `.balance ?? 0.0` both type-check to a non-optional decimal.
 func TestCheckDecimalCoalesceLiteralPromotion(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
@@ -1053,7 +1041,7 @@ func TestCheckDecimalCoalesceRealColumnDefaultStillRejected(t *testing.T) {
 }
 
 // TestCheckSourceSchemaDateTime confirms "datetime" resolves in
-// typeNames (design/datetime.md §3).
+// typeNames.
 func TestCheckSourceSchemaDateTime(t *testing.T) {
 	const src = `source in = csv("events.csv", schema: { id: int, occurred_at: datetime })
 sink out = jsonl("out.jsonl")
@@ -1068,10 +1056,9 @@ pipeline main {
 	}
 }
 
-// TestCheckDateTimeComparison is DT-D/DT-E's compile-time half:
-// datetime-datetime comparisons type-check to bool (design/datetime.md
-// §3): isOrderable, widened to include DateTime, is the gate for
-// </>/<=/>=, and ==/!= already accepted any matching Kind pair.
+// TestCheckDateTimeComparison confirms datetime-datetime comparisons
+// type-check to bool: isOrderable, widened to include DateTime, is the
+// gate for </>/<=/>=, and ==/!= accept any matching Kind pair.
 func TestCheckDateTimeComparison(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "clock_in", Type: value.Type{Kind: value.DateTime}},
@@ -1104,8 +1091,8 @@ func TestCheckDateTimeComparison(t *testing.T) {
 }
 
 // TestCheckDateTimeArithmeticRejected confirms datetime deliberately
-// isn't numeric (design/datetime.md §2): no +, -, *, / on it, even
-// though it's comparable -- the same cut date.md made.
+// isn't numeric: no +, -, *, / on it, even though it's comparable --
+// the same cut date makes.
 func TestCheckDateTimeArithmeticRejected(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "clock_in", Type: value.Type{Kind: value.DateTime}},
@@ -1128,10 +1115,10 @@ func TestCheckDateTimeArithmeticRejected(t *testing.T) {
 	}
 }
 
-// TestCheckDateAndDateTimeNeverMix is DT-I: a date field and a datetime
+// TestCheckDateAndDateTimeNeverMix confirms a date field and a datetime
 // field are different Kinds, so the ordinary left.Kind != right.Kind
-// rejection already refuses to compare them, confirming design/
-// datetime.md §2's "never mix" decision is actually enforced.
+// rejection already refuses to compare them. The two temporal types
+// never mix.
 func TestCheckDateAndDateTimeNeverMix(t *testing.T) {
 	schema := value.Schema{Fields: []value.Field{
 		{Name: "signup_date", Type: value.Type{Kind: value.Date}},
@@ -1144,10 +1131,9 @@ func TestCheckDateAndDateTimeNeverMix(t *testing.T) {
 	}
 }
 
-// TestCheckDateTimePIIRejectsUnmaskedSink is design/datetime.md §2's PII
-// propagation half: a datetime @pii field reaches a sink unmasked
-// exactly like any other Kind, with no DateTime-specific carve-out.
-// Regression test, not new behavior.
+// TestCheckDateTimePIIRejectsUnmaskedSink confirms a datetime @pii field
+// reaches a sink unmasked exactly like any other Kind, with no
+// DateTime-specific carve-out.
 func TestCheckDateTimePIIRejectsUnmaskedSink(t *testing.T) {
 	const src = `source in = csv("events.csv", schema: { id: int, signup_time: datetime @pii })
 sink out = jsonl("out.jsonl")
@@ -1162,10 +1148,8 @@ pipeline main {
 	}
 }
 
-// TestCheckDateTimeOptionalRejectsUndischargedSink is design/datetime.md
-// §2's Optional-interaction half: a datetime? field reaches a sink
-// undischarged exactly like any other Kind. Regression test, not new
-// behavior.
+// TestCheckDateTimeOptionalRejectsUndischargedSink confirms a datetime?
+// field reaches a sink undischarged exactly like any other Kind.
 func TestCheckDateTimeOptionalRejectsUndischargedSink(t *testing.T) {
 	const src = `source in = csv("events.csv", schema: { id: int, signup_time: datetime? })
 sink out = jsonl("out.jsonl")

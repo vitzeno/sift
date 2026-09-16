@@ -13,21 +13,19 @@ import (
 // The return slice holds only built-in stage nodes (ast.BuiltinStageNames):
 // by the time a NameRef is resolved here, it either expands into more of
 // those (recursively) or fails, so nothing else can reach the output.
-// This is exactly the flat chain module 7 needs to build Stream objects
-// from.
+// This is exactly the flat chain the runtime needs to build Stream
+// objects from.
 //
 // visiting is the in-progress call stack of segment names, used to
 // reject a segment defined in terms of itself (directly or through a
-// cycle of segments) with a clear error instead of a stack overflow.
-// CLAUDE.md requires "no bare panic on user-facing error paths", and an
-// infinite recursion is exactly that if a malformed program can trigger
-// it.
+// cycle of segments) with a clear error instead of a stack overflow. A
+// malformed program must never be able to crash the compiler.
 //
 // callerName is the name of the pipeline decl whose Body is currently
 // being expanded (the runnable pipeline's name at the top of Check(), or
 // a segment's own name once expansion has recursed into one), carried
-// through for dual-site diagnostics (design/segments.md §4): a
-// parameterized-call error names both where the bad code lives (the
+// through for dual-site diagnostics: a parameterized-call error names
+// both where the bad code lives (the
 // segment definition, via the substituted node's own Pos) and where it
 // was instantiated from (callerName, plus the call's own position).
 func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting map[string]bool, callerName string) ([]ast.Stage, value.Schema, error) {
@@ -90,8 +88,7 @@ func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting
 		case *ast.Limit, *ast.Offset:
 			// Pure row-slicing: schema passes through unchanged, and
 			// there's nothing to validate. The parser only ever
-			// produces a non-negative int literal for N
-			// (design-improvements.md §3).
+			// produces a non-negative int literal for N.
 			out = append(out, st)
 
 		case *ast.Declassify:
@@ -127,10 +124,9 @@ func (c *checker) expandStages(stages []ast.Stage, schema value.Schema, visiting
 
 // expandNameRef resolves a NameRef found in the middle of a chain. Only
 // a named pipeline segment is valid here: a source or sink name may only
-// appear at the very ends of the one runnable pipeline (design.md
-// characterizes a source/sink-less pipeline as a pure
-// `stream<T> -> stream<U>` value, so a named segment's body can never
-// itself touch a source or sink).
+// appear at the very ends of the one runnable pipeline. A source/sink-
+// less pipeline is a pure `stream<T> -> stream<U>` value, so a named
+// segment's body can never itself touch a source or sink.
 func (c *checker) expandNameRef(ref *ast.NameRef, schema value.Schema, visiting map[string]bool) ([]ast.Stage, value.Schema, error) {
 	switch c.namespace[ref.Name] {
 	case declSource:
