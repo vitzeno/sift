@@ -1,7 +1,7 @@
-// Same shape as etl.sift, but with `on error |> errors` (design-errors.md
-// §5): two rows in this ingest are bad — Zoe's email is blank (fails
+// Same shape as etl.sift, but with `on error |> errors`: two rows in
+// this ingest are bad — Zoe's email is blank (fails
 // `validate`'s check) and Max's amount cell won't coerce to double at
-// all (fails at the source, design-errors.md §2.3 phase E3, before
+// all (fails at the source, before
 // `validate` even runs). Both are diverted to the `errors` sink as a
 // fixed envelope, never their raw fields; every other row still flows
 // through the full pipeline — segments, declassifiers, projection — and

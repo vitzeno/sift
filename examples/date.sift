@@ -1,4 +1,4 @@
-// Demonstrates the date type (design/date.md): a plain calendar date,
+// Demonstrates the date type: a plain calendar date,
 // compared chronologically instead of as text. started_on is written
 // as plain ISO-8601, so it needs no formats entry at all. renewed_on is
 // written day-first, so the formats kwarg says so explicitly -- each

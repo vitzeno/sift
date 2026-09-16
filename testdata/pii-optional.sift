@@ -1,4 +1,4 @@
-// Demonstrates design/optional-fields.md's OF-G: email is both optional
+// Demonstrates the two tags together: email is both optional
 // (`string?`) and @pii, and the two tags are orthogonal — both must be
 // discharged before the sink, in either order. Tom's blank email reads
 // as absent; `?? "n/a"` discharges the optional, then mask() discharges

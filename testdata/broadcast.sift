@@ -1,4 +1,4 @@
-// Demonstrates terminal broadcast (design-multisink.md): one masked
+// Demonstrates terminal broadcast: one masked
 // stream, pulled once, lands in two destinations at once -- a warehouse
 // export and an audit copy -- with no branching or per-row selection.
 // The PII check runs once against the shared terminal schema and covers

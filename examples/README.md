@@ -5,8 +5,7 @@ possible pipeline and adds one idea at a time. Every section has a
 working example in this folder you can run yourself.
 
 For the full grammar and the exact rules, see
-[`../design/language.md`](../design/language.md). For how the codebase
-is put together, see [`../CLAUDE.md`](../CLAUDE.md).
+[`../docs/language.md`](../docs/language.md).
 
 ## Contents
 
@@ -34,7 +33,7 @@ is put together, see [`../CLAUDE.md`](../CLAUDE.md).
 22. [Reading xlsx files](#reading-xlsx-files)
 23. [Quick reference](#quick-reference)
 24. [Project layout](#project-layout)
-25. [Status](#status)
+25. [What isn't here yet](#what-isnt-here-yet)
 
 ## Building the CLI
 
@@ -462,8 +461,7 @@ aborting the run depending on `on error`, with a reason like
 There's no way to write a date *literal* in an expression, so every
 comparison is between two date columns, never a column and a fixed
 cutoff, and there's no arithmetic (`date + 1`, `date - date`) yet
-either. Both are real, deliberate gaps, not oversights — see
-`../design/date.md` if you're curious why.
+either. Both are real, deliberate gaps, not oversights.
 
 `date.sift` in this folder is this exact program.
 
@@ -519,8 +517,7 @@ behavior always has.
 directly against each other (`.a_date == .a_datetime`) is a compile
 error, the same never-silently-mix rule every other pair of types
 already follows. Like `date`, there's no `datetime` literal syntax and
-no arithmetic (`datetime + 1`, `datetime - datetime`) — see
-`../design/datetime.md` if you're curious why.
+no arithmetic (`datetime + 1`, `datetime - datetime`).
 
 `datetime.sift` in this folder is this exact program.
 
@@ -993,8 +990,7 @@ segments-typo.sift:4:28: error: column "emial" not in schema { name: string, age
 
 Parameters are given by position only. No defaults, no variable length
 lists, no named arguments. And a segment can never take another segment
-as a parameter (see `../design/segments.md` §8 for why). `segments.sift`
-in this folder shows the same reuse.
+as a parameter. `segments.sift` in this folder shows the same reuse.
 
 ## A full ETL, with error routing
 
@@ -1220,9 +1216,7 @@ workbook it reads.
   fixed record, never the row's own fields, to a second sink.
 
 For the full grammar and rules, see
-[`../design/language.md`](../design/language.md). Each later feature has
-its own design doc under [`../design/`](../design/); see
-[Status](#status) for what's built.
+[`../docs/language.md`](../docs/language.md).
 
 ## Project layout
 
@@ -1243,7 +1237,7 @@ internal/format/console/  console sink (--print)
 examples/                 one .sift + fixture pair per language feature or error policy,
                           for this tutorial; never read by a test
 testdata/                 a copy of every examples/ fixture an actual Go test reads
-design/                   language spec + one design doc per build phase
+docs/                     the language reference
 ```
 
 ```console
@@ -1255,27 +1249,27 @@ $ make emit-ast       # dumps the parsed AST for examples/adults.sift
 $ make emit-schema    # dumps the checked source/sink schemas
 ```
 
-## Status
+## What isn't here yet
 
-The base language is done: both example cases in
-`../design/language.md` §7 pass end to end through the CLI, and every
-part of the code has tests. That base is kept small on purpose; see
-`../design/language.md` §5 for the full list of what's in and what's
-left out for now (joins, dedupe, fan out, an optimizer, schema guessing,
-and formats beyond csv/jsonl).
+Sift is deliberately small, and some things a mature ETL tool has are
+genuinely missing rather than hidden somewhere in this tutorial:
 
-Sift is still growing. `../CLAUDE.md` keeps the up to date list of what's
-shipped and what's still a draft, one design doc at a time. As of this
-tutorial, these have shipped: failing rows as data with `on error`
-(`../design/errors.md`), `select`/`drop`/`rename`/`limit`/`offset` and
-mask/hash/redact as stages (`../design/improvements.md`), writing to more
-than one sink (`../design/multisink.md`), named segments with parameters
-(`../design/segments.md`), the `xlsx` source (`../design/xlsx.md`),
-optional fields (`../design/optional-fields.md`), conditional routing
-(`../design/routing.md`), column aliases for headers that aren't valid
-identifiers (`../design/column-aliases.md`), the `date` type
-(`../design/date.md`), the `decimal` type (`../design/decimal.md`),
-unconditional thousands-comma leniency for `decimal` cells
-(`../design/decimal-leniency.md`), the `datetime` type
-(`../design/datetime.md`), and `@deidentify`, which encrypts a column at
-the source instead of tagging it (`../design/deidentify.md`).
+- **Joins**, and the optionality-aware result types they'd need.
+- **Buffering stages** — `dedupe`, `sort`, `group by`. Every stage in
+  the language today is streaming, with exactly one row in flight.
+- **Fan-in**: merging two sources into one stream. Fan-*out* exists, as
+  broadcast and `route`.
+- **An optimizer** — no stage fusion, no predicate pushdown, no parallel
+  branches.
+- **Schema inference.** Every csv and xlsx source declares its schema.
+- **More formats.** Sources are csv and xlsx; sinks are jsonl and
+  console. Adding one is a self-contained job: see the format registry
+  in [`../docs/language.md`](../docs/language.md).
+- **Mid-pipeline type conversion** — there's no `try_decimal(.col)` to
+  turn a string column into a `decimal` partway through a run. Types are
+  fixed at the source.
+- **Arithmetic on `date` and `datetime`**, and literal syntax for
+  either.
+- **In-place declassifiers for non-string types.** `mask`, `hash`, and
+  `redact` are string-only, so a `date @pii` or `decimal @pii` field can
+  only be dropped.

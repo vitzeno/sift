@@ -1,5 +1,5 @@
-// Demonstrates a named, reusable pipeline segment (design.md §2):
-// `clean` declares no source or sink of its own — it's a
+// Demonstrates a named, reusable pipeline segment: `clean` declares no
+// source or sink of its own — it's a
 // stream<T> -> stream<U> value dropped into main by name, just like a
 // built-in stage would be.
 source in  = csv("named-segment.csv", schema: { name: string, email: string })

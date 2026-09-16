@@ -1,5 +1,5 @@
-// Demonstrates the default error policy (design.md §2, design-errors.md
-// §3.1): a failing check stops the whole run. Tom is dropped by filter
+// Demonstrates the default error policy: a failing check stops the
+// whole run. Tom is dropped by filter
 // (age 15); Grace's blank email fails check and aborts the run right
 // there — Liam is never even read. Only Ada's row, written before the
 // failure, reaches the sink.

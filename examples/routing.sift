@@ -1,4 +1,4 @@
-// Demonstrates conditional routing (design-routing.md): one masked
+// Demonstrates conditional routing: one masked
 // stream, pulled once, but each row goes to exactly one sink chosen by
 // a predicate over region -- unlike broadcast, never more than one
 // write per row. else is mandatory (it's what makes route total), and

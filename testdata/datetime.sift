@@ -1,4 +1,4 @@
-// Demonstrates the datetime type (design/datetime.md): a naive timestamp
+// Demonstrates the datetime type: a naive timestamp
 // (date + time-of-day, no timezone), comparable exactly like date but
 // finer-grained. clock_in/clock_out are written space-separated, the
 // same shape a timeclock or bank export typically uses, so formats

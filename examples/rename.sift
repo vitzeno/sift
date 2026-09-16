@@ -1,5 +1,5 @@
 // Demonstrates rename migrating legacy column names onto a canonical
-// schema (design-improvements.md S2): this export still uses the old
+// schema: this export still uses the old
 // CRM field names dob and email_addr; rename brings them onto the
 // names downstream pipelines expect (birth_date, email) while keeping
 // each column's exact position and type. email_addr was @pii, so the

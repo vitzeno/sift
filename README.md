@@ -110,4 +110,5 @@ That's enough to get something running. For the full tour of the
 language, one feature at a time with a working example for each, see
 [examples/README.md](examples/README.md).
 
-For how the code itself is organized, see [CLAUDE.md](CLAUDE.md).
+For the language reference — the type system, the PII rules, and how the
+runtime is put together — see [docs/language.md](docs/language.md).

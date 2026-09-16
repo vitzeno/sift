@@ -3,11 +3,11 @@
 // analytics extract, broadcast to a warehouse and an audit copy.
 //
 //   1. validate         — a reusable, parameterless named segment
-//      (design.md §2): shared row-level checks every ingest pipeline
+//      shared row-level checks every ingest pipeline
 //      for this dataset would want, factored out once.
 //   2. filter(.age >= 18)          — a plain built-in stage.
 //   3. eligible(100.0)             — a parameterized named segment
-//      (design/segments.md): a scalar parameter reused wherever a
+//      a scalar parameter reused wherever a
 //      minimum-order-amount filter is needed.
 //   4. map(...)                    — normalizes plan to uppercase and
 //      derives a boolean field from a comparison.

@@ -1,5 +1,5 @@
-// Demonstrates offset/limit row-slicing (design-improvements.md S3):
-// pulling one small page out of a much larger activity log to smoke-test
+// Demonstrates offset/limit row-slicing: pulling one small page out of
+// a much larger activity log to smoke-test
 // a pipeline against a handful of rows instead of the full dataset.
 // offset(2) discards Ada and Tom, then limit(2) takes exactly the next
 // two rows (Grace, Liam) and stops — Nina and Owen are never reached.

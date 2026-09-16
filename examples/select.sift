@@ -1,4 +1,4 @@
-// Demonstrates select as a projection (design-improvements.md S1): the
+// Demonstrates select as a projection: the
 // full signup export carries an internal id and acquisition channel the
 // analytics team has no use for. select(email, name, plan) keeps only
 // the three columns analytics needs, in that order — not the source's

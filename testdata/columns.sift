@@ -1,4 +1,4 @@
-// Demonstrates column aliasing (design/column-aliases.md): a header
+// Demonstrates column aliasing: a header
 // with a space, like "Transaction ID", can never be a schema identifier,
 // so the columns kwarg maps a clean identifier to the raw header text
 // instead. amount is aliased too, purely for a consistent lowercase

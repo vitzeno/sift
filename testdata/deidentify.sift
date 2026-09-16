@@ -1,4 +1,4 @@
-// Demonstrates @deidentify (design/deidentify.md §2): email is encrypted
+// Demonstrates @deidentify: email is encrypted
 // inside the source, before any stage runs, and never decrypted by Sift
 // itself. Unlike @pii there is no declassifier — the column can only be
 // passed through, selected, dropped, or renamed once it's read.

@@ -1,5 +1,5 @@
-// A composite, real-world use of every stage design-improvements.md
-// added: turning a full CRM dump into a GDPR-safe analytics extract.
+// A composite, real-world use of every schema-shaping and declassifier
+// stage: turning a full CRM dump into a GDPR-safe analytics extract.
 // Order matters here and shows how the stages compose:
 //   1. drop(ssn, internal_notes)     — two columns analytics must never
 //      see at all, not even masked.

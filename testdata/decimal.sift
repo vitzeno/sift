@@ -1,9 +1,9 @@
-// Demonstrates the decimal type (design/decimal.md): exact arithmetic
+// Demonstrates the decimal type: exact arithmetic
 // with no float64 representation error. A bare int/double literal
 // standing against a decimal column adapts to decimal (0.08 below), but
 // two real columns of different Kind never mix silently. Row 3's price
-// ("1,100.00") shows decimal-leniency.md: a comma-thousands-formatted
-// cell parses unconditionally, no kwarg required.
+// ("1,100.00") shows thousands-comma leniency: a comma-thousands-
+// formatted cell parses unconditionally, no kwarg required.
 source in = csv("decimal.csv", schema: { id: int, price: decimal, discount: decimal })
 sink out = jsonl("decimal_out.jsonl")
 

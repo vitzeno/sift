@@ -1,5 +1,5 @@
 // Same shape again, but `on error |> errors` routes Grace's failure to
-// a second sink (design-errors.md §4) instead of dropping or aborting.
+// a second sink instead of dropping or aborting.
 // The "errors" sink never sees Grace's raw fields — only a fixed
 // envelope of where and why she failed: provenance plus reason.
 on error |> errors

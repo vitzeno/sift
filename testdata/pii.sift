@@ -1,4 +1,4 @@
-// Demonstrates @pii tagging and declassification (design.md §3): email
+// Demonstrates @pii tagging and declassification: email
 // is tagged @pii at the source and must be masked before it can reach
 // the sink — writing it unmasked is a compile error.
 source in  = csv("pii.csv", schema: { name: string, email: string @pii })
