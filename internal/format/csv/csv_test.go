@@ -10,6 +10,21 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
+// newTestSource builds a source and closes it when the test ends. These
+// tests drive a csvSource directly rather than through runtime.Run,
+// which is what closes a source in a real program, so without this the
+// file handle stays open for the whole test binary. On Unix that is
+// invisible; on Windows t.TempDir's cleanup cannot delete a file that is
+// still open, and the test fails there and only there.
+func newTestSource(t *testing.T, opts runtime.SourceOptions) (runtime.Source, error) {
+	t.Helper()
+	src, err := NewCSVSource(opts)
+	if src != nil {
+		t.Cleanup(func() { _ = src.Close() })
+	}
+	return src, err
+}
+
 func peopleSchema() value.Schema {
 	return value.Schema{Fields: []value.Field{
 		{Name: "name", Type: value.Type{Kind: value.String}},
@@ -18,7 +33,7 @@ func peopleSchema() value.Schema {
 }
 
 func TestCSVSourceTypedParseAndProvenance(t *testing.T) {
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name:   "in",
 		Path:   "../../../testdata/people.csv",
 		Schema: peopleSchema(),
@@ -57,7 +72,7 @@ func TestCSVSourceTypedParseAndProvenance(t *testing.T) {
 }
 
 func TestCSVSourceMissingSchemaField(t *testing.T) {
-	_, err := NewCSVSource(runtime.SourceOptions{
+	_, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: "../../../testdata/people.csv",
 		Schema: value.Schema{Fields: []value.Field{
@@ -82,7 +97,7 @@ func TestCSVSourceMalformedRecordIsInfraFatal(t *testing.T) {
 	// rather than returning a (short) record.
 	writeFile(t, path, "name,age\nOnlyOneField\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name:   "in",
 		Path:   path,
 		Schema: peopleSchema(),
@@ -109,7 +124,7 @@ func TestCSVSourceBadCellIsRowFailure(t *testing.T) {
 	path := filepath.Join(dir, "badcell.csv")
 	writeFile(t, path, "name,age\nAda,not-a-number\nTom,15\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name:   "in",
 		Path:   path,
 		Schema: peopleSchema(),
@@ -169,7 +184,7 @@ func TestCSVSourceOptionalAbsentFromEmptyCell(t *testing.T) {
 	path := filepath.Join(dir, "people.csv")
 	writeFile(t, path, "name,phone\nAda,555-1234\nTom,\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{Name: "in", Path: path, Schema: optionalPhoneSchema()})
+	src, err := newTestSource(t, runtime.SourceOptions{Name: "in", Path: path, Schema: optionalPhoneSchema()})
 	if err != nil {
 		t.Fatalf("NewCSVSource: %v", err)
 	}
@@ -199,7 +214,7 @@ func TestCSVSourceOptionalAbsentFromMissingColumn(t *testing.T) {
 	path := filepath.Join(dir, "people.csv")
 	writeFile(t, path, "name\nAda\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{Name: "in", Path: path, Schema: optionalPhoneSchema()})
+	src, err := newTestSource(t, runtime.SourceOptions{Name: "in", Path: path, Schema: optionalPhoneSchema()})
 	if err != nil {
 		t.Fatalf("NewCSVSource: %v, want no error for a missing Optional column", err)
 	}
@@ -216,7 +231,7 @@ func TestCSVSourceOptionalAbsentFromMissingColumn(t *testing.T) {
 // TestCSVSourceRequiredColumnMissingIsStructuralError is OF-C: a required
 // column absent from the header names the column and the real header.
 func TestCSVSourceRequiredColumnMissingIsStructuralError(t *testing.T) {
-	_, err := NewCSVSource(runtime.SourceOptions{
+	_, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: "../../../testdata/people.csv",
 		Schema: value.Schema{Fields: []value.Field{
@@ -242,7 +257,7 @@ func TestCSVSourceColumnAlias(t *testing.T) {
 	// already read "amount", not "Amount".
 	writeFile(t, path, "Transaction ID,Date,amount\n1001,2026-01-05,42.50\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -273,7 +288,7 @@ func TestCSVSourceColumnAliasRequiredMissingIsStructuralError(t *testing.T) {
 	path := filepath.Join(dir, "transactions.csv")
 	writeFile(t, path, "Transaction ID,Amount\n1001,42.50\n")
 
-	_, err := NewCSVSource(runtime.SourceOptions{
+	_, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -298,7 +313,7 @@ func TestCSVSourceColumnAliasOptionalMissingIsAbsent(t *testing.T) {
 	path := filepath.Join(dir, "transactions.csv")
 	writeFile(t, path, "Transaction ID,Amount\n1001,42.50\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -328,7 +343,7 @@ func TestCSVSourceOptionalUnparseableIsRowFailure(t *testing.T) {
 	path := filepath.Join(dir, "people.csv")
 	writeFile(t, path, "name,age\nAda,not-a-number\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -356,7 +371,7 @@ func TestCSVSourceDateDefaultFormat(t *testing.T) {
 	path := filepath.Join(dir, "signups.csv")
 	writeFile(t, path, "name,signup_date\nAda,2026-01-05\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -389,7 +404,7 @@ func TestCSVSourceDateExplicitFormat(t *testing.T) {
 	path := filepath.Join(dir, "uk_export.csv")
 	writeFile(t, path, "name,dob\nAda,05/01/2026\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -420,7 +435,7 @@ func TestCSVSourceDateTwoFieldsTwoFormats(t *testing.T) {
 	path := filepath.Join(dir, "uk_export.csv")
 	writeFile(t, path, "dob,last_login\n05/01/2026,2026-02-10T09:30:00Z\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -456,7 +471,7 @@ func TestCSVSourceDateBadCellIsRowFailure(t *testing.T) {
 	path := filepath.Join(dir, "signups.csv")
 	writeFile(t, path, "name,signup_date\nAda,2026-02-30\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -485,7 +500,7 @@ func TestCSVSourceDateTimeDefaultFormat(t *testing.T) {
 	path := filepath.Join(dir, "events.csv")
 	writeFile(t, path, "name,occurred_at\nAda,2026-07-31T04:10:25\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -518,7 +533,7 @@ func TestCSVSourceDateTimeExplicitFormat(t *testing.T) {
 	path := filepath.Join(dir, "tide.csv")
 	writeFile(t, path, "transaction_id,date\nTX1,2026-07-31 04:10:25\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -550,7 +565,7 @@ func TestCSVSourceDateAndDateTimeTwoFieldsIndependentDefaults(t *testing.T) {
 	path := filepath.Join(dir, "mixed.csv")
 	writeFile(t, path, "signup_date,last_login\n2026-01-05,2026-02-10T09:30:00\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -582,7 +597,7 @@ func TestCSVSourceDateTimeBadCellIsRowFailure(t *testing.T) {
 	path := filepath.Join(dir, "events.csv")
 	writeFile(t, path, "name,occurred_at\nAda,2026-07-31T25:10:25\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -611,7 +626,7 @@ func TestCSVSourceDecimal(t *testing.T) {
 	path := filepath.Join(dir, "orders.csv")
 	writeFile(t, path, "id,price\n1,19.99\n2,5.00\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -647,7 +662,7 @@ func TestCSVSourceDecimalThousandsSeparator(t *testing.T) {
 	path := filepath.Join(dir, "orders.csv")
 	writeFile(t, path, "id,price\n1,\"2,100.00\"\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -675,7 +690,7 @@ func TestCSVSourceDecimalBadCellIsRowFailure(t *testing.T) {
 	path := filepath.Join(dir, "orders.csv")
 	writeFile(t, path, "id,price\n1,not-a-number\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name: "in",
 		Path: path,
 		Schema: value.Schema{Fields: []value.Field{
@@ -714,7 +729,7 @@ func TestCSVSourceDeidentify(t *testing.T) {
 	path := filepath.Join(dir, "people.csv")
 	writeFile(t, path, "name,email\nAda,ada@example.com\n")
 
-	src, err := NewCSVSource(runtime.SourceOptions{
+	src, err := newTestSource(t, runtime.SourceOptions{
 		Name:                "in",
 		Path:                path,
 		Schema:              deidentifySchema(),
@@ -742,7 +757,7 @@ func TestCSVSourceDeidentifyMissingKeyIsConstructionError(t *testing.T) {
 	path := filepath.Join(dir, "people.csv")
 	writeFile(t, path, "name,email\nAda,ada@example.com\n")
 
-	_, err := NewCSVSource(runtime.SourceOptions{
+	_, err := newTestSource(t, runtime.SourceOptions{
 		Name:   "in",
 		Path:   path,
 		Schema: deidentifySchema(),
