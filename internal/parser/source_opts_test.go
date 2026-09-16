@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestParseSourceOpts covers design/xlsx.md §1's generic-kwarg widening:
-// a source declaration may carry keyword arguments beyond schema, in any
+// TestParseSourceOpts covers generic keyword arguments: a source
+// declaration may carry keyword arguments beyond schema, in any
 // order relative to it, each a bare literal collected into
 // ast.SourceDecl.Opts untouched by the parser.
 func TestParseSourceOpts(t *testing.T) {
@@ -75,8 +75,8 @@ func TestParseSourceDuplicateSchema(t *testing.T) {
 	}
 }
 
-// TestParseSourceColumns covers design/column-aliases.md §3's columns
-// kwarg: a schema identifier mapped to the raw header string to match
+// TestParseSourceColumns covers the columns kwarg: a schema identifier
+// mapped to the raw header string to match
 // instead of its own name, collected into ast.SourceDecl.Columns.
 func TestParseSourceColumns(t *testing.T) {
 	const src = `source in = csv("transactions.csv",

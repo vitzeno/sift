@@ -41,8 +41,7 @@ func assertTokens(t *testing.T, src string, want []tok) {
 	}
 }
 
-// TestAdultsFilterTokens tokenizes design.md §7 Case A's adults.sift end
-// to end. This is the token table CLAUDE.md's Definition of Done asks for.
+// TestAdultsFilterTokens tokenizes a whole adults.sift end to end.
 func TestAdultsFilterTokens(t *testing.T) {
 	src := `source in = csv("people.csv", schema: { name: string, age: int })
 sink out = jsonl("adults.jsonl")
@@ -71,8 +70,8 @@ pipeline main {
 	assertTokens(t, src, want)
 }
 
-// TestPIIAndDeclassify covers design.md §7 Case B's shape: a @pii tag on
-// a schema field, and the mask() call that clears it.
+// TestPIIAndDeclassify covers a @pii tag on a schema field and the
+// mask() call that clears it.
 func TestPIIAndDeclassify(t *testing.T) {
 	src := `email: string @pii
 map({ email: mask(.email) })`
@@ -87,8 +86,8 @@ map({ email: mask(.email) })`
 	assertTokens(t, src, want)
 }
 
-// TestOptionalSchemaField covers design/optional-fields.md's `T?` schema
-// syntax, alone and combined with @pii (§4: the two tags can coexist).
+// TestOptionalSchemaField covers the `T?` schema syntax, alone and
+// combined with @pii -- the two tags can coexist.
 func TestOptionalSchemaField(t *testing.T) {
 	src := `phone: string?
 email: string? @pii`
@@ -101,8 +100,8 @@ email: string? @pii`
 	assertTokens(t, src, want)
 }
 
-// TestCoalesceOperator covers design/optional-fields.md's `??` discharge
-// operator: two "?" lex as one COALESCE token, not two QUESTIONs, and a
+// TestCoalesceOperator covers the `??` discharge operator: two "?" lex
+// as one COALESCE token, not two QUESTIONs, and a
 // lone "?" (schema syntax) still lexes as QUESTION.
 func TestCoalesceOperator(t *testing.T) {
 	assertTokens(t, `.phone ?? "n/a"`, []tok{
@@ -115,8 +114,8 @@ func TestCoalesceOperator(t *testing.T) {
 	})
 }
 
-// TestRouteArrow covers design/routing.md §7's one new token: "=>" lexes
-// as one ARROW, not ASSIGN followed by GT, and a lone "=" (assignment,
+// TestRouteArrow covers route's one new token: "=>" lexes as one ARROW,
+// not ASSIGN followed by GT, and a lone "=" (assignment,
 // e.g. a named segment's `=` form) still lexes as ASSIGN.
 func TestRouteArrow(t *testing.T) {
 	assertTokens(t, `.region == "EU" => eu_sink`, []tok{

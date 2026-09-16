@@ -1,7 +1,6 @@
 // Package lexer turns Sift source text into a stream of Tokens, each
 // carrying its source position so the parser and checker can produce
-// diagnostics that point at real code (design.md §4, CLAUDE.md's
-// "diagnostics are a feature").
+// diagnostics that point at real code.
 package lexer
 
 import "fmt"
@@ -141,12 +140,12 @@ func (k Kind) Symbol() string {
 	return k.String()
 }
 
-// keywords is the complete, closed set of reserved words in v0. Stage
-// names (filter/map/check), format names (csv/jsonl), and function names
+// keywords is the complete, closed set of reserved words. Stage names
+// (filter/map/check), format names (csv/jsonl), and function names
 // (mask/hash/upper/...) are absent on purpose: they're ordinary
-// identifiers that the parser/checker resolve, not lexer-level keywords.
-// This matches the "resolved late, not special-cased early" shape the
-// format registry uses (CLAUDE.md non-negotiable #4).
+// identifiers that the parser and checker resolve, not lexer-level
+// keywords, the same "resolve late, don't special-case early" shape the
+// format registry uses.
 var keywords = map[string]Kind{
 	"source":   SOURCE,
 	"sink":     SINK,

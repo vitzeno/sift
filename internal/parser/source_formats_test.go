@@ -51,8 +51,7 @@ func TestParseSourceDuplicateFormats(t *testing.T) {
 }
 
 // TestParseSourceColumnsAndFormatsTogether confirms the two per-field
-// kwargs coexist without interfering (design/date.md and
-// design/column-aliases.md are independent).
+// kwargs coexist without interfering.
 func TestParseSourceColumnsAndFormatsTogether(t *testing.T) {
 	const src = `source in = csv("export.csv",
   schema:  { dob: date },

@@ -54,9 +54,8 @@ func TestParseSelectSingleColumn(t *testing.T) {
 	}
 }
 
-// TestParseColumnListRejectsFieldAccess locks design-improvements.md §5's
-// two-form convention: `.field` is never valid where select/drop expect
-// a bare column name.
+// TestParseColumnListRejectsFieldAccess locks the two-form convention:
+// `.field` is never valid where select/drop expect a bare column name.
 func TestParseColumnListRejectsFieldAccess(t *testing.T) {
 	_, err := Parse(`pipeline main { in |> select(.name) |> out }`)
 	if err == nil {

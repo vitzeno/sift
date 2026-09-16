@@ -7,20 +7,17 @@ import (
 	"github.com/vitzeno/sift/internal/lexer"
 )
 
-// Precedence levels for design.md §2's binary operators, low to high,
-// plus design/optional-fields.md §3's `??` discharge operator between
-// comparisons and arithmetic. It's tighter than comparisons/&&/||, so
+// Precedence levels for the binary operators, low to high, plus the `??`
+// discharge operator between comparisons and arithmetic. It's tighter
+// than comparisons/&&/||, so
 // `.age ?? 0 >= 18` reads as `(.age ?? 0) >= 18`: the default resolves
 // before the comparison inspects it. It's looser than + - * /, so
 // `.amount ?? 0 + 5` reads as `.amount ?? (0 + 5)`: the whole arithmetic
 // expression to its right is the default. All operators are
-// left-associative, and none share design.md's grammar with a unary
-// form, so there's no unary tier here at all.
+// left-associative.
 //
-// decision: no unary operators in v0 (no "-x", no "!x"). design.md §2
-// lists only binary + - * /, comparisons, and && / ||. A negative
-// literal or boolean negation would need one, but neither acceptance
-// case calls for it, so it's left out rather than guessed at.
+// There are deliberately no unary operators (no "-x", no "!x"): the
+// grammar has only binary + - * /, comparisons, and && / ||.
 const (
 	lowest       = 0
 	orPrec       = 1
@@ -143,9 +140,8 @@ func (p *Parser) parsePrimary() ast.Expr {
 // parseCallOrParamRef := IDENT "(" (Expr ("," Expr)*)? ")" | IDENT
 //
 // A bare identifier followed by "(" is a function call, same as always.
-// One with no parens used to be a flat parse error in v0 ("no variable
-// bindings to reference"). design-segments.md §2.2 adds exactly one
-// case: a scalar parameter's bare name inside its own segment's body
+// One with no parens has exactly one meaning: a scalar parameter's bare
+// name inside its own segment's body
 // ("min" in `filter(.age >= min)`). The parser can't tell that apart
 // from a typo since it needs the enclosing segment's parameter list,
 // which is checker business, so every bare identifier now parses as an

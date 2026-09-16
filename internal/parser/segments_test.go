@@ -7,8 +7,8 @@ import (
 	"github.com/vitzeno/sift/internal/ast"
 )
 
-// TestParseScalarParam covers design-segments.md PS1: a `name: type`
-// parameter parses as ast.ParamScalar, and its bare-name reference inside
+// TestParseScalarParam checks that a `name: type` parameter parses as
+// ast.ParamScalar, and that its bare-name reference inside
 // the body parses as an ast.ParamRef.
 func TestParseScalarParam(t *testing.T) {
 	prog, err := Parse(`pipeline adults(min: int) = filter(.age >= min)`)
@@ -66,8 +66,8 @@ func TestParseColumnParam(t *testing.T) {
 	}
 }
 
-// TestParseMixedParams covers §2.3: column and scalar parameters can mix,
-// in declared order.
+// TestParseMixedParams confirms column and scalar parameters can mix, in
+// declared order.
 func TestParseMixedParams(t *testing.T) {
 	prog, err := Parse(`pipeline gate(col, min: int) = check(.col >= min, "below min")`)
 	if err != nil {
@@ -118,9 +118,9 @@ func TestParseSegmentCallSite(t *testing.T) {
 	}
 }
 
-// TestParseSegmentCallRejectsFieldAccessArgument confirms §6's scope
-// fence in the grammar: a call argument is a column name or literal,
-// never a field access (a call argument is never stream-dependent).
+// TestParseSegmentCallRejectsFieldAccessArgument confirms the grammar
+// keeps call arguments stream-independent: an argument is a column name
+// or a literal, never a field access.
 func TestParseSegmentCallRejectsFieldAccessArgument(t *testing.T) {
 	_, err := Parse(`pipeline main { in |> scrub(.email) |> out }`)
 	if err == nil {
@@ -133,9 +133,8 @@ func TestParseSegmentCallRejectsFieldAccessArgument(t *testing.T) {
 
 // TestParseBareIdentifierIsParamRef confirms the grammar relaxation
 // behind scalar parameters: a bare identifier in expression position is
-// no longer a flat parse error (v0's behavior). It now parses as an
-// ast.ParamRef, and whether it resolves to anything is left to the
-// checker.
+// not a parse error. It parses as an ast.ParamRef, and whether it
+// resolves to anything is left to the checker.
 func TestParseBareIdentifierIsParamRef(t *testing.T) {
 	prog, err := Parse(`pipeline main { in |> filter(row) |> out }`)
 	if err != nil {

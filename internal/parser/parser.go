@@ -1,6 +1,6 @@
 // Package parser turns a lexer.Token stream into an *ast.Program:
 // recursive descent for top-level and pipeline structure, a Pratt
-// (precedence-climbing) parser for expressions (design.md §4/§6).
+// (precedence-climbing) parser for expressions.
 package parser
 
 import (
@@ -10,10 +10,10 @@ import (
 	"github.com/vitzeno/sift/internal/lexer"
 )
 
-// ParseError is a parser diagnostic: a position plus a message, formatted
-// the way CLAUDE.md asks for ("reads like a data tool, not a stack
-// trace"). The CLI (module 8) prefixes it with the source file name; the
-// parser itself doesn't know what file it's reading.
+// ParseError is a parser diagnostic: a position plus a message, phrased
+// to read like a data tool rather than a stack trace. The CLI prefixes
+// it with the source file name; the parser itself doesn't know what file
+// it's reading.
 type ParseError struct {
 	Pos lexer.Pos
 	Msg string
@@ -37,11 +37,11 @@ func newParser(src string) *Parser {
 	return p
 }
 
-// abort carries a *ParseError through a panic. This is v0's error-bailout
-// mechanism, not a user-facing panic: Parse and ParseExpr are the only two
+// abort carries a *ParseError through a panic. This is an internal
+// bailout, not a user-facing panic: Parse and ParseExpr are the only two
 // entry points into this package, and both recover it and return a plain
-// error, so nothing outside this package ever sees a panic (CLAUDE.md: "no
-// bare panic on user-facing error paths"). The alternative, threading `if
+// error, so nothing outside this package ever sees a panic. The
+// alternative, threading `if
 // err != nil { return }` through every one of the ~20 parse* functions
 // below, would obscure the grammar those functions are meant to read like.
 type abort struct{ err *ParseError }

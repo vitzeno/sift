@@ -17,7 +17,7 @@ func (p *Parser) parseProgram() *ast.Program {
 		case lexer.PIPELINE:
 			prog.Pipelines = append(prog.Pipelines, p.parsePipelineDecl())
 		case lexer.ON:
-			// decision: "at most one on error declaration" is a purely
+			// "at most one on error declaration" is a purely
 			// structural check, no namespace or type resolution needed to
 			// spot a second one, so it's rejected here in the parser
 			// rather than deferred to the checker the way "more than one
@@ -73,12 +73,10 @@ func (p *Parser) parseErrorPolicyDecl() *ast.ErrorPolicyDecl {
 //	| "formats" ":" FormatsLit | IDENT ":" Literal
 //
 // Exactly one "schema" kwarg is required, in any position among the
-// kwargs. "columns" (design/column-aliases.md §3) and "formats"
-// (design/date.md §3) are both optional. Every other kwarg is a
-// format-specific option collected into ast.SourceDecl.Opts and left
-// uninterpreted here (design/xlsx.md §1's "widen the generic kwarg
-// handling", not an xlsx-specific grammar change per CLAUDE.md
-// non-negotiable #2).
+// kwargs. "columns" and "formats" are both optional. Every other kwarg
+// is a format-specific option collected into ast.SourceDecl.Opts and
+// left uninterpreted here, so a format can grow options without any
+// change to this grammar.
 func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 	pos := p.cur.Pos
 	p.expect(lexer.SOURCE)
@@ -143,7 +141,7 @@ func (p *Parser) parseSourceDecl() *ast.SourceDecl {
 
 // parseEnvRef := "env" "(" STRING ")"
 //
-// The only value the key: kwarg accepts in v0 (design/deidentify.md §2).
+// The only value the key: kwarg accepts.
 func (p *Parser) parseEnvRef() *ast.EnvRef {
 	pos := p.cur.Pos
 	fn := p.expectIdent()
@@ -174,9 +172,9 @@ func (p *Parser) parseColumnsLit() []ast.ColumnAlias {
 // parseColumnAlias := IDENT ":" STRING
 //
 // Unlike a schema field, the value here is always a raw header string,
-// never a type name — design/column-aliases.md §3 keeps this grammar
-// deliberately narrower than schema's, since a columns entry only ever
-// names a literal header to match, nothing else.
+// never a type name. This grammar is deliberately narrower than
+// schema's, since a columns entry only ever names a literal header to
+// match, nothing else.
 func (p *Parser) parseColumnAlias() ast.ColumnAlias {
 	pos := p.cur.Pos
 	field := p.expectIdent()
@@ -187,9 +185,9 @@ func (p *Parser) parseColumnAlias() ast.ColumnAlias {
 
 // parseFormatsLit := "{" (FieldFormat ("," FieldFormat)*)? "}"
 //
-// A direct syntactic copy of parseColumnsLit (design/date.md §3): same
-// shape, different purpose — a formats entry names a Go reference-layout
-// string to parse a date field's cells against, not a header to match.
+// A direct syntactic copy of parseColumnsLit: same shape, different
+// purpose — a formats entry names a Go reference-layout string to parse
+// a date field's cells against, not a header to match.
 func (p *Parser) parseFormatsLit() []ast.FieldFormat {
 	p.expect(lexer.LBRACE)
 	var formats []ast.FieldFormat
@@ -232,9 +230,9 @@ func (p *Parser) parseSourceOptValue() ast.Expr {
 
 // parseSinkDecl := "sink" IDENT "=" IDENT "(" STRING ")"
 //
-// No schema keyword arg here: design.md §3 declares schema only on
-// sources. A sink's expected schema is whatever the checker computes for
-// the stream feeding it.
+// No schema keyword arg here: schema is declared only on sources. A
+// sink's expected schema is whatever the checker computes for the stream
+// feeding it.
 func (p *Parser) parseSinkDecl() *ast.SinkDecl {
 	pos := p.cur.Pos
 	p.expect(lexer.SINK)
@@ -265,11 +263,11 @@ func (p *Parser) parseSchemaLit() ast.SchemaLit {
 
 // parseSchemaField := IDENT ":" IDENT "?"? ("@" IDENT)*
 //
-// decision: @pii and @deidentify are the only two tags v0 recognizes.
-// Rather than build a general attribute grammar for two cases, the
-// parser accepts any number of `@` IDENT tags and rejects anything but
-// those two; whether a field can carry both is a semantic question
-// (design/deidentify.md §5) the checker answers, not the parser.
+// @pii and @deidentify are the only two tags recognized. Rather than
+// build a general attribute grammar for two cases, the parser accepts
+// any number of `@` IDENT tags and rejects anything but those two;
+// whether a field can carry both is a semantic question the checker
+// answers, not the parser.
 func (p *Parser) parseSchemaField() ast.SchemaField {
 	pos := p.cur.Pos
 	name := p.expectIdent()
@@ -342,9 +340,9 @@ func (p *Parser) parseParamList() []ast.Param {
 
 // parseParam := IDENT (":" IDENT)?
 //
-// No colon: a column parameter (design-segments.md §2.1), referenced as
-// `.name` inside the body and bound to a bare column name at the call
-// site. With a colon: a scalar parameter (§2.2) of the named type,
+// No colon: a column parameter, referenced as `.name` inside the body
+// and bound to a bare column name at the call site. With a colon: a
+// scalar parameter of the named type,
 // referenced as a bare value inside the body and bound to a literal at
 // the call site. Like SchemaField.TypeName, the type name is left as raw
 // identifier text; resolving it against int/double/string/bool is the

@@ -52,7 +52,7 @@ func TestExprPrecedenceAndAssociativity(t *testing.T) {
 		{".age >= 18 && .active == true", "((.age GE 18) AND (.active EQ true))"},
 		{"1 != 2 == false", "((1 NE 2) EQ false)"},
 		{"1 < 2", "(1 LT 2)"},
-		// design/optional-fields.md §3: ?? binds tighter than comparisons
+		// ?? binds tighter than comparisons
 		// (the default resolves before the comparison inspects it) but
 		// looser than arithmetic (the whole right-hand expression is the
 		// default), and chains left-associatively like every other
@@ -85,9 +85,8 @@ func TestExprCallsAndNesting(t *testing.T) {
 	}
 }
 
-// TestParseAdultsFilter parses design.md §7 Case A's adults.sift end to
-// end and checks the resulting tree against the shape module 4
-// hand-built; the parser now produces it instead.
+// TestParseAdultsFilter parses a whole adults.sift end to end and checks
+// the resulting tree, the same shape internal/ast's tests hand-build.
 func TestParseAdultsFilter(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, age: int })
 sink out = jsonl("adults.jsonl")
@@ -158,8 +157,8 @@ pipeline main {
 	}
 }
 
-// TestParseMultiSinkTerminalList covers design-multisink.md §2: after
-// the final "|>", a comma-separated list of sink NameRefs becomes
+// TestParseMultiSinkTerminalList covers broadcast: after the final "|>",
+// a comma-separated list of sink NameRefs becomes
 // multiple trailing elements in the pipeline body, in declared order.
 func TestParseMultiSinkTerminalList(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string })
@@ -208,8 +207,8 @@ pipeline main {
 	}
 }
 
-// TestParseRouteTerminal covers design/routing.md §7's grammar: a route
-// terminal with two predicate branches and a mandatory else, each
+// TestParseRouteTerminal covers the route grammar: a route terminal with
+// two predicate branches and a mandatory else, each
 // resolving a sink name or the discard sentinel.
 func TestParseRouteTerminal(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, region: string })
@@ -254,9 +253,8 @@ pipeline main {
 	}
 }
 
-// TestParseRouteElseDischarge covers `else => discard` (design-routing.md
-// §2): the one way to opt out of totality explicitly, distinct from a
-// sink target.
+// TestParseRouteElseDischarge covers `else => discard`, the one way to
+// opt out of totality explicitly, distinct from a sink target.
 func TestParseRouteElseDischarge(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string })
 sink out = jsonl("out.jsonl")
@@ -279,8 +277,7 @@ pipeline main {
 }
 
 // TestParseRouteRejectsTrailingPipe confirms a route terminal always
-// ends the pipeline (design-routing.md §1): nothing can follow its
-// closing "}".
+// ends the pipeline: nothing can follow its closing "}".
 func TestParseRouteRejectsTrailingPipe(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string })
 sink out = jsonl("out.jsonl")
@@ -294,8 +291,8 @@ pipeline main {
 	}
 }
 
-// TestParsePIIDeclassify covers design.md §7 Case B's shape: a @pii
-// schema field, and a map stage that clears it with mask().
+// TestParsePIIDeclassify covers a @pii schema field and a map stage that
+// clears it with mask().
 func TestParsePIIDeclassify(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, email: string @pii })
 sink out = jsonl("out.jsonl")
@@ -329,11 +326,11 @@ pipeline main {
 	}
 }
 
-// TestParseDeidentifySchemaFieldAndKeyKwarg covers design/deidentify.md
-// §2's grammar: a @deidentify schema field tag and a source's key:
+// TestParseDeidentifySchemaFieldAndKeyKwarg covers the @deidentify
+// grammar: a @deidentify schema field tag and a source's key:
 // env("NAME") kwarg. Also parses @pii and @deidentify stacked on one
 // field -- the parser accepts any combination of the two recognized
-// tags (this decl.go's own decision comment); rejecting that
+// tags; rejecting that
 // combination is the checker's job, exercised separately in
 // internal/checker.
 func TestParseDeidentifySchemaFieldAndKeyKwarg(t *testing.T) {
@@ -366,9 +363,9 @@ func TestParseDeidentifySchemaFieldAndKeyKwarg(t *testing.T) {
 	}
 }
 
-// TestParseOptionalSchemaField covers design/optional-fields.md's `T?`
-// schema syntax, alone and combined with @pii (§4: the two tags coexist,
-// and `?` always comes first after the type name).
+// TestParseOptionalSchemaField covers the `T?` schema syntax, alone and
+// combined with @pii: the two tags coexist, and `?` always comes first
+// after the type name.
 func TestParseOptionalSchemaField(t *testing.T) {
 	const src = `source in = csv("people.csv", schema: { name: string, phone: string?, email: string? @pii })`
 
@@ -391,8 +388,8 @@ func TestParseOptionalSchemaField(t *testing.T) {
 	}
 }
 
-// TestParseNamedSegmentEqualsForm covers design.md §2's named-segment
-// syntax (`pipeline clean = ...`, no braces) alongside the brace form,
+// TestParseNamedSegmentEqualsForm covers the named-segment syntax
+// (`pipeline clean = ...`, no braces) alongside the brace form,
 // and a NameRef to a named segment used inside another pipeline's body.
 func TestParseNamedSegmentEqualsForm(t *testing.T) {
 	const src = `pipeline clean =
