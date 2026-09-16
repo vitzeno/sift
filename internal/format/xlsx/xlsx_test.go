@@ -22,8 +22,8 @@ func peopleSchema() value.Schema {
 }
 
 // optionalPhoneSchema is name/phone where phone is Optional: the
-// fixture schema for design/optional-fields.md's OF-A/OF-C/OF-D cases,
-// mirroring the csv package's own copy.
+// fixture schema for this package's optional-field tests, mirroring the
+// csv package's own copy.
 func optionalPhoneSchema() value.Schema {
 	return value.Schema{Fields: []value.Field{
 		{Name: "name", Type: value.Type{Kind: value.String}},
@@ -35,7 +35,7 @@ func optionalPhoneSchema() value.Schema {
 // row of raw cell strings, in order) and saves it under t.TempDir().
 // Generating fixtures with excelize itself, rather than checking in
 // binary .xlsx files, keeps every fixture's shape readable as the Go
-// code that built it (design/xlsx.md §5).
+// code that built it.
 func writeXLSXFixture(t *testing.T, sheet string, rows [][]string) string {
 	t.Helper()
 	f := excelize.NewFile()
@@ -135,8 +135,7 @@ func TestXLSXSourceTypedParseAndProvenance(t *testing.T) {
 }
 
 // TestXLSXSourceColumnOrderIgnoresSheetOrder: extra/reordered columns
-// in the sheet don't matter. Header binding matches by name
-// (design/xlsx.md §2.1).
+// in the sheet don't matter. Header binding matches by name.
 func TestXLSXSourceColumnOrderIgnoresSheetOrder(t *testing.T) {
 	path := writeXLSXFixture(t, "Sheet1", [][]string{
 		{"age", "extra", "name"},
@@ -269,9 +268,9 @@ func TestXLSXSourceMissingColumn(t *testing.T) {
 	}
 }
 
-// TestXLSXSourceColumnAliasWithOffsetHeaderRow is design/column-aliases.md's
-// acceptance case B: a spaced header resolves via an alias, proving
-// aliasing composes with an offset header_row and is format-agnostic
+// TestXLSXSourceColumnAliasWithOffsetHeaderRow confirms a spaced header
+// resolves via an alias, proving aliasing composes with an offset
+// header_row and is format-agnostic
 // (it resolves identically to the csv case).
 func TestXLSXSourceColumnAliasWithOffsetHeaderRow(t *testing.T) {
 	path := writeXLSXFixture(t, "Sheet1", [][]string{
@@ -400,11 +399,10 @@ func TestXLSXSourceEmptyHeaderCellsIgnored(t *testing.T) {
 	}
 }
 
-// TestXLSXSourceDate is DATE-G: a date-typed field reads correctly from
-// an xlsx fixture with no format-specific code path of its own --
-// regression-shaped, proving design/date.md §3's "xlsx needs no special
-// handling" claim, since excelize's row iterator already delivers cells
-// as strings the same way csv's reader does.
+// TestXLSXSourceDate confirms a date-typed field reads correctly from an
+// xlsx fixture with no format-specific code path of its own: excelize's
+// row iterator already delivers cells as strings the same way csv's
+// reader does.
 func TestXLSXSourceDate(t *testing.T) {
 	path := writeXLSXFixture(t, "Sheet1", [][]string{
 		{"name", "dob"},
@@ -432,10 +430,9 @@ func TestXLSXSourceDate(t *testing.T) {
 	}
 }
 
-// TestXLSXSourceDateTime is DT-G: a datetime-typed field reads correctly
-// from an xlsx fixture with no format-specific code path of its own --
-// regression-shaped, proving design/datetime.md §3's "no source/sink code
-// changes" claim the same way TestXLSXSourceDate already did for date.
+// TestXLSXSourceDateTime confirms a datetime-typed field reads correctly
+// from an xlsx fixture with no format-specific code path of its own, the
+// same way TestXLSXSourceDate already does for date.
 func TestXLSXSourceDateTime(t *testing.T) {
 	path := writeXLSXFixture(t, "Sheet1", [][]string{
 		{"transaction_id", "date"},
@@ -463,11 +460,10 @@ func TestXLSXSourceDateTime(t *testing.T) {
 	}
 }
 
-// TestXLSXSourceDecimal is DEC-A's xlsx half: a decimal-typed field
-// reads correctly from an xlsx fixture with no format-specific code
-// path of its own -- regression-shaped, proving design/decimal.md §3's
-// "no source/sink code changes" claim, since excelize's row iterator
-// already delivers cells as strings the same way csv's reader does.
+// TestXLSXSourceDecimal confirms a decimal-typed field reads correctly
+// from an xlsx fixture with no format-specific code path of its own,
+// since excelize's row iterator already delivers cells as strings the
+// same way csv's reader does.
 // "5.00" is deliberately not "5": trailing zeros must round-trip
 // through xlsx exactly like they do through csv (value.DecimalValue's
 // fix isn't csv-specific).
@@ -527,7 +523,7 @@ func TestXLSXSourceDecimalThousandsSeparator(t *testing.T) {
 }
 
 // deidentifySchema is name/email where email is @deidentify, shared by
-// this package's design/deidentify.md tests.
+// this package's deidentify tests.
 func deidentifySchema() value.Schema {
 	return value.Schema{Fields: []value.Field{
 		{Name: "name", Type: value.Type{Kind: value.String}},
@@ -536,8 +532,8 @@ func deidentifySchema() value.Schema {
 }
 
 // TestXLSXSourceDeidentify confirms xlsx gets @deidentify for free from
-// Coerce's own shared parse path (design/deidentify.md §10), the same
-// way it already gets date/decimal/datetime with no format-specific
+// Coerce's own shared parse path, the same way it already gets
+// date/decimal/datetime with no format-specific
 // code: encrypted output is opaque base64, never the plaintext cell.
 func TestXLSXSourceDeidentify(t *testing.T) {
 	t.Setenv("SIFT_TEST_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")

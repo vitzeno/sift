@@ -69,8 +69,8 @@ func TestCSVSourceMissingSchemaField(t *testing.T) {
 	}
 }
 
-// TestCSVSourceMalformedRecordIsInfraFatal is ERR-E's source-level half
-// (design-errors.md §2.4): a record the reader can't even tokenize into
+// TestCSVSourceMalformedRecordIsInfraFatal confirms a record the reader
+// can't even tokenize into
 // the right number of fields leaves no well-formed row to attach a
 // per-row Failure to, so Next reports a clean-looking ok=false and the
 // real problem surfaces through Err(), never a panic.
@@ -99,8 +99,8 @@ func TestCSVSourceMalformedRecordIsInfraFatal(t *testing.T) {
 	}
 }
 
-// TestCSVSourceBadCellIsRowFailure is ERR-D (design-errors.md §7): a
-// non-numeric "age" cell must become a row Failure, not a panic, and
+// TestCSVSourceBadCellIsRowFailure confirms a non-numeric "age" cell
+// becomes a row Failure, not a panic, and
 // the source must keep working normally afterward: the next row still
 // reads, and Ordinal/Offset keep advancing as though nothing went wrong,
 // since only that one row is marked, never the stream itself.
@@ -154,7 +154,7 @@ func TestCSVSourceBadCellIsRowFailure(t *testing.T) {
 }
 
 // optionalPhoneSchema is name/phone where phone is Optional: the
-// fixture schema for design/optional-fields.md's OF-A/OF-C/OF-D cases.
+// fixture schema for this package's optional-field tests.
 func optionalPhoneSchema() value.Schema {
 	return value.Schema{Fields: []value.Field{
 		{Name: "name", Type: value.Type{Kind: value.String}},
@@ -231,15 +231,15 @@ func TestCSVSourceRequiredColumnMissingIsStructuralError(t *testing.T) {
 	}
 }
 
-// TestCSVSourceColumnAlias is design/column-aliases.md's A-1: a header
-// with a space (never a valid identifier) is named via the columns
-// kwarg instead of the field's own identifier text.
+// TestCSVSourceColumnAlias confirms a header with a space (never a valid
+// identifier) is named via the columns kwarg instead of the field's own
+// identifier text.
 func TestCSVSourceColumnAlias(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transactions.csv")
 	// amount has no columns entry: it resolves by the bare-identifier
 	// fallback, which is exact and case-sensitive, so the header must
-	// already read "amount", not "Amount" (design/column-aliases.md §8).
+	// already read "amount", not "Amount".
 	writeFile(t, path, "Transaction ID,Date,amount\n1001,2026-01-05,42.50\n")
 
 	src, err := NewCSVSource(runtime.SourceOptions{
@@ -290,9 +290,9 @@ func TestCSVSourceColumnAliasRequiredMissingIsStructuralError(t *testing.T) {
 	}
 }
 
-// TestCSVSourceColumnAliasOptionalMissingIsAbsent is design/column-aliases.md's
-// acceptance case D: an Optional field with an alias whose header isn't
-// in the file at all resolves to absent, not a construction error.
+// TestCSVSourceColumnAliasOptionalMissingIsAbsent confirms an Optional
+// field with an alias whose header isn't in the file at all resolves to
+// absent, not a construction error.
 func TestCSVSourceColumnAliasOptionalMissingIsAbsent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transactions.csv")
@@ -544,7 +544,7 @@ func TestCSVSourceDateTimeExplicitFormat(t *testing.T) {
 // TestCSVSourceDateAndDateTimeTwoFieldsIndependentDefaults proves a date
 // field and a datetime field on the same source, both with no formats
 // entry, resolve against their own Kind-appropriate default independently
-// on the same row (design/datetime.md §3's resolveDateFormat widening).
+// on the same row.
 func TestCSVSourceDateAndDateTimeTwoFieldsIndependentDefaults(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mixed.csv")
@@ -640,9 +640,8 @@ func TestCSVSourceDecimal(t *testing.T) {
 	}
 }
 
-// TestCSVSourceDecimalThousandsSeparator is LENIENT-A: a comma-thousands-
-// formatted cell parses through csv unconditionally, no kwarg needed
-// (design/decimal-leniency.md §2).
+// TestCSVSourceDecimalThousandsSeparator confirms a comma-thousands-
+// formatted cell parses through csv unconditionally, no kwarg needed.
 func TestCSVSourceDecimalThousandsSeparator(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "orders.csv")
@@ -698,7 +697,7 @@ func TestCSVSourceDecimalBadCellIsRowFailure(t *testing.T) {
 }
 
 // deidentifySchema is name/email where email is @deidentify, shared by
-// this package's design/deidentify.md tests.
+// this package's deidentify tests.
 func deidentifySchema() value.Schema {
 	return value.Schema{Fields: []value.Field{
 		{Name: "name", Type: value.Type{Kind: value.String}},
@@ -707,8 +706,8 @@ func deidentifySchema() value.Schema {
 }
 
 // TestCSVSourceDeidentify confirms csv gets @deidentify for free from
-// Coerce's own shared parse path (design/deidentify.md §10): encrypted
-// output is opaque base64, never the plaintext cell.
+// Coerce's own shared parse path: encrypted output is opaque base64,
+// never the plaintext cell.
 func TestCSVSourceDeidentify(t *testing.T) {
 	t.Setenv("SIFT_TEST_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	dir := t.TempDir()
@@ -735,9 +734,9 @@ func TestCSVSourceDeidentify(t *testing.T) {
 	}
 }
 
-// TestCSVSourceDeidentifyMissingKeyIsConstructionError is
-// design/deidentify.md §2: a schema with a @deidentify field but no
-// key kwarg fails NewCSVSource itself, before any row is read.
+// TestCSVSourceDeidentifyMissingKeyIsConstructionError confirms a schema
+// with a @deidentify field but no key kwarg fails NewCSVSource itself,
+// before any row is read.
 func TestCSVSourceDeidentifyMissingKeyIsConstructionError(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "people.csv")

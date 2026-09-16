@@ -1,7 +1,6 @@
 // Package xlsx registers a Source that reads one worksheet of an .xlsx
-// workbook against a declared schema (design/xlsx.md §1). Per CLAUDE.md's
-// format-registry convention, this is the only place that knows the
-// string "xlsx"; the registry itself, and everything above it, is
+// workbook against a declared schema. This is the only place that knows
+// the string "xlsx"; the registry itself, and everything above it, is
 // format-agnostic.
 package xlsx
 
@@ -22,13 +21,13 @@ func init() {
 
 // xlsxSource reads rows from one worksheet of an .xlsx workbook against a
 // declared schema, the same "declared, not inferred" contract csvSource
-// follows (design/xlsx.md §1): xlsx cells are nominally typed but
-// unreliably so, and a declared schema keeps every source format
+// follows: xlsx cells are nominally typed but unreliably so, and a
+// declared schema keeps every source format
 // consistent and explicit.
 //
 // Opening the workbook (excelize.OpenFile) parses the whole zip's
 // structure and shared-string table up front, so an xlsx source has a
-// fixed memory cost a CSV source does not (design/xlsx.md §2). Row
+// fixed memory cost a CSV source does not. Row
 // reading itself still streams via the excelize row iterator
 // (Rows/Next/Columns), not GetRows, keeping the data itself to one row
 // in flight at a time.
@@ -40,26 +39,26 @@ type xlsxSource struct {
 	// the sheet, bound once from header_row and reused for every row.
 	// Mirrors csvSource.col.
 	col map[string]int
-	// dateFormats holds the source's formats kwarg (design/date.md §3):
-	// a date-typed field name to the layout string to parse it against.
+	// dateFormats holds the source's formats kwarg: a date-typed field
+	// name to the layout string to parse it against.
 	dateFormats map[string]string
 	// deidentifyKey is the 32-byte AES-256 key resolved from the source's
-	// key kwarg (design/deidentify.md §6), nil for a schema with no
-	// @deidentify field. Mirrors csvSource.deidentifyKey.
+	// key kwarg, nil for a schema with no @deidentify field. Mirrors
+	// csvSource.deidentifyKey.
 	deidentifyKey []byte
 	schema        value.Schema
 	ordinal       int
 	// sheetRow is the 1-based spreadsheet row number of the last row
 	// pulled from rows. Becomes each emitted Row's Provenance.Offset
-	// (design/xlsx.md §2: "the one a user can act on"), distinct from
-	// ordinal once header_row > 1.
+	// -- the row number a user can act on -- distinct from ordinal once
+	// header_row > 1.
 	sheetRow int
 	err      error
 }
 
 // NewXLSXSource is the SourceCtor registered under "xlsx". Fail-fast is
-// entirely this constructor's job (design/xlsx.md §2): it opens the
-// workbook, resolves the sheet, reads header_row, and binds every
+// entirely this constructor's job: it opens the workbook, resolves the
+// sheet, reads header_row, and binds every
 // declared schema field to a column, all before any row flows. Anything
 // wrong in that sequence is infra-fatal and returned here, never as a
 // per-row Failure or a panic.
@@ -96,8 +95,8 @@ func NewXLSXSource(opts runtime.SourceOptions) (runtime.Source, error) {
 		return nil, fmt.Errorf("source %q: reading sheet %q: %w", opts.Name, sheet, err)
 	}
 
-	// Advance to header_row, discarding everything above it unread
-	// (design/xlsx.md §2.1). seen counts rows actually iterated, so a
+	// Advance to header_row, discarding everything above it unread. seen
+	// counts rows actually iterated, so a
 	// sheet shorter than header_row still reports its real row count.
 	var header []string
 	seen := 0
@@ -116,8 +115,8 @@ func NewXLSXSource(opts runtime.SourceOptions) (runtime.Source, error) {
 	}
 
 	// Empty header cells are ignored along with their columns: they're
-	// unnameable, so nothing can reference them (design/xlsx.md §2.1).
-	// This also quietly handles a merged header cell: excelize returns
+	// unnameable, so nothing can reference them. This also quietly
+	// handles a merged header cell: excelize returns
 	// its value only in the top-left cell of the range, leaving the
 	// rest empty. Duplicate-header detection is a structural check on
 	// the file itself, independent of column aliasing, so it stays its
@@ -171,9 +170,9 @@ func (s *xlsxSource) Err() error {
 func (s *xlsxSource) Next() (value.Row, bool) {
 	for {
 		if !s.rows.Next() {
-			// An exhausted iterator can still carry a real read error
-			// (design-errors.md §2.4: infra-fatal, checked after Next
-			// reports EOF). A clean end of sheet leaves this nil.
+			// An exhausted iterator can still carry a real read error:
+			// infra-fatal, checked after Next reports EOF. A clean end
+			// of sheet leaves this nil.
 			s.err = s.rows.Error()
 			return value.Row{}, false
 		}
@@ -186,10 +185,9 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 		}
 
 		if blankRow(cells, s.col) {
-			// Skipped, not emitted and not end-of-stream
-			// (design/xlsx.md §7): blank rows are common and must not
-			// abort a run, and stopping on the first one would
-			// silently truncate any sheet with a gap in it.
+			// Skipped, not emitted and not end-of-stream: blank rows are
+			// common and must not abort a run, and stopping on the first
+			// one would silently truncate any sheet with a gap in it.
 			continue
 		}
 
@@ -223,8 +221,8 @@ func (s *xlsxSource) Next() (value.Row, bool) {
 }
 
 // cellAt indexes cells defensively: rows.Columns trims trailing empty
-// cells (design/xlsx.md §2.2), so a row shorter than the header is
-// normal, not an error. A missing index is just an empty cell.
+// cells, so a row shorter than the header is normal, not an error. A
+// missing index is just an empty cell.
 func cellAt(cells []string, idx int) string {
 	if idx < 0 || idx >= len(cells) {
 		return ""
@@ -232,10 +230,9 @@ func cellAt(cells []string, idx int) string {
 	return cells[idx]
 }
 
-// blankRow reports whether every schema-mapped column in a row is empty
-// (design/xlsx.md §7). Only mapped columns count: an unmapped column
-// (ignored per §2.1) having stray content doesn't make an otherwise
-// blank row "data".
+// blankRow reports whether every schema-mapped column in a row is empty.
+// Only mapped columns count: an ignored, unmapped column having stray
+// content doesn't make an otherwise blank row "data".
 func blankRow(cells []string, col map[string]int) bool {
 	for _, idx := range col {
 		if cellAt(cells, idx) != "" {
@@ -259,10 +256,9 @@ func sheetIndex(f *excelize.File, sheet string) (int, bool) {
 // stringOpt and intOpt read one keyword argument out of
 // runtime.SourceOptions.Opts, applying a default when absent and
 // producing a clear, positioned-by-name error when the argument was
-// given but is the wrong type: the "let constructors validate types"
-// half of design/xlsx.md §1's registry-boundary note. The parser and
-// checker never know these names mean anything; only this constructor
-// does.
+// given but is the wrong type. Validating an option's type is the
+// constructor's job: the parser and checker never know these names mean
+// anything.
 func stringOpt(opts runtime.SourceOptions, name, def string) (string, error) {
 	v, ok := opts.Opts[name]
 	if !ok {

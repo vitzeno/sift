@@ -51,12 +51,11 @@ func TestResolveDateFormatPerField(t *testing.T) {
 	}
 }
 
-// TestResolveDateFormatDefaultIsPerField is DT-B/DT-K's building block:
-// a datetime field with no formats entry falls back to
-// value.DefaultDateTimeFormat, not value.DefaultDateFormat, on the same
-// source as a date field that does fall back to the date default --
-// proving the two temporal Kinds don't share one hardcoded fallback
-// (design/datetime.md §3).
+// TestResolveDateFormatDefaultIsPerField confirms a datetime field with
+// no formats entry falls back to value.DefaultDateTimeFormat, not
+// value.DefaultDateFormat, on the same source as a date field that does
+// fall back to the date default -- proving the two temporal Kinds don't
+// share one hardcoded fallback.
 func TestResolveDateFormatDefaultIsPerField(t *testing.T) {
 	if got := ResolveDateFormat(nil, "dob", DefaultFormatForKind(value.Date)); got != value.DefaultDateFormat {
 		t.Errorf("ResolveDateFormat(date) = %q, want %q", got, value.DefaultDateFormat)

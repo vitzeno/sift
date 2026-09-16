@@ -44,8 +44,7 @@ func TestResolveColumnsBareIdentifierFallback(t *testing.T) {
 }
 
 // TestResolveColumnsCaseSensitive confirms the bare-identifier fallback
-// is exact, case-sensitive match, not a lenient one (design/column-aliases.md
-// §8's locked default).
+// is an exact, case-sensitive match, not a lenient one.
 func TestResolveColumnsCaseSensitive(t *testing.T) {
 	headers := []string{"Transaction ID", "TXN_DATE"}
 	aliases := map[string]string{"txn_id": "Transaction ID"}
@@ -73,10 +72,10 @@ func TestResolveColumnsRequiredMissingFails(t *testing.T) {
 	}
 }
 
-// TestResolveColumnsOptionalMissingSucceeds is design-column-aliases.md's
-// acceptance case D: an Optional field with an alias whose header isn't
-// in the file at all resolves to absent, not a failure -- the same
-// design/optional-fields.md carve-out this doc must not regress.
+// TestResolveColumnsOptionalMissingSucceeds confirms an Optional field
+// with an alias whose header isn't in the file at all resolves to
+// absent, not a failure -- the same carve-out a bare optional field
+// gets.
 func TestResolveColumnsOptionalMissingSucceeds(t *testing.T) {
 	headers := []string{"Transaction ID"}
 	aliases := map[string]string{"txn_id": "Transaction ID", "txn_date": "Date"}
@@ -94,7 +93,7 @@ func TestResolveColumnsOptionalMissingSucceeds(t *testing.T) {
 }
 
 // TestResolveColumnsBlankHeaderNeverMatches: a blank header cell (xlsx's
-// merged-cell quirk, design/xlsx.md §2.1) is never a legal alias target,
+// merged-cell quirk) is never a legal alias target,
 // even if a columns entry happens to have an empty string value.
 func TestResolveColumnsBlankHeaderNeverMatches(t *testing.T) {
 	headers := []string{"Transaction ID", ""}
@@ -111,8 +110,8 @@ func TestResolveColumnsBlankHeaderNeverMatches(t *testing.T) {
 
 // TestResolveColumnsUnclaimedAliasEntryIgnored: a columns entry for a
 // field name that isn't in the schema at all is silently unused, the
-// same way an extra column in the file is silently dropped (design/column-aliases.md
-// §3's "fully optional and additive").
+// same way an extra column in the file is silently dropped: the columns
+// kwarg is fully optional and additive.
 func TestResolveColumnsUnclaimedAliasEntryIgnored(t *testing.T) {
 	headers := []string{"Transaction ID", "Date"}
 	aliases := map[string]string{

@@ -14,11 +14,10 @@ import (
 // TestAdultsFilterEndToEnd is jsonlSink.Write/Close's only unit-level
 // coverage -- jsonl has no other test file, so this drives it with real
 // rows from a real csv.Source through the driver loop and Filter, rather
-// than a synthetic Row built by hand (design.md §7 Case A, which this
-// predates the parser for). cmd/sift's TestExampleFilter proves the same
-// scenario through the real CLI; the two are different failure-isolation
-// layers, not duplicates (CLAUDE.md's own unit-plus-CLI-acceptance
-// convention). package jsonl_test, not jsonl, since nothing here needs
+// than a synthetic Row built by hand. cmd/sift's TestExampleFilter
+// proves the same scenario through the real CLI; the two are different
+// failure-isolation layers, not duplicates. package jsonl_test, not
+// jsonl, since nothing here needs
 // jsonl's unexported internals -- only NewCSVSource and NewJSONLSink,
 // both already exported.
 func TestAdultsFilterEndToEnd(t *testing.T) {

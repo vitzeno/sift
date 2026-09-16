@@ -2,16 +2,16 @@ package format
 
 import "github.com/vitzeno/sift/internal/value"
 
-// ResolveColumns maps each schema field to a column index
-// (design/column-aliases.md §3): aliases[field], if present, is the raw
-// header string to match instead of field's own identifier text. A blank
+// ResolveColumns maps each schema field to a column index:
+// aliases[field], if present, is the raw header string to match instead
+// of field's own identifier text. A blank
 // header cell (xlsx's merged-cell quirk) is never a legal match target.
 // The csv and xlsx source packages share this one function rather than
 // each matching columns their own way.
 //
 // A field that resolves neither way is simply left out of the returned
-// map when it's Optional (design/optional-fields.md): Coerce already
-// turns a missing index into Absent, so there's nothing more to do here.
+// map when it's Optional: Coerce already turns a missing index into
+// Absent, so there's nothing more to do here.
 // A required field that resolves neither way is reported back as
 // missingField with ok=false; the caller builds its own error message,
 // since csv and xlsx report a missing column in different shapes (xlsx
