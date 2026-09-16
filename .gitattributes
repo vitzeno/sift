@@ -1,0 +1,15 @@
+# Sift's tests compare sink output byte for byte against fixtures read from
+# disk, so a fixture's line endings are part of the assertion. Git for
+# Windows checks out CRLF by default; pin every text file to LF so a clone
+# is identical on every platform.
+* text=auto eol=lf
+
+# Fixtures and programs are always LF, never reinterpreted.
+*.sift  text eol=lf
+*.csv   text eol=lf
+*.jsonl text eol=lf
+*.go    text eol=lf
+*.md    text eol=lf
+
+# Binary fixtures must never be line-ending converted.
+*.xlsx  binary
