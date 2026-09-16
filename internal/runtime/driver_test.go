@@ -16,9 +16,10 @@ import (
 // parameter directly whenever a test has no stages wrapping it, or
 // simulate an infra-fatal failure via err.
 type fakeStream struct {
-	rows  []value.Row
-	calls int
-	err   error
+	rows   []value.Row
+	calls  int
+	err    error
+	closed bool
 }
 
 func (f *fakeStream) Next() (value.Row, bool) {
@@ -37,6 +38,13 @@ func (f *fakeStream) Schema() value.Schema {
 
 func (f *fakeStream) Err() error {
 	return f.err
+}
+
+// closed records that the driver released the source, so a test can
+// assert the source is closed on the same exit paths the sinks are.
+func (f *fakeStream) Close() error {
+	f.closed = true
+	return nil
 }
 
 // fakeSink records every Write and whether Close was called.
@@ -223,6 +231,51 @@ func (s *failingCloseSink) Close() error {
 // TestDriverCloseAllAggregatesErrors covers the close-all rule: every
 // sink is closed even if an earlier one errors,
 // and the failures are aggregated rather than the first one winning.
+// TestDriverClosesTheSource covers every exit path a run can take: a
+// clean EOF, an abort on a failed row, and an infra-fatal error. The
+// source must be released on all three, exactly as the sinks are.
+//
+// Worth asserting explicitly rather than trusting: on Unix an unclosed
+// file is invisible, since a still-open file can be unlinked. It only
+// shows up on Windows, where the input file stays locked.
+func TestDriverClosesTheSource(t *testing.T) {
+	tests := []struct {
+		name   string
+		src    *fakeStream
+		policy Policy
+	}{
+		{
+			name:   "clean EOF",
+			src:    &fakeStream{rows: []value.Row{{Fields: map[string]any{"name": "Ada"}}}},
+			policy: PolicyAbort,
+		},
+		{
+			name: "abort on a failed row",
+			src: &fakeStream{rows: []value.Row{
+				{Fail: &value.Failure{Reason: "missing email", Stage: "check"}},
+			}},
+			policy: PolicyAbort,
+		},
+		{
+			name:   "infra-fatal error",
+			src:    &fakeStream{err: fmt.Errorf("disk read error")},
+			policy: PolicySkip,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sink := &fakeSink{}
+			_ = Run(tt.src, tt.src, []Sink{sink}, nil, tt.policy, nil)
+			if !tt.src.closed {
+				t.Error("source was not closed; its handle would leak until the process exits")
+			}
+			if !sink.closed {
+				t.Error("sink was not closed")
+			}
+		})
+	}
+}
+
 func TestDriverCloseAllAggregatesErrors(t *testing.T) {
 	src := &fakeStream{}
 	sink1 := &failingCloseSink{closeErr: fmt.Errorf("disk full")}

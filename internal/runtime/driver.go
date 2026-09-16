@@ -56,10 +56,13 @@ func (e *FailureError) Error() string {
 // source) as separate arguments, instead of adding Err() to the general
 // Stream interface, since only Source needs it.
 func Run(top Stream, src Source, sinks []Sink, route []RouteBranch, policy Policy, errSink Sink) error {
-	// closeAll closes every sink even if an earlier one errors, and
-	// collects every error rather than stopping at the first.
+	// closeAll releases the source and every sink even if an earlier one
+	// errors, and collects every error rather than stopping at the first.
 	closeAll := func() error {
 		var errs []error
+		if err := src.Close(); err != nil {
+			errs = append(errs, err)
+		}
 		for _, s := range sinks {
 			if err := s.Close(); err != nil {
 				errs = append(errs, err)

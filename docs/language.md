@@ -370,7 +370,8 @@ type Stream interface {
 type Source interface {
     Stream
     Schema() Schema
-    Err() error // infra-fatal failure, checked after Next reports EOF
+    Err() error   // infra-fatal failure, checked after Next reports EOF
+    Close() error // released by the driver on every exit path
 }
 
 type Sink interface {

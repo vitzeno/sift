@@ -96,6 +96,14 @@ func (s *csvSource) Err() error {
 	return s.err
 }
 
+// Close releases the file handle opened in NewCSVSource. Closing is the
+// driver's job on every exit path, the same as for a sink: until this
+// existed the handle stayed open for the life of the process, which on
+// Windows also left the input file locked against deletion.
+func (s *csvSource) Close() error {
+	return s.f.Close()
+}
+
 func (s *csvSource) Next() (value.Row, bool) {
 	record, err := s.r.Read()
 	if err == io.EOF {

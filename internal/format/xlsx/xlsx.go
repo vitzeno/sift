@@ -5,6 +5,7 @@
 package xlsx
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -165,6 +166,14 @@ func (s *xlsxSource) Schema() value.Schema {
 
 func (s *xlsxSource) Err() error {
 	return s.err
+}
+
+// Close releases the row iterator and the parsed workbook opened in
+// NewXLSXSource. Both are closed even if the first errors, so a failure
+// to close the iterator can't strand the much larger workbook. Mirrors
+// csvSource.Close.
+func (s *xlsxSource) Close() error {
+	return errors.Join(s.rows.Close(), s.f.Close())
 }
 
 func (s *xlsxSource) Next() (value.Row, bool) {

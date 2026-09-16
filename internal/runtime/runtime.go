@@ -24,10 +24,17 @@ type Stream interface {
 // instead. The driver calls Err() only after Next returns ok == false;
 // nil means a clean EOF, non-nil means abort regardless of the active
 // error policy.
+//
+// Close releases whatever the source holds open -- a file handle, a
+// parsed workbook -- and the driver always calls it, on every exit path,
+// exactly as it already does for a sink. Without it a source's handle
+// stays open until the process exits, which leaks a descriptor per run
+// and, on Windows, leaves the input file locked against deletion.
 type Source interface {
 	Stream
 	Schema() value.Schema
 	Err() error
+	Close() error
 }
 
 // Sink consumes a finished stream. Close flushes and releases any
