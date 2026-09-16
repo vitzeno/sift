@@ -1,8 +1,8 @@
-// This file maps to design-errors.md §7's acceptance list. ERR-A/B/C are
-// already covered in error_policy_test.go (abort/skip/route against a
-// failing `check`); this file adds ERR-D (bad-cell coercion failure)
-// under all three policies, ERR-E (a source-level infra-fatal error)
-// through the real CLI, and one stronger ERR-A assertion on the full
+// Error-policy coverage through the real CLI. Abort, skip, and route
+// against a failing `check` are already covered in error_policy_test.go;
+// this file adds a bad-cell coercion failure under all three policies, a
+// source-level infra-fatal error, and one stronger abort assertion on
+// the full
 // diagnostic string.
 package main
 
@@ -13,11 +13,10 @@ import (
 	"testing"
 )
 
-// TestERR_A_AbortDiagnosticCarriesSourceOrdinalAndReason strengthens
-// TestRunOnErrorAbort in error_policy_test.go: design-errors.md §7 asks
-// for "a diagnostic carrying source name, ordinal, and reason", not just
-// any error.
-func TestERR_A_AbortDiagnosticCarriesSourceOrdinalAndReason(t *testing.T) {
+// TestAbortDiagnosticCarriesSourceOrdinalAndReason strengthens
+// TestRunOnErrorAbort in error_policy_test.go: the diagnostic must carry
+// source name, ordinal, and reason, not just be any error.
+func TestAbortDiagnosticCarriesSourceOrdinalAndReason(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, _ := errorPolicyFixture(t, dir, "on error abort")
 
@@ -54,9 +53,9 @@ pipeline main {
 	return siftPath, outPath
 }
 
-// TestERR_D_BadCellAbort: under the default policy, Tom's unparseable
+// TestBadCellAbort: under the default policy, Tom's unparseable
 // age cell aborts the run (not a panic) after Ada was already written.
-func TestERR_D_BadCellAbort(t *testing.T) {
+func TestBadCellAbort(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := badCellFixture(t, dir, "on error abort", "")
 
@@ -77,9 +76,9 @@ func TestERR_D_BadCellAbort(t *testing.T) {
 	}
 }
 
-// TestERR_D_BadCellSkip: under `on error skip`, Tom's row is dropped
+// TestBadCellSkip: under `on error skip`, Tom's row is dropped
 // silently, Ada and Grace both make it through, and the run succeeds.
-func TestERR_D_BadCellSkip(t *testing.T) {
+func TestBadCellSkip(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := badCellFixture(t, dir, "on error skip", "")
 
@@ -97,10 +96,10 @@ func TestERR_D_BadCellSkip(t *testing.T) {
 	}
 }
 
-// TestERR_D_BadCellRoute: under `on error |> errs`, Tom's row's
+// TestBadCellRoute: under `on error |> errs`, Tom's row's
 // envelope (Stage "csv:age") lands in the error sink byte-exact, while
 // Ada and Grace reach the main sink.
-func TestERR_D_BadCellRoute(t *testing.T) {
+func TestBadCellRoute(t *testing.T) {
 	dir := t.TempDir()
 	siftPath, outPath := badCellFixture(t, dir, "on error |> errs", `sink errs = jsonl("errs.jsonl")`)
 	errPath := filepath.Join(dir, "errs.jsonl")
@@ -128,11 +127,10 @@ func TestERR_D_BadCellRoute(t *testing.T) {
 	}
 }
 
-// TestERR_E_InfraFatalAbortsEvenUnderSkip: a CSV the reader can't even
+// TestInfraFatalAbortsEvenUnderSkip: a CSV the reader can't even
 // tokenize (a field-count mismatch) must abort the run regardless of
-// policy. design-errors.md §2.4 and §7 say `skip` must NOT swallow
-// this.
-func TestERR_E_InfraFatalAbortsEvenUnderSkip(t *testing.T) {
+// policy. `skip` must not swallow this.
+func TestInfraFatalAbortsEvenUnderSkip(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nOnlyOneField\n")
 	siftPath := filepath.Join(dir, "prog.sift")

@@ -10,17 +10,15 @@ import (
 	"github.com/vitzeno/sift/internal/runtime"
 )
 
-// runFile runs design.md §4's full pipeline: lex, parse, check, build,
-// execute.
+// runFile runs the full pipeline: lex, parse, check, build, execute.
 //
-// decision: a source or sink path (e.g. csv("people.csv", ...))
-// resolves relative to path's own directory, not the process's working
-// directory, so `sift run some/dir/x.sift` finds `some/dir/people.csv`
-// no matter where it's invoked from. An absolute path is left
-// unchanged. This is what lets `go run ./cmd/sift run
-// examples/adults.sift` (CLAUDE.md's documented command) work from the
-// repo root. The same resolution applies to an `on error |> <name>`
-// route target's path.
+// A source or sink path (e.g. csv("people.csv", ...)) resolves relative
+// to path's own directory, not the process's working directory, so
+// `sift run some/dir/x.sift` finds `some/dir/people.csv` no matter where
+// it's invoked from. An absolute path is left unchanged. This is what
+// lets `go run ./cmd/sift run examples/adults.sift` work from the repo
+// root. The same resolution applies to an `on error |> <name>` route
+// target's path.
 //
 // printToConsole redirects every sink to stdout instead of its declared
 // file (--print, main.go).

@@ -1,5 +1,5 @@
-// Command sift is the v0 CLI (design.md §6, module 8): run a .sift
-// program end to end, or inspect it with --emit-ast / --emit-schema.
+// Command sift runs a .sift program end to end, or inspects it with
+// --emit-ast / --emit-schema.
 package main
 
 import (

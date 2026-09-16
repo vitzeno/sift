@@ -1,9 +1,7 @@
-// This file rounds out design/routing.md's acceptance list with cases
-// testdata/routing.sift + TestExampleRouting doesn't cover: an
-// overlapping-predicate first-match proof, a missing else compile error,
-// full row conservation across sinks and discard, and route composed
-// with error routing, all driven through the real CLI like the
-// errors/multisink/optional integration tests.
+// CLI-level coverage for route, adding the cases testdata/routing.sift
+// + TestExampleRouting don't cover: an overlapping-predicate first-match
+// proof, a missing else compile error, full row conservation across
+// sinks and discard, and route composed with error routing.
 package main
 
 import (
@@ -13,9 +11,9 @@ import (
 	"testing"
 )
 
-// TestRT_A_FirstMatchWinsOverOverlap: a row satisfying two branches'
+// TestRouteFirstMatchWinsOverOverlap: a row satisfying two branches'
 // predicates lands in the earlier one's sink only.
-func TestRT_A_FirstMatchWinsOverOverlap(t *testing.T) {
+func TestRouteFirstMatchWinsOverOverlap(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -55,9 +53,9 @@ pipeline main {
 	}
 }
 
-// TestRT_B_MissingElseIsCompileError: a route with no else branch fails
+// TestRouteMissingElseIsCompileError: a route with no else branch fails
 // to compile, naming exactly what's missing.
-func TestRT_B_MissingElseIsCompileError(t *testing.T) {
+func TestRouteMissingElseIsCompileError(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,region\nAda,EU\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -79,11 +77,11 @@ pipeline main {
 	}
 }
 
-// TestRT_D_ExhaustiveCoverageConservesRowCount: every input row lands in
+// TestRouteExhaustiveCoverageConservesRowCount: every input row lands in
 // exactly one place across the target sinks and discard. Total row
 // count is conserved: none duplicated, none dropped except through the
 // explicit discard branch.
-func TestRT_D_ExhaustiveCoverageConservesRowCount(t *testing.T) {
+func TestRouteExhaustiveCoverageConservesRowCount(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"),
 		"name,region\nAda,EU\nTom,US\nGrace,APAC\nLiam,EU\nNina,US\nOwen,AF\n")
@@ -130,11 +128,11 @@ pipeline main {
 	}
 }
 
-// TestRT_E_RouteComposesWithErrorRouting: a failed row goes to the error
+// TestRouteComposesWithErrorRouting: a failed row goes to the error
 // sink under `on error |> errs` and never reaches a route branch. The
 // Fail path runs first no matter which terminal production the program
-// uses (design-routing.md §3).
-func TestRT_E_RouteComposesWithErrorRouting(t *testing.T) {
+// uses.
+func TestRouteComposesWithErrorRouting(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\nTom,not-a-number\nGrace,15\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -185,10 +183,10 @@ pipeline main {
 	}
 }
 
-// TestRT_F_DuplicateSinkAcrossBranchesReceivesUnion: the same sink named
+// TestRouteDuplicateSinkAcrossBranchesReceivesUnion: the same sink named
 // in two branches receives the union of rows either branch matched.
 // Allowed for route, unlike broadcast's duplicate-sink error.
-func TestRT_F_DuplicateSinkAcrossBranchesReceivesUnion(t *testing.T) {
+func TestRouteDuplicateSinkAcrossBranchesReceivesUnion(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,region\nAda,EU\nTom,US\nGrace,APAC\n")
 	siftPath := filepath.Join(dir, "prog.sift")

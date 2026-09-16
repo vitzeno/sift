@@ -1,8 +1,7 @@
-// This file rounds out design/date.md's acceptance list with the case
-// testdata/date.sift + TestExampleDate can't show: a cell that fails to
-// parse against its declared date format, routed as a row failure by
-// the active error policy, driven through the real CLI like the
-// column-aliases phase's integration tests.
+// CLI-level coverage for date, adding the case testdata/date.sift +
+// TestExampleDate can't show: a cell that fails to parse against its
+// declared date format, routed as a row failure by the active error
+// policy.
 package main
 
 import (
@@ -12,10 +11,10 @@ import (
 	"testing"
 )
 
-// TestDATE_C_BadCellIsRowFailure is DATE-C: a cell that names an
+// TestDateBadCellIsRowFailure is DATE-C: a cell that names an
 // impossible calendar date is a row failure, not a construction error
 // and not a panic, routed to the error sink like any other bad cell.
-func TestDATE_C_BadCellIsRowFailure(t *testing.T) {
+func TestDateBadCellIsRowFailure(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "signups.csv"), "name,signup_date\nAda,2026-01-05\nGrace,2026-02-30\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -52,12 +51,11 @@ pipeline main { in |> out }
 	}
 }
 
-// TestDATE_UnknownFormatEntryFieldIsHarmless confirms a formats kwarg
+// TestUnknownFormatEntryFieldIsHarmless confirms a formats kwarg
 // naming a field the schema doesn't have (a typo, or a field that isn't
 // date-typed) is silently unused, the same additive-and-optional shape
-// columns: already has (design/column-aliases.md §3), not a
-// construction error.
-func TestDATE_UnknownFormatEntryFieldIsHarmless(t *testing.T) {
+// columns: already has, not a construction error.
+func TestUnknownFormatEntryFieldIsHarmless(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "signups.csv"), "name,signup_date\nAda,2026-01-05\n")
 	siftPath := filepath.Join(dir, "prog.sift")

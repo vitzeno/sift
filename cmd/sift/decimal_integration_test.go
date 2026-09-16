@@ -1,9 +1,8 @@
-// This file rounds out design/decimal.md's and design/decimal-leniency.md's
-// acceptance lists with the cases testdata/decimal.sift + TestExampleDecimal
-// can't show: a bad cell routed as a row failure, the compile error the
-// whole literal-context design is built around, and a European-formatted
-// cell the thousands-comma guard rule must still reject, driven through
-// the real CLI like the date phase's integration tests.
+// CLI-level coverage for decimal, adding the cases
+// testdata/decimal.sift + TestExampleDecimal can't show: a bad cell
+// routed as a row failure, the compile error the literal-context rule is
+// built around, and a European-formatted cell the thousands-comma guard
+// must still reject.
 package main
 
 import (
@@ -13,10 +12,10 @@ import (
 	"testing"
 )
 
-// TestDEC_B_BadCellIsRowFailure is DEC-B: a non-numeric cell in a
+// TestDecimalBadCellIsRowFailure is DEC-B: a non-numeric cell in a
 // decimal column is a row failure, not a construction error and not a
 // panic, routed to the error sink like any other bad cell.
-func TestDEC_B_BadCellIsRowFailure(t *testing.T) {
+func TestDecimalBadCellIsRowFailure(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "orders.csv"), "id,price\n1,19.99\n2,not-a-number\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -53,12 +52,12 @@ pipeline main { in |> out }
 	}
 }
 
-// TestLENIENT_C_EuropeanFormatFailsLoudly is decimal-leniency.md's
+// TestEuropeanDecimalFormatFailsLoudly is decimal-leniency.md's
 // LENIENT-C, driven through the real CLI: a comma sitting after the
 // cell's last '.' is European decimal-point formatting, not US/UK
 // thousands grouping, so the guard rule refuses to strip it and the row
 // fails loudly instead of silently parsing to the wrong number.
-func TestLENIENT_C_EuropeanFormatFailsLoudly(t *testing.T) {
+func TestEuropeanDecimalFormatFailsLoudly(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "orders.csv"), "id,amount\n1,\"1.234,56\"\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -94,12 +93,12 @@ pipeline main { in |> out }
 	}
 }
 
-// TestDEC_D_NoCrossColumnPromotionThroughRealCLI is DEC-D, driven
+// TestNoCrossColumnDecimalPromotion is DEC-D, driven
 // through the checker exactly the way a user would hit it: a decimal
 // column and a double column never mix, even though the literal
 // exception lets a bare double literal adapt to decimal in the same
 // position.
-func TestDEC_D_NoCrossColumnPromotionThroughRealCLI(t *testing.T) {
+func TestNoCrossColumnDecimalPromotion(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "orders.csv"), "price,rate\n19.99,0.08\n")
 	siftPath := filepath.Join(dir, "prog.sift")

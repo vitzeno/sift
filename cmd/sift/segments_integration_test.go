@@ -1,8 +1,7 @@
-// This file maps to design/segments.md §9's acceptance list (PS-A
-// through PS-H). Each scenario already has unit-level coverage in
-// internal/parser and internal/checker; these confirm the same
-// scenarios hold through the real CLI end to end (runFile: parse,
-// check, build, run).
+// CLI-level coverage for parameterized segments. Each scenario already
+// has unit-level coverage in internal/parser and internal/checker; these
+// confirm the same scenarios hold through the real CLI end to end
+// (runFile: parse, check, build, run).
 package main
 
 import (
@@ -12,10 +11,10 @@ import (
 	"testing"
 )
 
-// TestACC_PS_A_ScalarParamReusedWithDifferentLiterals: one
+// TestScalarParamReusedWithDifferentLiterals: one
 // `adults(min: int)` definition, called with different literals in two
 // separate programs, each filtering correctly.
-func TestACC_PS_A_ScalarParamReusedWithDifferentLiterals(t *testing.T) {
+func TestScalarParamReusedWithDifferentLiterals(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\nTom,15\n")
 
@@ -67,10 +66,10 @@ pipeline main {
 	}
 }
 
-// TestACC_PS_B_ColumnParamDeclassifiesTwoDifferentPIIColumns: one
+// TestColumnParamDeclassifiesTwoDifferentPIIColumns: one
 // `scrub(col)` definition applied to two different @pii columns. Both
 // get declassified and reach the sink cleanly.
-func TestACC_PS_B_ColumnParamDeclassifiesTwoDifferentPIIColumns(t *testing.T) {
+func TestColumnParamDeclassifiesTwoDifferentPIIColumns(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email,backup_email\nAda,ada@x.co,ada2@x.co\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -96,10 +95,10 @@ pipeline main {
 	}
 }
 
-// TestACC_PS_D_NonDeclassifyingSegmentStillRejectedUnmasked: a segment
+// TestNonDeclassifyingSegmentStillRejectedUnmasked: a segment
 // that transforms but doesn't declassify keeps @pii on its argument
 // column, so the field still can't reach a sink unmasked.
-func TestACC_PS_D_NonDeclassifyingSegmentStillRejectedUnmasked(t *testing.T) {
+func TestNonDeclassifyingSegmentStillRejectedUnmasked(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@x.co\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -121,10 +120,10 @@ pipeline main {
 	}
 }
 
-// TestACC_PS_E_DeclassifyingSegmentOnNonPIIColumnRejected: applying a
+// TestDeclassifyingSegmentOnNonPIIColumnRejected: applying a
 // declassifying segment to a non-PII column is a compile error, with
 // dual-site context naming the segment, its binding, and the call site.
-func TestACC_PS_E_DeclassifyingSegmentOnNonPIIColumnRejected(t *testing.T) {
+func TestDeclassifyingSegmentOnNonPIIColumnRejected(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -150,11 +149,11 @@ pipeline main {
 	}
 }
 
-// TestACC_PS_F_BadColumnArgumentDualSiteDiagnostic: a misspelled column
+// TestBadColumnArgumentDualSiteDiagnostic: a misspelled column
 // argument errors against the real schema, naming the segment, its
 // binding, and the call site, not just a bare "field not in schema"
 // pointing at synthesized AST.
-func TestACC_PS_F_BadColumnArgumentDualSiteDiagnostic(t *testing.T) {
+func TestBadColumnArgumentDualSiteDiagnostic(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -183,9 +182,9 @@ pipeline main {
 	}
 }
 
-// TestACC_PS_G_ArityMismatchRejected: a segment call with the wrong
+// TestArityMismatchRejected: a segment call with the wrong
 // number of arguments is a compile error with position.
-func TestACC_PS_G_ArityMismatchRejected(t *testing.T) {
+func TestArityMismatchRejected(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -207,10 +206,10 @@ pipeline main {
 	}
 }
 
-// TestACC_PS_H_SelfReferencingSegmentCallRejected: a parameterized
+// TestSelfReferencingSegmentCallRejected: a parameterized
 // segment defined in terms of itself is a compile error. Cycle
 // detection holds through substitution.
-func TestACC_PS_H_SelfReferencingSegmentCallRejected(t *testing.T) {
+func TestSelfReferencingSegmentCallRejected(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@x.co\n")
 	siftPath := filepath.Join(dir, "prog.sift")

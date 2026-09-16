@@ -1,8 +1,8 @@
-// This file maps directly to design-improvements.md §9's acceptance
-// list (S1-A through S4-B). Each scenario already has unit-level
-// coverage in internal/checker and internal/runtime from its S1-S4
-// phase; these tests confirm the same scenarios hold through the real
-// CLI end to end (runFile: parse, check, build, run), one test per
+// CLI-level coverage for the schema-shaping and declassifier stages.
+// Each scenario already has unit-level coverage in internal/checker and
+// internal/runtime; these tests confirm the same scenarios hold through
+// the real CLI end to end (runFile: parse, check, build, run), one test
+// per
 // acceptance ID.
 package main
 
@@ -13,10 +13,10 @@ import (
 	"testing"
 )
 
-// TestACC_S1_A_DropRemovesColumnAndDownstreamReference: drop(age)
+// TestDropRemovesColumnAndDownstreamReference: drop(age)
 // removes the column from output and schema. A downstream .age
 // reference is a compile error against the reduced schema.
-func TestACC_S1_A_DropRemovesColumnAndDownstreamReference(t *testing.T) {
+func TestDropRemovesColumnAndDownstreamReference(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
 
@@ -57,10 +57,10 @@ pipeline main {
 	}
 }
 
-// TestACC_S1_B_SelectOrderAndMissingColumn: select(email, name) yields
+// TestSelectOrderAndMissingColumn: select(email, name) yields
 // output with columns in that order. A missing column errors citing the
 // real set.
-func TestACC_S1_B_SelectOrderAndMissingColumn(t *testing.T) {
+func TestSelectOrderAndMissingColumn(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age,email\nAda,42,ada@example.com\n")
 
@@ -101,9 +101,9 @@ pipeline main {
 	}
 }
 
-// TestACC_S1_C_DroppingPIIColumnSatisfiesSinkRule: a @pii column dropped
+// TestDroppingPIIColumnSatisfiesSinkRule: a @pii column dropped
 // before the sink compiles and runs. No mask needed.
-func TestACC_S1_C_DroppingPIIColumnSatisfiesSinkRule(t *testing.T) {
+func TestDroppingPIIColumnSatisfiesSinkRule(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@example.com\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -127,9 +127,9 @@ pipeline main {
 	}
 }
 
-// TestACC_S2_A_RenamePreservesPositionAndType: rename(dob: birth_date)
+// TestRenamePreservesPositionAndType: rename(dob: birth_date)
 // renames in place, preserving type and position.
-func TestACC_S2_A_RenamePreservesPositionAndType(t *testing.T) {
+func TestRenamePreservesPositionAndType(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,dob,age\nAda,1990-01-01,42\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -154,10 +154,10 @@ pipeline main {
 	}
 }
 
-// TestACC_S2_B_RenamedPIIStillRejectedUnmasked: renaming a @pii column
+// TestRenamedPIIStillRejectedUnmasked: renaming a @pii column
 // and writing it unmasked is still a compile error. The tag survives
 // the rename.
-func TestACC_S2_B_RenamedPIIStillRejectedUnmasked(t *testing.T) {
+func TestRenamedPIIStillRejectedUnmasked(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@example.com\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -177,9 +177,9 @@ pipeline main {
 	}
 }
 
-// TestACC_S3_A_LimitEmitsExactlyFirstRow: limit(1) on the §7 data emits
-// exactly the first row.
-func TestACC_S3_A_LimitEmitsExactlyFirstRow(t *testing.T) {
+// TestLimitEmitsExactlyFirstRow: limit(1) emits exactly the
+// first row.
+func TestLimitEmitsExactlyFirstRow(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\nTom,15\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -203,11 +203,11 @@ pipeline main {
 	}
 }
 
-// TestACC_S3_B_LimitCountsFailedRowsPositionally: with a failing check
+// TestLimitCountsFailedRowsPositionally: with a failing check
 // upstream under on error skip, limit(n) counts failed rows toward n
 // (they occupy positions too). Asserted via the exact healthy-row count
 // reaching the sink.
-func TestACC_S3_B_LimitCountsFailedRowsPositionally(t *testing.T) {
+func TestLimitCountsFailedRowsPositionally(t *testing.T) {
 	dir := t.TempDir()
 	// Ada healthy, Grace fails check (blank email), Tom healthy.
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@example.com\nGrace,\nTom,tom@example.com\n")
@@ -237,10 +237,10 @@ pipeline main {
 	}
 }
 
-// TestACC_S4_A_DeclassifyStageCompilesAndRuns: |> hash(email) |> out
+// TestDeclassifyStageCompilesAndRuns: |> hash(email) |> out
 // compiles and runs. The output column is present and clean (string, no
 // tag).
-func TestACC_S4_A_DeclassifyStageCompilesAndRuns(t *testing.T) {
+func TestDeclassifyStageCompilesAndRuns(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@example.com\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -264,9 +264,9 @@ pipeline main {
 	}
 }
 
-// TestACC_S4_B_DeclassifyOnNonPIIColumnRejected: redact(age) where age
+// TestDeclassifyOnNonPIIColumnRejected: redact(age) where age
 // is int is a compile error with a clear message.
-func TestACC_S4_B_DeclassifyOnNonPIIColumnRejected(t *testing.T) {
+func TestDeclassifyOnNonPIIColumnRejected(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -286,10 +286,10 @@ pipeline main {
 	}
 }
 
-// TestACC_MS_C_DuplicateSinkInBroadcastListRejected is
-// design-multisink.md MS-C: `|> out, out` is a compile error through
-// the real CLI, not just the checker in isolation.
-func TestACC_MS_C_DuplicateSinkInBroadcastListRejected(t *testing.T) {
+// TestDuplicateSinkInBroadcastListRejected confirms `|> out,
+// out` is a compile error through the real CLI, not just the checker in
+// isolation.
+func TestDuplicateSinkInBroadcastListRejected(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age\nAda,42\n")
 	siftPath := filepath.Join(dir, "prog.sift")
@@ -309,11 +309,10 @@ pipeline main {
 	}
 }
 
-// TestACC_MS_D_PIIRejectedOnceAcrossBroadcastList is design-multisink.md
-// MS-D: an unmasked @pii field reaching `|> out, out2` is a single
-// compile error naming both sinks, not one error per sink. Masking
-// fixes it for both.
-func TestACC_MS_D_PIIRejectedOnceAcrossBroadcastList(t *testing.T) {
+// TestPIIRejectedOnceAcrossBroadcastList confirms an unmasked
+// @pii field reaching `|> out, out2` is a single compile error naming
+// both sinks, not one error per sink. Masking fixes it for both.
+func TestPIIRejectedOnceAcrossBroadcastList(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@example.com\n")
 
@@ -361,11 +360,11 @@ pipeline main {
 	}
 }
 
-// TestACC_MS_E_ErrorRoutingAndBroadcastCompose is design-multisink.md
-// MS-E: `on error |> errsink` with `|> out, out2` routes failed rows to
-// errsink and sends every healthy row to both out and out2. Three
+// TestErrorRoutingAndBroadcastCompose confirms `on error |>
+// errsink` with `|> out, out2` routes failed rows to errsink and sends
+// every healthy row to both out and out2. Three
 // sinks, one per-row decision.
-func TestACC_MS_E_ErrorRoutingAndBroadcastCompose(t *testing.T) {
+func TestErrorRoutingAndBroadcastCompose(t *testing.T) {
 	dir := t.TempDir()
 	// Ada healthy, Grace fails check (blank email), Tom healthy.
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,email\nAda,ada@example.com\nGrace,\nTom,tom@example.com\n")

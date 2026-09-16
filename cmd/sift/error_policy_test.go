@@ -79,10 +79,9 @@ func TestRunOnErrorSkip(t *testing.T) {
 	}
 }
 
-// TestRunOnErrorRoute is ERR-C through the real CLI: healthy rows reach
-// the main sink, and Grace's failure reaches the declared error sink as
-// exactly one envelope line, asserted byte-exact per design-errors.md
-// §7.
+// TestRunOnErrorRoute confirms that through the real CLI, healthy rows
+// reach the main sink and Grace's failure reaches the declared error
+// sink as exactly one envelope line, asserted byte-exact.
 func TestRunOnErrorRoute(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "people.csv"), "name,age,email\nAda,42,ada@example.com\nTom,15,tom@example.com\nGrace,30,\n")

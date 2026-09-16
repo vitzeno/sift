@@ -83,9 +83,8 @@ pipeline main {
 }
 
 // TestRunFileScriptInSubdirectory confirms resolution walks from the
-// script's own directory even several levels below cwd, matching
-// CLAUDE.md's documented `sift run examples/adults.sift` from the repo
-// root.
+// script's own directory even several levels below cwd, so `sift run
+// examples/adults.sift` works from the repo root.
 func TestRunFileScriptInSubdirectory(t *testing.T) {
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "scripts")

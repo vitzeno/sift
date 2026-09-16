@@ -2,9 +2,9 @@
 // entry point (runFile) and asserts its output byte-exact. complex_test.go
 // used to apply this discipline to one big combined program; now it's
 // spread across testdata/'s per-feature examples (filter, map, check, pii,
-// named-segment) plus the design-errors.md examples (on-error-abort/skip/
-// route, bad-cell). Each example demonstrates exactly one language feature
-// or error policy.
+// named-segment) plus the error-policy examples (on-error-abort/skip/
+// route, bad-cell). Each example demonstrates exactly one language
+// feature or error policy.
 //
 // testdata/ holds a copy of every fixture actually exercised by a Go test
 // (this file, plus internal/runtime and internal/format); examples/ is the
@@ -137,8 +137,9 @@ func TestExampleDeclassify(t *testing.T) {
 }
 
 // TestExampleCustomerExport runs a composite real-world pipeline chaining
-// every stage design-improvements.md added (drop, rename, hash, mask,
-// select, limit) in the order a GDPR-safe analytics extract would use them.
+// every schema-shaping and declassifier stage (drop, rename, hash, mask,
+// select, limit) in the order a GDPR-safe analytics extract would use
+// them.
 func TestExampleCustomerExport(t *testing.T) {
 	got := runExample(t, "customer-export")
 	want := `{"id":1,"name":"Ada Lovelace","email":"b5fc85e55755f9e0d030a10ab4429b6b2944855f9a0d60077fe832becbc41d72","phone":"********","plan":"pro","joined_at":"2024-01-15"}
@@ -160,8 +161,8 @@ func TestExampleNamedSegment(t *testing.T) {
 	}
 }
 
-// TestExampleSegments is design/segments.md's flagship demo: `scrub(col)`
-// reused across two different @pii columns, and `adults(min: int)` called
+// TestExampleSegments is the flagship segments demo: `scrub(col)` reused
+// across two different @pii columns, and `adults(min: int)` called
 // with a literal, composed together in one `|>` chain.
 func TestExampleSegments(t *testing.T) {
 	got := runExample(t, "segments")
@@ -237,8 +238,8 @@ func TestExampleOnErrorRoute(t *testing.T) {
 	}
 }
 
-// TestExampleBroadcast is design-multisink.md MS-A: `|> warehouse, audit`
-// writes byte-identical masked output to both sinks.
+// TestExampleBroadcast confirms `|> warehouse, audit` writes
+// byte-identical masked output to both sinks.
 func TestExampleBroadcast(t *testing.T) {
 	got := runExample(t, "broadcast", "broadcast_audit.jsonl")
 	want := `{"name":"Ada","email":"***************"}
@@ -258,8 +259,8 @@ func TestExampleBroadcast(t *testing.T) {
 	}
 }
 
-// TestExampleRouting is design-routing.md's own example end to end: mask
-// once, then route each row to exactly one of three sinks by region.
+// TestExampleRouting runs a route end to end: mask once, then route each
+// row to exactly one of three sinks by region.
 // Ada's EU row lands only in the primary output; Tom and Grace land in
 // the other two. Never more than one write per row.
 func TestExampleRouting(t *testing.T) {
@@ -399,9 +400,8 @@ func TestExampleETLErrors(t *testing.T) {
 // TestExampleXLSX exercises xlsx.sift: an xlsx source reading a real
 // worksheet (people.xlsx, sheet "People", with a title row above the
 // header, so header_row: 2 is load-bearing) through the same
-// filter/jsonl-sink shape as adults.sift's csv version. That's
-// design/xlsx.md's headline claim: no frontend change to read a
-// different format.
+// filter/jsonl-sink shape as adults.sift's csv version. Reading a
+// different format takes no frontend change at all.
 func TestExampleXLSX(t *testing.T) {
 	got := runExample(t, "xlsx")
 	want := `{"name":"Ada","age":42}
@@ -411,9 +411,9 @@ func TestExampleXLSX(t *testing.T) {
 	}
 }
 
-// TestExampleColumns is design/column-aliases.md's own example end to
-// end: a header with a space ("Transaction ID") is named via the
-// columns kwarg, since no identifier could ever equal it.
+// TestExampleColumns runs a column alias end to end: a header with a
+// space ("Transaction ID") is named via the columns kwarg, since no
+// identifier could ever equal it.
 func TestExampleColumns(t *testing.T) {
 	got := runExample(t, "columns")
 	want := `{"txn_id":1001,"txn_date":"2026-01-05","amount":42.5}
@@ -424,9 +424,9 @@ func TestExampleColumns(t *testing.T) {
 	}
 }
 
-// TestExampleDate drives testdata/date.sift through the real CLI
-// (design/date.md): started_on's default ISO-8601 format and
-// renewed_on's day-first formats entry both parse correctly, and
+// TestExampleDate drives testdata/date.sift through the real CLI:
+// started_on's default ISO-8601 format and renewed_on's day-first
+// formats entry both parse correctly, and
 // filter(.renewed_on >= .started_on) drops Tom, whose renewal predates
 // his subscription -- a data-quality catch no string comparison could
 // make.
@@ -440,12 +440,12 @@ func TestExampleDate(t *testing.T) {
 	}
 }
 
-// TestExampleDecimal drives testdata/decimal.sift through the real CLI
-// (design/decimal.md): a bare double literal (0.08) standing against a
-// decimal column adapts to decimal for tax, net's subtraction stays
-// exact, and filter(.net > 0) drops Tom, whose discount exceeds his
-// price. Row 3's price ("1,100.00", design/decimal-leniency.md) proves a
-// comma-thousands-formatted cell parses unconditionally, and its trailing
+// TestExampleDecimal drives testdata/decimal.sift through the real CLI:
+// a bare double literal (0.08) standing against a decimal column adapts
+// to decimal for tax, net's subtraction stays exact, and
+// filter(.net > 0) drops Tom, whose discount exceeds his price. Row 3's
+// price ("1,100.00") proves a comma-thousands-formatted cell parses
+// unconditionally, and its trailing
 // zeros ("1100.00", "0.00") still round-trip exactly -- the case a naive
 // decimal.Decimal-without-a-wrapper implementation gets wrong (it
 // silently renders "1100" and "0" instead).
@@ -459,8 +459,8 @@ func TestExampleDecimal(t *testing.T) {
 	}
 }
 
-// TestExampleDateTime drives testdata/datetime.sift through the real CLI
-// (design/datetime.md): clock_in/clock_out are space-separated, so
+// TestExampleDateTime drives testdata/datetime.sift through the real
+// CLI: clock_in/clock_out are space-separated, so
 // formats: names their layout explicitly for both -- reusing date's own
 // kwarg, not a second one. filter(.clock_out < .clock_in) flags Tom's
 // row, whose clock-out time is chronologically before its clock-in on
