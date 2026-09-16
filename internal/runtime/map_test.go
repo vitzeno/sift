@@ -42,8 +42,8 @@ func TestMapAppliesRecordAndKeepsProvenance(t *testing.T) {
 	}
 }
 
-// TestMapPassesThroughFailedRowUnevaluated confirms design-errors.md
-// §2.2's pass-through rule: map must not evaluate its record literal
+// TestMapPassesThroughFailedRowUnevaluated confirms the pass-through
+// rule: map must not evaluate its record literal
 // against a failed row's (potentially suspect) fields. A record
 // expression that would panic on this row's actual Fields proves the
 // point: if map evaluated it, the test itself would panic.

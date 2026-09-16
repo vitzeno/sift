@@ -8,18 +8,18 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
-// Policy is a program's error policy (design.md §2, design-errors.md
-// §3.1): what the driver does with a row that failed upstream.
+// Policy is a program's error policy: what the driver does with a row
+// that failed upstream.
 type Policy int
 
 const (
 	// PolicyAbort stops the run at the first failed row. This is the
-	// default (design.md §2).
+	// default.
 	PolicyAbort Policy = iota
 	// PolicySkip drops a failed row and keeps going.
 	PolicySkip
-	// PolicyRoute writes a failed row's envelope (design-errors.md §4)
-	// to errSink instead of the main sink.
+	// PolicyRoute writes a failed row's envelope to errSink instead of
+	// the main sink.
 	PolicyRoute
 )
 
@@ -34,34 +34,30 @@ func (e *FailureError) Error() string {
 	return fmt.Sprintf("row %d from %q: %s", e.Prov.Ordinal, e.Prov.Source, e.Fail.Reason)
 }
 
-// Run is the driver loop (design.md §4, design-errors.md §3.2): pull one
-// row from top at a time, and either send a healthy row through route's
-// branch-by-branch pick (design-routing.md §4), broadcast it to every
-// sink (design-multisink.md §3), or hand a failed one to the error
-// policy. Stops when top runs out. Only one row is ever in flight.
+// Run is the driver loop: pull one row from top at a time, and either
+// send a healthy row through route's branch-by-branch pick, broadcast it
+// to every sink, or hand a failed one to the error policy. Stops when
+// top runs out. Only one row is ever in flight.
 //
 // route is nil for a plain broadcast program. When set, Build has
 // already turned each branch's sink name into an index in sinks, so Run
 // just walks the branches, no name lookup here. Route is checked after
 // the Fail check either way: a failed row's data can't be trusted, so it
-// never reaches a branch (design-routing.md §3).
+// never reaches a branch.
 //
-// sinks are written in the order they're declared (design-multisink.md
-// §6), whether that's broadcast (every sink) or route (at most one). A
-// write error stops the run right there.
+// sinks are written in the order they're declared, whether that's
+// broadcast (every sink) or route (at most one). A write error stops the
+// run right there.
 //
 // errSink is only used, and only needs to be set, under PolicyRoute. It
-// stays nil for any program with no `on error |> <name>`
-// (design-errors.md §5).
+// stays nil for any program with no `on error |> <name>`.
 //
-// decision: Run takes both top (the built stage chain) and src (the
-// original source) as separate arguments, instead of adding Err() to
-// the general Stream interface, since only Source needs it
-// (design-errors.md §2.4).
+// Run takes both top (the built stage chain) and src (the original
+// source) as separate arguments, instead of adding Err() to the general
+// Stream interface, since only Source needs it.
 func Run(top Stream, src Source, sinks []Sink, route []RouteBranch, policy Policy, errSink Sink) error {
 	// closeAll closes every sink even if an earlier one errors, and
-	// collects every error rather than stopping at the first
-	// (design-multisink.md §6).
+	// collects every error rather than stopping at the first.
 	closeAll := func() error {
 		var errs []error
 		for _, s := range sinks {

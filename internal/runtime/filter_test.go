@@ -8,10 +8,9 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
-// TestNewFilterExprUsesEval reproduces design.md §7's Case A trace again,
-// but through NewFilterExpr (an ast.Expr evaluated by eval) instead of
-// module 2's hand-wired Go predicate, fulfilling the decision comment
-// left on Filter until eval existed.
+// TestNewFilterExprUsesEval traces a filtered run through NewFilterExpr
+// (an ast.Expr evaluated by eval) rather than a hand-wired Go
+// predicate.
 func TestNewFilterExprUsesEval(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
 		{Fields: map[string]any{"name": "Ada", "age": 42}},
@@ -32,8 +31,8 @@ func TestNewFilterExprUsesEval(t *testing.T) {
 	}
 }
 
-// TestFilterPassesThroughFailedRowUnevaluated confirms design-errors.md
-// §2.2's pass-through rule: a failed row is never tested against pred,
+// TestFilterPassesThroughFailedRowUnevaluated confirms the pass-through
+// rule: a failed row is never tested against pred,
 // and reaches the sink (under PolicyAbort) as the failure itself,
 // unmodified, rather than being silently dropped as though it failed
 // the predicate.

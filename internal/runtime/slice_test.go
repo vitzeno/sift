@@ -6,8 +6,8 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
-// TestLimitEmitsFirstNRows is S3-A: limit(1) on the §7 data (Ada, Tom)
-// emits exactly the first row (design-improvements.md §9).
+// TestLimitEmitsFirstNRows confirms limit(1) over two rows (Ada, Tom)
+// emits exactly the first.
 func TestLimitEmitsFirstNRows(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
 		{Fields: map[string]any{"name": "Ada"}},
@@ -45,10 +45,10 @@ func TestLimitStopsPullingUpstreamOnceSatisfied(t *testing.T) {
 	}
 }
 
-// TestLimitCountsFailedRowsPositionally is S3-B: with a failing row
-// upstream, limit(n) counts it toward n same as a healthy row. A failed
-// row occupies a position in the stream just like a healthy one
-// (design-improvements.md §3, §9).
+// TestLimitCountsFailedRowsPositionally confirms that with a failing row
+// upstream, limit(n) counts it toward n the same as a healthy row: a
+// failed row occupies a position in the stream just like a healthy
+// one.
 func TestLimitCountsFailedRowsPositionally(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
 		{Fields: map[string]any{"name": "Ada"}},

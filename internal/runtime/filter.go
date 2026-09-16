@@ -6,10 +6,10 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
-// Filter keeps rows from in for which pred returns true, per design.md
-// §7's trace: a false predicate re-pulls from in instead of returning,
-// so a run of rejected rows produces no output but still visits every
-// input row exactly once.
+// Filter keeps rows from in for which pred returns true. A false
+// predicate re-pulls from in instead of returning, so a run of rejected
+// rows produces no output but still visits every input row exactly
+// once.
 type Filter struct {
 	in   Stream
 	pred func(value.Row) bool
@@ -38,7 +38,7 @@ func (f *Filter) Next() (value.Row, bool) {
 			return value.Row{}, false
 		}
 		// A failed row is opaque: it flows straight through, never
-		// tested against pred (design-errors.md §2.2). Its Fields may
+		// tested against pred. Its Fields may
 		// be incomplete or suspect, and deciding what happens to it is
 		// the driver's job, not Filter's.
 		if row.Fail != nil {

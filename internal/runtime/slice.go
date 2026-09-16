@@ -2,11 +2,11 @@ package runtime
 
 import "github.com/vitzeno/sift/internal/value"
 
-// Limit emits at most N rows then stops (design-improvements.md §3).
+// Limit emits at most N rows then stops.
 //
-// emitted counts every row Limit itself returns, healthy or failed. That
-// gives design-improvements.md §3's positional-over-all-rows rule for
-// free: Limit has no idea what the active error policy is (a failed row
+// emitted counts every row Limit itself returns, healthy or failed, so
+// the limit is positional over all rows: Limit has no idea what the
+// active error policy is (a failed row
 // might later be skipped, routed, or abort the run), so it just tracks
 // what it has pulled and handed upstream, uniformly.
 type Limit struct {

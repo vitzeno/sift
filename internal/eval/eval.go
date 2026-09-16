@@ -1,12 +1,12 @@
-// Package eval implements design.md §4's eval(expr, row) any: computing
-// an expression's runtime value against one row, no bytecode, by
-// switching on AST node types and applying Go's own operators.
+// Package eval computes an expression's runtime value against one row,
+// no bytecode, by switching on AST node types and applying Go's own
+// operators.
 //
 // Every expression handled here has already passed the checker
 // (internal/checker), so a type mismatch found mid-evaluation (a field
 // missing from the row, an operand of the wrong Go type) is an internal
-// invariant violation, not a user-facing data error, and CLAUDE.md
-// reserves panic for exactly that case. A genuine per-row data problem
+// invariant violation, not a user-facing data error, which is the one
+// case panic is reserved for. A genuine per-row data problem
 // (a malformed CSV cell) is already caught earlier, in the source
 // (internal/format/csv's csvSource), so by the time a row reaches eval
 // its shape is guaranteed.
@@ -83,7 +83,7 @@ func EvalRecord(rec *ast.RecordExpr, row value.Row) map[string]any {
 
 // isAbsent reports whether v is an optional field's absent value
 // (value.Absent), the runtime counterpart of value.Type.Optional the
-// checker tracked ahead of time (design/optional-fields.md §3).
+// checker tracked ahead of time.
 func isAbsent(v any) bool {
 	_, ok := v.(value.Absent)
 	return ok
@@ -99,7 +99,7 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			right := Eval(e.Right, row)
 			// left is absent, so there's no DecimalValue to inspect the
 			// way the promotion below relies on -- a.Kind is the only
-			// surviving signal (design/decimal.md §2).
+			// surviving signal.
 			if a.Kind == value.Decimal {
 				right = toDecimal(right)
 			}
@@ -118,8 +118,8 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 		return value.Absent{}
 	}
 
-	// decision: mirrors checkBinaryOp's literal-context promotion at the
-	// type level (design/decimal.md §2). If either operand is already a
+	// Mirrors checkBinaryOp's literal-context promotion at the type
+	// level. If either operand is already a
 	// value.DecimalValue, the checker only ever let this expression
 	// compile if the other side is an int/float64 literal, so it's safe
 	// to convert that side to value.DecimalValue here too -- the switch
@@ -207,14 +207,13 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 			return l.CompareValue(right) >= 0
 		}
 	case lexer.EQ:
-		// decision: value.DateValue and value.DecimalValue both wrap a
-		// struct (time.Time, decimal.Decimal's own *big.Int underneath)
-		// whose bare == compares internal representation, not the value
-		// denoted -- two equal instants or amounts aren't guaranteed ==
-		// (design/date.md §3, design/decimal.md §2). Every other Kind
-		// here is a plain comparable Go primitive, so bare == is correct
-		// for them; only a value.OrderedValue needs its own branch, one
-		// shared path for every struct-backed Kind (design/datetime.md §2).
+		// value.DateValue and value.DecimalValue both wrap a struct
+		// (time.Time, decimal.Decimal's own *big.Int underneath) whose
+		// bare == compares internal representation, not the value
+		// denoted -- two equal instants or amounts aren't guaranteed ==.
+		// Every other Kind here is a plain comparable Go primitive, so
+		// bare == is correct for them; only a value.OrderedValue needs
+		// its own branch, one shared path for every struct-backed Kind.
 		if l, ok := left.(value.OrderedValue); ok {
 			return l.CompareValue(right) == 0
 		}
@@ -236,14 +235,14 @@ func evalBinaryOp(e *ast.BinaryOp, row value.Row) any {
 // decimal.Decimal, for calling the library's own arithmetic methods (+ - * /
 // have no shared OrderedValue-style interface, since only comparison needs
 // one uniform contract across Kinds). The one place callers still need to
-// know DecimalValue wraps decimal.Decimal at all (design/decimal.md §2).
+// know DecimalValue wraps decimal.Decimal at all.
 func asDecimal(v any) decimal.Decimal {
 	return decimal.Decimal(v.(value.DecimalValue))
 }
 
 // toDecimal converts an int or float64 literal's runtime value to
-// value.DecimalValue (design/decimal.md §2's literal-context promotion,
-// performed at eval time). v is never already anything else here: the
+// value.DecimalValue: the literal-context promotion, performed at eval
+// time. v is never already anything else here: the
 // checker only let this call site's expression compile if the operand
 // this promotes is a bare int/double literal or already a DecimalValue.
 func toDecimal(v any) any {
@@ -260,7 +259,7 @@ func toDecimal(v any) any {
 }
 
 // evalCall implements what the checker only typed: the actual behavior
-// of v0's closed function set. Every entry takes one string and returns
+// of the closed function set. Every entry takes one string and returns
 // one string (internal/checker's builtinFuncs), so evalCall needs no
 // arity/type dispatch of its own; the checker already guaranteed both by
 // the time this runs.
@@ -268,8 +267,8 @@ func evalCall(e *ast.Call, row value.Row) any {
 	argVal := Eval(e.Args[0], row)
 	if isAbsent(argVal) {
 		// The checker lets a function propagate Optional unconditionally
-		// (design/optional-fields.md §3: upper(.phone) is string?). Mirror
-		// that here instead of asserting an Absent to string.
+		// (upper(.phone) is itself a string?). Mirror that here instead
+		// of asserting an Absent to string.
 		return value.Absent{}
 	}
 	arg := argVal.(string)
@@ -288,15 +287,13 @@ func evalCall(e *ast.Call, row value.Row) any {
 }
 
 // Declassify applies a named declassifier (mask/hash/redact) to s. It's
-// exported so runtime's Declassify stage (design-improvements.md §4,
-// §6's "two namespaces") shares the exact same implementation as
-// evalCall's expression-position call: one implementation, two call
-// sites, so "mask" can't drift into two different meanings.
+// exported so runtime's Declassify stage shares the exact same
+// implementation as evalCall's expression-position call: one
+// implementation, two call sites, so "mask" can't drift into two
+// different meanings.
 //
-// decision: design.md names mask/hash/redact as PII declassifiers but
-// never specifies their algorithms. Picked the simplest reasonable,
-// deterministic behavior for each, using only the standard library
-// (CLAUDE.md: "no third-party deps in the core"):
+// Each declassifier is the simplest reasonable deterministic behavior,
+// using only the standard library:
 //   - mask:   same length, every character replaced with '*'. Shows the
 //     value's shape without its content.
 //   - hash:   SHA-256, hex-encoded. A real one-way hash, not a stub.

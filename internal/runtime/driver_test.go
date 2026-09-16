@@ -55,8 +55,8 @@ func (s *fakeSink) Close() error {
 	return nil
 }
 
-// TestDriverFilterAndEOF reproduces design.md §7's trace exactly: Ada
-// (age 42) passes the filter and is written; Tom (age 15) fails the
+// TestDriverFilterAndEOF traces a whole run: Ada (age 42) passes the
+// filter and is written; Tom (age 15) fails the
 // filter, which must re-pull rather than emit or stop; the third pull
 // hits EOF, and the driver breaks cleanly with no error and no extra
 // write.
@@ -107,8 +107,8 @@ func TestDriverEmptyStream(t *testing.T) {
 	}
 }
 
-// TestDriverAbortOnFailedRow is ERR-A from design-errors.md §7 at the
-// runtime layer: a failed row under PolicyAbort stops the run with a
+// TestDriverAbortOnFailedRow confirms a failed row under PolicyAbort
+// stops the run with a
 // *FailureError carrying the row's reason and provenance, and closes
 // the sink even though the run didn't finish. Healthy rows before the
 // failure still reach the sink.
@@ -167,9 +167,9 @@ func TestDriverSkipOnFailedRow(t *testing.T) {
 	}
 }
 
-// TestDriverInfraFatalAbortsRegardlessOfPolicy is ERR-E: a source-level
-// Err() aborts the run even under PolicySkip. Infra-fatal isn't
-// governed by the error policy at all (design-errors.md §2.4).
+// TestDriverInfraFatalAbortsRegardlessOfPolicy confirms a source-level
+// Err() aborts the run even under PolicySkip. An infra-fatal error isn't
+// governed by the error policy at all.
 func TestDriverInfraFatalAbortsRegardlessOfPolicy(t *testing.T) {
 	infraErr := fmt.Errorf("disk read error")
 	src := &fakeStream{err: infraErr}
@@ -187,8 +187,8 @@ func TestDriverInfraFatalAbortsRegardlessOfPolicy(t *testing.T) {
 	}
 }
 
-// TestDriverBroadcastsToEveryMainSink is design-multisink.md's terminal
-// broadcast at the runtime layer: every healthy row reaches every sink,
+// TestDriverBroadcastsToEveryMainSink covers terminal broadcast at the
+// runtime layer: every healthy row reaches every sink,
 // in declared order, and Close is called on all of them.
 func TestDriverBroadcastsToEveryMainSink(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
@@ -220,8 +220,8 @@ func (s *failingCloseSink) Close() error {
 	return s.closeErr
 }
 
-// TestDriverCloseAllAggregatesErrors is design-multisink.md §6's
-// "close-all" rule: every sink is closed even if an earlier one errors,
+// TestDriverCloseAllAggregatesErrors covers the close-all rule: every
+// sink is closed even if an earlier one errors,
 // and the failures are aggregated rather than the first one winning.
 func TestDriverCloseAllAggregatesErrors(t *testing.T) {
 	src := &fakeStream{}
@@ -240,10 +240,10 @@ func TestDriverCloseAllAggregatesErrors(t *testing.T) {
 	}
 }
 
-// TestDriverRouteWritesEnvelopeToErrSink is ERR-C at the runtime layer:
-// under PolicyRoute, a healthy row still reaches the main sink, and a
-// failed row's envelope (design-errors.md §4), not its raw fields,
-// reaches errSink instead. The run completes with no error either way.
+// TestDriverRouteWritesEnvelopeToErrSink confirms that under
+// PolicyRoute, a healthy row still reaches the main sink, and a failed
+// row's envelope, not its raw fields, reaches errSink instead. The run
+// completes with no error either way.
 func TestDriverRouteWritesEnvelopeToErrSink(t *testing.T) {
 	src := &fakeStream{rows: []value.Row{
 		{Fields: map[string]any{"name": "Ada"}, Prov: value.Provenance{Source: "in", Ordinal: 0}},

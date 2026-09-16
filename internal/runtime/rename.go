@@ -3,8 +3,8 @@ package runtime
 import "github.com/vitzeno/sift/internal/value"
 
 // Rename remaps each old key to its new name in a fresh Fields map;
-// every other field, and every value, passes through untouched
-// (design-improvements.md §2). The checker has already validated every
+// every other field, and every value, passes through untouched. The
+// checker has already validated every
 // Old exists and every New is collision-free, so Next just applies the
 // mapping. There's no PII bookkeeping to do here either: the value
 // itself is never touched, so whatever the checker decided about the

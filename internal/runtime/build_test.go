@@ -46,9 +46,9 @@ func toRouteInputs(route []checker.RouteBranch) []runtime.RouteInput {
 	return in
 }
 
-// TestBuildFullPipelineRouteResolvesSinkNamesToIndexes is
-// design-routing.md end to end through the real compiler pipeline: Build
-// must resolve each branch's target sink *name* into the right index of
+// TestBuildFullPipelineRouteResolvesSinkNamesToIndexes runs a route end
+// to end through the real compiler pipeline: Build must resolve each
+// branch's target sink *name* into the right index of
 // the sinks slice it constructs itself. That's the one piece of route
 // wiring unique to this layer -- checker only deals in names, and the
 // driver only deals in indexes -- and it's exercised here with sinks

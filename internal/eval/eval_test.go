@@ -137,8 +137,8 @@ func TestEvalBinaryOpArithmeticAndComparison(t *testing.T) {
 }
 
 // TestEvalDateComparison exercises all six comparison operators on
-// value.DateValue via FieldAccess (design/date.md §3): there's no
-// ast.DateLit, so a Date value can only reach Eval through a row field,
+// value.DateValue via FieldAccess: there's no ast.DateLit, so a Date
+// value can only reach Eval through a row field,
 // never a literal node.
 func TestEvalDateComparison(t *testing.T) {
 	earlier := value.DateValue(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
@@ -197,10 +197,10 @@ func TestEvalDateEqualityUsesTimeEqualNotBareEquals(t *testing.T) {
 	}
 }
 
-// TestEvalDecimalArithmetic is DEC-C: decimal-decimal arithmetic is
-// exact, and a bare int/double literal on either side promotes to
-// decimal at eval time exactly like the checker allowed it to at
-// compile time (design/decimal.md §2).
+// TestEvalDecimalArithmetic confirms decimal-decimal arithmetic is
+// exact, and that a bare int/double literal on either side promotes to
+// decimal at eval time exactly like the checker allowed it to at compile
+// time.
 func TestEvalDecimalArithmetic(t *testing.T) {
 	price := value.DecimalValue(decimal.RequireFromString("19.99"))
 	discount := value.DecimalValue(decimal.RequireFromString("5.00"))

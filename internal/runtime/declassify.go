@@ -6,9 +6,9 @@ import (
 )
 
 // Declassify applies Fn (mask/hash/redact) to each named column's value
-// in place (design-improvements.md §4), sharing eval.Declassify with the
-// expression-position function call: one implementation behind both
-// namespaces (design-improvements.md §6).
+// in place, sharing eval.Declassify with the expression-position
+// function call: one implementation behind both the stage form and the
+// expression form.
 type Declassify struct {
 	in      Stream
 	fn      string
@@ -32,8 +32,8 @@ func (d *Declassify) Next() (value.Row, bool) {
 		fields[k] = v
 	}
 	for _, name := range d.columns {
-		// A column can be both Optional and @pii (design/optional-fields.md
-		// §4). An absent value has nothing to declassify, so it passes
+		// A column can be both Optional and @pii. An absent value has
+		// nothing to declassify, so it passes
 		// through untouched instead of panicking the type assertion
 		// below on a value that was never there.
 		if _, absent := fields[name].(value.Absent); absent {

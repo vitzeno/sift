@@ -42,10 +42,10 @@ func TestDeclassifyRedactStage(t *testing.T) {
 	}
 }
 
-// TestDeclassifyPassesThroughAbsentUntouched is OF-G's runtime half for
-// the declassify stage form: a column that's both Optional and @pii
-// (design/optional-fields.md §4) has nothing to declassify when its value
-// is absent for a given row, so it must pass through as value.Absent
+// TestDeclassifyPassesThroughAbsentUntouched covers the declassify stage
+// form: a column that's both Optional and @pii has nothing to
+// declassify when its value is absent for a given row, so it must pass
+// through as value.Absent
 // rather than panicking the type assertion mask/hash/redact needs for a
 // real string.
 func TestDeclassifyPassesThroughAbsentUntouched(t *testing.T) {

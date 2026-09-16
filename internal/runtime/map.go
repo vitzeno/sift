@@ -6,7 +6,7 @@ import (
 	"github.com/vitzeno/sift/internal/value"
 )
 
-// Map rebuilds each row from a record literal (design.md §2). Provenance
+// Map rebuilds each row from a record literal. Provenance
 // carries over unchanged: a mapped row is still the same row, logically,
 // just with different fields.
 type Map struct {
@@ -24,8 +24,8 @@ func (m *Map) Next() (value.Row, bool) {
 		return value.Row{}, false
 	}
 	// A failed row is opaque: map must not evaluate its record literal
-	// against fields that are, by definition, suspect
-	// (design-errors.md §2.2). Pass it through unchanged.
+	// against fields that are, by definition, suspect. Pass it through
+	// unchanged.
 	if row.Fail != nil {
 		return row, true
 	}

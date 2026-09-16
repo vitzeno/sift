@@ -11,13 +11,13 @@ import (
 // pieces Build needs, in terms this package already depends on (ast,
 // value). It mirrors internal/checker.CheckedProgram field-for-field
 // instead of importing that type directly, since checker sits on top of
-// ast and value and runtime must not depend on it. The caller (module
-// 8's CLI) bridges the two.
+// ast and value and runtime must not depend on it. The CLI bridges the
+// two.
 //
-// Sinks is a list, not a single decl: design-multisink.md's terminal
-// broadcast sends every sink the identical SinkSchema, since broadcast
-// happens after the last stage with no transform. When Route is set
-// (design-routing.md), Sinks holds every distinct sink a branch can
+// Sinks is a list, not a single decl: a terminal broadcast sends every
+// sink the identical SinkSchema, since broadcast happens after the last
+// stage with no transform. When Route is set, Sinks holds every distinct
+// sink a branch can
 // target, and Route's entries name one by Target. Build resolves that
 // name into an index once it knows where each named sink landed in the
 // slice it builds.
@@ -43,8 +43,8 @@ type RouteInput struct {
 
 // RouteBranch is one route branch after Build has resolved its target
 // sink name into an index into the sinks slice Build also returns, so
-// design-routing.md §4's per-row branch walk needs no name lookup at
-// run time. SinkIndex is -1 when Discard.
+// the per-row branch walk needs no name lookup at run time. SinkIndex is
+// -1 when Discard.
 type RouteBranch struct {
 	Pred      ast.Expr
 	IsElse    bool
@@ -54,13 +54,13 @@ type RouteBranch struct {
 
 // Build turns a checked program into a runnable chain: a Source from the
 // registry, wrapped by one runtime stage per checked ast.Stage, feeding
-// every Sink also from the registry. This is design.md §4's "build" step
-// (buildPipeline), the only place a *ast.Filter/*ast.Map/*ast.Check turns
-// into the matching runtime.Filter/Map/Check.
+// every Sink also from the registry. This is the only place a
+// *ast.Filter/*ast.Map/*ast.Check turns into the matching
+// runtime.Filter/Map/Check.
 //
 // Build returns the original Source alongside the wrapped chain: Run
 // needs both, top to pull rows and src to check Err() after top reports
-// EOF (design-errors.md §2.4), since a Filter/Map/Check wrapping src no
+// EOF, since a Filter/Map/Check wrapping src no
 // longer looks like src to the type system. route is nil unless in.Route
 // was set, resolved from in.Route's sink names into indexes into sinks,
 // since only Build knows which position each sink landed at.
@@ -148,8 +148,8 @@ func columnNames(cols []ast.ColumnRef) []string {
 }
 
 // sourceOptValues decodes a source declaration's extra keyword arguments
-// (design/xlsx.md §1) into the plain-value map SourceOptions.Opts
-// exposes to a format constructor. The parser guarantees every
+// into the plain-value map SourceOptions.Opts exposes to a format
+// constructor. The parser guarantees every
 // ast.SourceOpt.Value is one of the four scalar literal kinds
 // (parseSourceOptValue), so the switch below covers every case that can
 // occur; it isn't defensive coding against one that can't.
@@ -173,9 +173,8 @@ func sourceOptValues(opts []ast.SourceOpt) map[string]any {
 	return m
 }
 
-// columnAliases flattens a source's columns kwarg
-// (design/column-aliases.md §3) into the field->header map
-// SourceOptions.Columns exposes to a format constructor. nil for a
+// columnAliases flattens a source's columns kwarg into the field->header
+// map SourceOptions.Columns exposes to a format constructor. nil for a
 // source with no columns kwarg, so a format that never looks here (every
 // format but csv/xlsx) sees exactly what it did before this existed.
 func columnAliases(aliases []ast.ColumnAlias) map[string]string {
@@ -189,9 +188,9 @@ func columnAliases(aliases []ast.ColumnAlias) map[string]string {
 	return m
 }
 
-// deidentifyKeyEnvVar unwraps a source's optional key kwarg
-// (design/deidentify.md §2) into the plain env-var-name string
-// SourceOptions.DeidentifyKeyEnvVar exposes to a format constructor.
+// deidentifyKeyEnvVar unwraps a source's optional key kwarg into the
+// plain env-var-name string SourceOptions.DeidentifyKeyEnvVar exposes to
+// a format constructor.
 // Empty for a source with no key kwarg at all.
 func deidentifyKeyEnvVar(key *ast.EnvRef) string {
 	if key == nil {
@@ -200,8 +199,8 @@ func deidentifyKeyEnvVar(key *ast.EnvRef) string {
 	return key.Var
 }
 
-// dateFormats flattens a source's formats kwarg (design/date.md §3) into
-// the field->layout map SourceOptions.DateFormats exposes to a format
+// dateFormats flattens a source's formats kwarg into the field->layout
+// map SourceOptions.DateFormats exposes to a format
 // constructor. A direct copy of columnAliases's shape. nil for a source
 // with no formats kwarg, so a format that never looks here sees exactly
 // what it did before this existed.
