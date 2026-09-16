@@ -15,3 +15,7 @@ testdata/*.jsonl
 
 # OS cruft
 .DS_Store
+
+# Working notes kept out of the published repo.
+/claude.md
+/design/
