@@ -1,0 +1,40 @@
+name: "Go tests"
+description: "Run Go tests"
+
+inputs:
+    working-directory:
+        description: "Working directory to run the steps from"
+        required: false
+        default: "."
+    race:
+        description: "Enable the race detector"
+        required: false
+        default: "true"
+    coverpkg:
+        description: >
+            Measure coverage across every package, not just the one under
+            test. Sift's packages exercise each other heavily (the checker
+            drives internal/value, the runtime drives internal/format), so
+            the default per-package number understates real coverage.
+        required: false
+        default: "true"
+
+runs:
+    using: "composite"
+    steps:
+        - name: Run tests
+          working-directory: ${{ inputs.working-directory }}
+          env:
+              RACE: ${{ inputs.race }}
+              COVERPKG: ${{ inputs.coverpkg }}
+          run: |
+              set -euo pipefail
+              flags="-cover -json -v"
+              if [ "$RACE" = "true" ]; then
+                  flags="$flags -race"
+              fi
+              if [ "$COVERPKG" = "true" ]; then
+                  flags="$flags -coverpkg=./..."
+              fi
+              go test $flags ./...
+          shell: bash
